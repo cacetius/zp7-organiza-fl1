@@ -1,0 +1,55 @@
+{
+  "name": "CarTest",
+  "type": "object",
+  "properties": {
+    "numero_carro": {
+      "type": "string",
+      "description": "N\u00famero do carro"
+    },
+    "modelo": {
+      "type": "string"
+    },
+    "testor_nome": {
+      "type": "string",
+      "description": "Nome do testor"
+    },
+    "horario_entrada": {
+      "type": "string",
+      "description": "Hor\u00e1rio de entrada"
+    },
+    "horario_saida": {
+      "type": "string",
+      "description": "Hor\u00e1rio de sa\u00edda"
+    },
+    "tempo_total": {
+      "type": "number",
+      "description": "Tempo total em minutos"
+    },
+    "resultado": {
+      "type": "string",
+      "enum": [
+        "aprovado",
+        "reprovado",
+        "retrabalho",
+        "parado"
+      ],
+      "default": "aprovado"
+    },
+    "observacoes": {
+      "type": "string"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    }
+  },
+  "required": [
+    "numero_carro",
+    "testor_nome",
+    "resultado"
+  ]
+}

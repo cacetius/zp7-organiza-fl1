@@ -1,0 +1,82 @@
+{
+  "name": "Testor",
+  "type": "object",
+  "properties": {
+    "nome": {
+      "type": "string",
+      "description": "Nome/identifica\u00e7\u00e3o do testor"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "rodando",
+        "atencao",
+        "parado",
+        "manutencao",
+        "bloqueado"
+      ],
+      "default": "rodando"
+    },
+    "tempo_medio_carro": {
+      "type": "number",
+      "description": "Tempo m\u00e9dio por carro em minutos"
+    },
+    "tempo_minimo": {
+      "type": "number",
+      "description": "Tempo m\u00ednimo em minutos"
+    },
+    "tempo_maximo": {
+      "type": "number",
+      "description": "Tempo m\u00e1ximo em minutos"
+    },
+    "carros_testados_turno": {
+      "type": "number",
+      "default": 0
+    },
+    "carros_por_hora": {
+      "type": "number",
+      "default": 0
+    },
+    "falhas_turno": {
+      "type": "number",
+      "default": 0
+    },
+    "reprovacoes": {
+      "type": "number",
+      "default": 0
+    },
+    "paradas_curtas": {
+      "type": "number",
+      "default": 0
+    },
+    "tempo_total_parado": {
+      "type": "number",
+      "default": 0,
+      "description": "Em minutos"
+    },
+    "ultima_manutencao": {
+      "type": "string",
+      "format": "date"
+    },
+    "proxima_manutencao": {
+      "type": "string",
+      "format": "date"
+    },
+    "risco_score": {
+      "type": "number",
+      "default": 0,
+      "description": "Score de risco 0-100"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    }
+  },
+  "required": [
+    "nome"
+  ]
+}

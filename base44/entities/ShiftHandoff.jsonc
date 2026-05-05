@@ -1,0 +1,61 @@
+{
+  "name": "ShiftHandoff",
+  "type": "object",
+  "properties": {
+    "turno_saindo": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "turno_entrando": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "producao_realizada": {
+      "type": "number"
+    },
+    "producao_planejada": {
+      "type": "number"
+    },
+    "testores_com_problema": {
+      "type": "string",
+      "description": "Lista de testores com problema"
+    },
+    "pendencias_abertas": {
+      "type": "number"
+    },
+    "ocorrencias_criticas": {
+      "type": "string"
+    },
+    "acoes_em_andamento": {
+      "type": "string"
+    },
+    "alertas_proximo_turno": {
+      "type": "string"
+    },
+    "recomendacao_ia": {
+      "type": "string"
+    },
+    "observacao": {
+      "type": "string"
+    },
+    "responsavel": {
+      "type": "string"
+    },
+    "data": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "turno_saindo",
+    "turno_entrando"
+  ]
+}

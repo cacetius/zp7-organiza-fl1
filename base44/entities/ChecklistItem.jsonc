@@ -1,0 +1,63 @@
+{
+  "name": "ChecklistItem",
+  "type": "object",
+  "properties": {
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "inicio_turno",
+        "durante_turno",
+        "fim_turno",
+        "testores",
+        "seguranca",
+        "qualidade",
+        "5s",
+        "manutencao",
+        "liberacao_area"
+      ],
+      "description": "Categoria do checklist"
+    },
+    "descricao": {
+      "type": "string",
+      "description": "Item do checklist"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "conforme",
+        "nao_conforme",
+        "nao_aplicavel"
+      ],
+      "default": "pendente"
+    },
+    "responsavel": {
+      "type": "string"
+    },
+    "horario": {
+      "type": "string"
+    },
+    "observacao": {
+      "type": "string"
+    },
+    "foto_url": {
+      "type": "string"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "data": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "categoria",
+    "descricao"
+  ]
+}

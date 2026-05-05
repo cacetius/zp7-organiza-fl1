@@ -1,0 +1,83 @@
+{
+  "name": "Occurrence",
+  "type": "object",
+  "properties": {
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "falha_mecanica",
+        "falha_eletrica",
+        "qualidade",
+        "seguranca",
+        "parada",
+        "outro"
+      ],
+      "description": "Tipo de ocorr\u00eancia"
+    },
+    "testor": {
+      "type": "string",
+      "description": "Testor envolvido"
+    },
+    "carro": {
+      "type": "string",
+      "description": "N\u00famero do carro"
+    },
+    "local": {
+      "type": "string"
+    },
+    "responsavel": {
+      "type": "string"
+    },
+    "gravidade": {
+      "type": "string",
+      "enum": [
+        "baixa",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "media"
+    },
+    "acao_tomada": {
+      "type": "string"
+    },
+    "tempo_parada": {
+      "type": "number",
+      "description": "Tempo de parada em minutos"
+    },
+    "impacto_producao": {
+      "type": "number",
+      "description": "Carros perdidos estimados"
+    },
+    "fotos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "aberta",
+        "em_andamento",
+        "resolvida"
+      ],
+      "default": "aberta"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "descricao": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tipo",
+    "gravidade"
+  ]
+}

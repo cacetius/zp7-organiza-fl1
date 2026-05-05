@@ -1,0 +1,72 @@
+{
+  "name": "MaintenanceRequest",
+  "type": "object",
+  "properties": {
+    "testor_nome": {
+      "type": "string",
+      "description": "Testor relacionado"
+    },
+    "tipo_falha": {
+      "type": "string",
+      "enum": [
+        "mecanica",
+        "eletrica",
+        "software",
+        "calibracao",
+        "outro"
+      ]
+    },
+    "descricao": {
+      "type": "string"
+    },
+    "prioridade": {
+      "type": "string",
+      "enum": [
+        "baixa",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "media"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "aberto",
+        "em_andamento",
+        "concluido"
+      ],
+      "default": "aberto"
+    },
+    "tempo_estimado_reparo": {
+      "type": "number",
+      "description": "Em minutos"
+    },
+    "pecas_necessarias": {
+      "type": "string"
+    },
+    "impacto_carros": {
+      "type": "number",
+      "description": "Carros perdidos estimados"
+    },
+    "responsavel": {
+      "type": "string"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "observacao": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "testor_nome",
+    "tipo_falha",
+    "descricao"
+  ]
+}

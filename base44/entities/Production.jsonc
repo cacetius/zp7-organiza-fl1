@@ -1,0 +1,37 @@
+{
+  "name": "Production",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "string",
+      "format": "date"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "producao_planejada": {
+      "type": "number"
+    },
+    "producao_realizada": {
+      "type": "number"
+    },
+    "carros_por_hora": {
+      "type": "number"
+    },
+    "gargalos": {
+      "type": "string"
+    },
+    "observacoes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "turno",
+    "producao_planejada"
+  ]
+}
