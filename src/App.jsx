@@ -55,7 +55,7 @@ function AppShell() {
 
   return (
     <Routes>
-      <Route element={<AppLayout profile={profile} />}>
+      <Route element={<AppLayout profile={profile} onProfileSaved={loadProfile} />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/tarefas" element={<Tasks />} />
         <Route path="/testores" element={<Testores />} />
