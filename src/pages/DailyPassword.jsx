@@ -87,10 +87,20 @@ export default function DailyPassword() {
   const updateMut = useMutation({
     mutationFn: async ({ id, status }) => {
       const user = await base44.auth.me();
-      return base44.entities.DailyPassword.update(id, {
+      const req = passwords.find(p => p.id === id);
+      await base44.entities.DailyPassword.update(id, {
         status,
         aprovador: user.full_name || user.email,
       });
+      // Email automático ao solicitante
+      if (req?.solicitante_email) {
+        const label = status === "aprovada" ? "✅ APROVADA" : "❌ REJEITADA";
+        base44.integrations.Core.SendEmail({
+          to: req.solicitante_email,
+          subject: `[ZP7] Sua solicitação de acesso foi ${status === "aprovada" ? "aprovada" : "rejeitada"}`,
+          body: `Olá ${req.solicitante},\n\nSua solicitação de acesso ao turno no ZP7 foi <b>${label}</b>.\n\n📋 Motivo informado: ${req.motivo}\n🕐 Turno: ${req.turno}\n👤 Aprovador: ${user.full_name || user.email}\n\n${status === "aprovada" ? "Você está autorizado a acessar a área ZP7 no turno solicitado. Apresente-se ao ponto de controle com sua identificação." : "Caso tenha dúvidas, entre em contato com seu líder de turno."}\n\n— ZP7 Organização | Volkswagen Taubaté`,
+        }).catch(() => {});
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["passwords"] }),
   });
