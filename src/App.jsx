@@ -20,6 +20,7 @@ import Maintenance from "./pages/Maintenance";
 import PredictiveAI from "./pages/PredictiveAI";
 import Reports from "./pages/Reports";
 import DailyPassword from "./pages/DailyPassword";
+import LossControl from "./pages/LossControl";
 
 function AppShell() {
   const [profile, setProfile] = useState(null);
@@ -66,6 +67,7 @@ function AppShell() {
         <Route path="/ia-preditiva" element={<PredictiveAI />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/senha-diaria" element={<DailyPassword />} />
+        <Route path="/controle-perdas" element={<LossControl />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

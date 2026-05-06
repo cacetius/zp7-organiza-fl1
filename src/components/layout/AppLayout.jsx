@@ -10,21 +10,23 @@ export default function AppLayout({ profile, onProfileSaved }) {
 
   return (
     <ThemeProvider>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex">
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(!collapsed)}
         />
-        <div className={`transition-all duration-300 ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-64'}`}>
+        <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-64'}`}>
           <TopBar
             onMenuClick={() => setSidebarOpen(true)}
             profile={profile}
             onProfileSaved={onProfileSaved}
           />
-          <main className="p-4 lg:p-6">
-            <Outlet />
+          <main className="flex-1 p-4 lg:p-6 overflow-auto">
+            <div className="max-w-screen-2xl mx-auto">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>

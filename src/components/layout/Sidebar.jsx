@@ -11,8 +11,8 @@ import {
   BarChart3,
   KeyRound,
   Brain,
+  TrendingDown,
   X,
-  Settings,
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
@@ -27,6 +27,7 @@ const navItems = [
   { path: "/passagem-turno", icon: ArrowRightLeft, label: "Passagem Turno" },
   { path: "/manutencao", icon: Wrench, label: "Manutenção" },
   { path: "/ia-preditiva", icon: Brain, label: "IA Preditiva" },
+  { path: "/controle-perdas", icon: TrendingDown, label: "Controle de Perdas" },
   { path: "/relatorios", icon: BarChart3, label: "Relatórios" },
   { path: "/senha-diaria", icon: KeyRound, label: "Senha Diária" },
 ];

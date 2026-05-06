@@ -1,0 +1,64 @@
+{
+  "name": "LossControl",
+  "type": "object",
+  "properties": {
+    "testor_nome": {
+      "type": "string",
+      "description": "Nome do testor"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "data": {
+      "type": "string",
+      "format": "date"
+    },
+    "carros_planejados": {
+      "type": "number",
+      "default": 0
+    },
+    "carros_produzidos": {
+      "type": "number",
+      "default": 0
+    },
+    "carros_perdidos": {
+      "type": "number",
+      "default": 0
+    },
+    "motivo_perda": {
+      "type": "string",
+      "enum": [
+        "falha_mecanica",
+        "falha_eletrica",
+        "manutencao",
+        "setup",
+        "qualidade",
+        "operacional",
+        "outro"
+      ]
+    },
+    "tempo_parado_min": {
+      "type": "number",
+      "default": 0,
+      "description": "Minutos parado"
+    },
+    "observacoes": {
+      "type": "string"
+    },
+    "responsavel": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "testor_nome",
+    "turno",
+    "data",
+    "carros_planejados",
+    "carros_produzidos"
+  ]
+}
