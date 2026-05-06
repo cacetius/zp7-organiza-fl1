@@ -1,5 +1,5 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import {
   Car,
@@ -17,6 +17,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
+  const qc = useQueryClient();
+
+  // ── Real-time subscriptions for all entities on the dashboard ──
+  useEffect(() => {
+    const subs = [
+      base44.entities.Testor.subscribe(() => qc.invalidateQueries({ queryKey: ["testores"] })),
+      base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-open"] })),
+      base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-open"] })),
+      base44.entities.Production.subscribe(() => qc.invalidateQueries({ queryKey: ["production"] })),
+    ];
+    return () => subs.forEach(unsub => unsub());
+  }, [qc]);
+
   const { data: production = [] } = useQuery({
     queryKey: ["production"],
     queryFn: () => base44.entities.Production.list("-created_date", 1),

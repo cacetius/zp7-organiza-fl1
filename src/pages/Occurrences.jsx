@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +30,19 @@ export default function Occurrences() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const qc = useQueryClient();
+
+  // ── Real-time sync ──
+  useEffect(() => {
+    const unsub = base44.entities.Occurrence.subscribe((event) => {
+      qc.setQueryData(["occurrences"], (prev = []) => {
+        if (event.type === "create") return [event.data, ...prev];
+        if (event.type === "update") return prev.map(o => o.id === event.id ? event.data : o);
+        if (event.type === "delete") return prev.filter(o => o.id !== event.id);
+        return prev;
+      });
+    });
+    return unsub;
+  }, [qc]);
 
   const { data: occurrences = [], isLoading } = useQuery({
     queryKey: ["occurrences"],

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,19 @@ export default function Tasks() {
   const [editId, setEditId] = useState(null);
   const [filter, setFilter] = useState("todos");
   const qc = useQueryClient();
+
+  // ── Real-time sync ──
+  useEffect(() => {
+    const unsub = base44.entities.Task.subscribe((event) => {
+      qc.setQueryData(["tasks"], (prev = []) => {
+        if (event.type === "create") return [event.data, ...prev];
+        if (event.type === "update") return prev.map(t => t.id === event.id ? event.data : t);
+        if (event.type === "delete") return prev.filter(t => t.id !== event.id);
+        return prev;
+      });
+    });
+    return unsub;
+  }, [qc]);
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks"],

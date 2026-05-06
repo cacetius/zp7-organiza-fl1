@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -138,6 +138,19 @@ export default function Testores() {
   const [bulkStatus, setBulkStatus]   = useState("");
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const qc = useQueryClient();
+
+  // ── Real-time subscription: any change by any user updates the list instantly ──
+  useEffect(() => {
+    const unsub = base44.entities.Testor.subscribe((event) => {
+      qc.setQueryData(["testores"], (prev = []) => {
+        if (event.type === "create") return [...prev, event.data];
+        if (event.type === "update") return prev.map(t => t.id === event.id ? event.data : t);
+        if (event.type === "delete") return prev.filter(t => t.id !== event.id);
+        return prev;
+      });
+    });
+    return unsub;
+  }, [qc]);
 
   const { data: testores = [], isLoading } = useQuery({
     queryKey: ["testores"],
