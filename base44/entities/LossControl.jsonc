@@ -2,9 +2,17 @@
   "name": "LossControl",
   "type": "object",
   "properties": {
+    "item_perda": {
+      "type": "string",
+      "description": "Item/motivo da perda (linha da planilha)"
+    },
+    "hora": {
+      "type": "string",
+      "description": "Hor\u00e1rio da perda (coluna da planilha)"
+    },
     "testor_nome": {
       "type": "string",
-      "description": "Nome do testor"
+      "description": "Nome do testor (compatibilidade legada)"
     },
     "turno": {
       "type": "string",
@@ -28,7 +36,8 @@
     },
     "carros_perdidos": {
       "type": "number",
-      "default": 0
+      "default": 1,
+      "description": "Contagem de perdas na c\u00e9lula"
     },
     "motivo_perda": {
       "type": "string",
@@ -44,21 +53,18 @@
     },
     "tempo_parado_min": {
       "type": "number",
-      "default": 0,
-      "description": "Minutos parado"
+      "default": 0
     },
     "observacoes": {
-      "type": "string"
+      "type": "string",
+      "description": "Campo legado para hora"
     },
     "responsavel": {
       "type": "string"
     }
   },
   "required": [
-    "testor_nome",
     "turno",
-    "data",
-    "carros_planejados",
-    "carros_produzidos"
+    "data"
   ]
 }

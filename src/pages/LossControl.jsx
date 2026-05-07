@@ -1,449 +1,291 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend, PieChart, Pie, Cell
-} from "recharts";
-import {
-  TrendingDown, Plus, BarChart3, AlertTriangle, Car, Clock,
-  Calendar, RefreshCw, FileText, ChevronDown
-} from "lucide-react";
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { TrendingDown, Download, Plus, ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { format, addDays, subDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const TURNO_LABELS = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" };
-const MOTIVO_LABELS = {
-  falha_mecanica: "Falha Mecânica", falha_eletrica: "Falha Elétrica",
-  manutencao: "Manutenção", setup: "Setup", qualidade: "Qualidade",
-  operacional: "Operacional", outro: "Outro"
-};
-const COLORS = ["hsl(0,72%,51%)", "hsl(38,92%,50%)", "hsl(217,91%,60%)", "hsl(142,71%,45%)", "hsl(280,65%,60%)", "hsl(199,89%,48%)", "hsl(215,16%,55%)"];
+const DEFAULT_ITEMS = [
+  "COMANDO VALVULA (PRÉ)",
+  "CAMBIO AUT. (PRÉ)",
+  "AR CONDICIONADO",
+  "AGREGADO (Reprov. Testor)",
+  "BOX ZP6",
+  "SISTEMA FIS",
+  "TORQUE LINHA",
+  "TORQUE FAROL",
+  "ELÉTRICA",
+  "DIREÇÃO ELETRICA (Alinh.)",
+  "BZD",
+  "AJUSTE",
+  "FREIO",
+  "GEOMETRIA",
+  "COMANDO AC",
+  "R2 LINHA",
+  "FALHA IDT",
+  "SIST FIS (PINT)",
+];
 
-const tooltipStyle = { background: "hsl(217,25%,11%)", border: "1px solid hsl(217,19%,18%)", borderRadius: "8px", color: "hsl(210,40%,96%)", fontSize: "12px" };
-const axisStyle = { fontSize: 11, fill: "hsl(215,16%,55%)" };
-const gridStyle = { strokeDasharray: "3 3", stroke: "hsl(217,19%,18%)" };
-
-const today = format(new Date(), "yyyy-MM-dd");
-
-const EMPTY_FORM = {
-  testor_nome: "", turno: "primeiro", data: today,
-  carros_planejados: "", carros_produzidos: "", motivo_perda: "falha_mecanica",
-  tempo_parado_min: "", observacoes: "", responsavel: ""
-};
+const TURNOS = [
+  { label: "2º Turno (15h–00h)", key: "segundo",   horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","00:00"] },
+  { label: "3º Turno (01h–05h)", key: "terceiro",  horas: ["01:00","02:00","03:00","04:00","05:00"] },
+  { label: "1º Turno (06h–14h)", key: "primeiro",  horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
+];
 
 export default function LossControl() {
   const qc = useQueryClient();
-  const [periodo, setPeriodo] = useState("diario");
-  const [turnoFiltro, setTurnoFiltro] = useState("todos");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const printRef = useRef(null);
+  const today = format(new Date(), "yyyy-MM-dd");
 
-  const { data: losses = [], isLoading } = useQuery({
-    queryKey: ["losses"],
-    queryFn: () => base44.entities.LossControl.list("-data", 200),
+  const [selectedDate, setSelectedDate]   = useState(today);
+  const [selectedTurno, setSelectedTurno] = useState("segundo");
+  const [itens, setItens]                 = useState(DEFAULT_ITEMS);
+  const [novoItem, setNovoItem]           = useState("");
+
+  const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
+  const sheetKey   = `loss-sheet-${selectedDate}-${selectedTurno}`;
+  const dateLabel  = format(parseISO(selectedDate), "dd/MM");
+
+  const { data: records = [] } = useQuery({
+    queryKey: [sheetKey],
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
-  const { data: testores = [] } = useQuery({
-    queryKey: ["testores"],
-    queryFn: () => base44.entities.Testor.list(),
-  });
 
-  useEffect(() => {
-    const unsub = base44.entities.LossControl.subscribe((event) => {
-      qc.setQueryData(["losses"], (prev = []) => {
-        if (event.type === "create") return [event.data, ...prev];
-        if (event.type === "update") return prev.map(l => l.id === event.id ? event.data : l);
-        if (event.type === "delete") return prev.filter(l => l.id !== event.id);
-        return prev;
-      });
-    });
-    return unsub;
-  }, [qc]);
-
-  const createMutation = useMutation({
+  const createCell = useMutation({
     mutationFn: (data) => base44.entities.LossControl.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["losses"] }); setDialogOpen(false); setForm(EMPTY_FORM); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+  });
+  const updateCell = useMutation({
+    mutationFn: ({ id, carros_perdidos }) => base44.entities.LossControl.update(id, { carros_perdidos }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+  });
+  const deleteCell = useMutation({
+    mutationFn: (id) => base44.entities.LossControl.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
 
-  // ── Date range filter ──
-  const filteredByPeriod = useMemo(() => {
-    const now = new Date();
-    let from, to;
-    if (periodo === "diario") { from = today; to = today; }
-    else if (periodo === "semanal") { from = format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd"); to = format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd"); }
-    else { from = format(startOfMonth(now), "yyyy-MM-dd"); to = format(endOfMonth(now), "yyyy-MM-dd"); }
+  // Build cell map: item_perda -> hora -> { id, count }
+  const cellMap = {};
+  records.forEach(r => {
+    if (!r.item_perda || !r.hora) return;
+    if (!cellMap[r.item_perda]) cellMap[r.item_perda] = {};
+    cellMap[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+  });
 
-    return losses.filter(l => {
-      const inRange = l.data >= from && l.data <= to;
-      const inTurno = turnoFiltro === "todos" || l.turno === turnoFiltro;
-      return inRange && inTurno;
-    });
-  }, [losses, periodo, turnoFiltro]);
-
-  // ── KPIs ──
-  const totalPlanejado  = filteredByPeriod.reduce((s, l) => s + (l.carros_planejados || 0), 0);
-  const totalProduzido  = filteredByPeriod.reduce((s, l) => s + (l.carros_produzidos || 0), 0);
-  const totalPerdido    = filteredByPeriod.reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const totalParado     = filteredByPeriod.reduce((s, l) => s + (l.tempo_parado_min || 0), 0);
-  const eficiencia      = totalPlanejado > 0 ? Math.round((totalProduzido / totalPlanejado) * 100) : 0;
-
-  // ── Chart: Perdas por Testor ──
-  const perdasPorTestor = useMemo(() => {
-    const map = {};
-    filteredByPeriod.forEach(l => {
-      if (!map[l.testor_nome]) map[l.testor_nome] = { name: l.testor_nome, Perdidos: 0, Produzidos: 0 };
-      map[l.testor_nome].Perdidos   += l.carros_perdidos || 0;
-      map[l.testor_nome].Produzidos += l.carros_produzidos || 0;
-    });
-    return Object.values(map).sort((a, b) => b.Perdidos - a.Perdidos);
-  }, [filteredByPeriod]);
-
-  // ── Chart: Linha de produção diária ──
-  const linhaDiaria = useMemo(() => {
-    const map = {};
-    filteredByPeriod.forEach(l => {
-      if (!map[l.data]) map[l.data] = { label: l.data?.slice(5), Planejado: 0, Produzido: 0, Perdido: 0 };
-      map[l.data].Planejado += l.carros_planejados || 0;
-      map[l.data].Produzido += l.carros_produzidos || 0;
-      map[l.data].Perdido   += l.carros_perdidos || 0;
-    });
-    return Object.values(map).sort((a, b) => a.label > b.label ? 1 : -1);
-  }, [filteredByPeriod]);
-
-  // ── Chart: Motivos ──
-  const motivoData = useMemo(() => {
-    const map = {};
-    filteredByPeriod.forEach(l => {
-      const k = l.motivo_perda || "outro";
-      map[k] = (map[k] || 0) + (l.carros_perdidos || 0);
-    });
-    return Object.entries(map).map(([name, value]) => ({ name: MOTIVO_LABELS[name] || name, value })).filter(d => d.value > 0);
-  }, [filteredByPeriod]);
-
-  // ── Chart: Perdas por turno ──
-  const perdasPorTurno = useMemo(() => {
-    const map = { primeiro: 0, segundo: 0, terceiro: 0 };
-    filteredByPeriod.forEach(l => { map[l.turno] = (map[l.turno] || 0) + (l.carros_perdidos || 0); });
-    return Object.entries(map).map(([t, v]) => ({ name: TURNO_LABELS[t], Perdidos: v }));
-  }, [filteredByPeriod]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const perdidos = Math.max(0, (Number(form.carros_planejados) || 0) - (Number(form.carros_produzidos) || 0));
-    createMutation.mutate({ ...form, carros_planejados: Number(form.carros_planejados), carros_produzidos: Number(form.carros_produzidos), carros_perdidos: perdidos, tempo_parado_min: Number(form.tempo_parado_min) || 0 });
+  const handleCellClick = (item, hora) => {
+    const cell = cellMap[item]?.[hora];
+    if (cell) {
+      const next = cell.count + 1;
+      if (next > 9) {
+        deleteCell.mutate(cell.id);
+      } else {
+        updateCell.mutate({ id: cell.id, carros_perdidos: next });
+      }
+    } else {
+      createCell.mutate({
+        item_perda: item,
+        hora,
+        turno: selectedTurno,
+        data: selectedDate,
+        carros_perdidos: 1,
+        carros_planejados: 0,
+        carros_produzidos: 0,
+        motivo_perda: "outro",
+      });
+    }
   };
 
+  const handlePrint = () => {
+    const style = `
+      <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        body { font-family: Arial, sans-serif; background: white; color: black; margin: 0; }
+        table { border-collapse: collapse; width: 100%; font-size: 9px; }
+        th, td { border: 1px solid #333; padding: 3px 5px; text-align: center; }
+        th { background: #e0e0e0; font-weight: bold; }
+        .item-col { text-align: left; min-width: 140px; font-size: 8.5px; }
+        .title-row th { font-size: 13px; font-weight: 900; letter-spacing: 2px; background: #f5f5f5; }
+        .marked { background: #ffe5e5; font-weight: bold; color: #cc0000; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .header h1 { font-size: 11px; margin: 0; }
+      </style>
+    `;
+
+    const rows = itens.map(item => {
+      const cells = turnoAtual.horas.map(hora => {
+        const cell = cellMap[item]?.[hora];
+        return `<td class="${cell ? "marked" : ""}">${cell ? (cell.count > 1 ? cell.count : "✓") : ""}</td>`;
+      }).join("");
+      return `<tr><td class="item-col">${item}</td>${cells}</tr>`;
+    }).join("");
+
+    const headerCols = turnoAtual.horas.map(h => `<th>${h}</th>`).join("");
+
+    const html = `<!DOCTYPE html><html><head>${style}</head><body>
+      <table>
+        <thead>
+          <tr class="title-row">
+            <th colspan="${turnoAtual.horas.length + 1}">
+              CONTROLE DE PERDAS DO TESTOR &nbsp;&nbsp;&nbsp; ${dateLabel} &nbsp;&nbsp; ${turnoAtual.label}
+            </th>
+          </tr>
+          <tr><th class="item-col">ITEM</th>${headerCols}</tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </body></html>`;
+
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => { win.print(); win.close(); };
+  };
+
+  const addItem = () => {
+    const trimmed = novoItem.trim().toUpperCase();
+    if (trimmed && !itens.includes(trimmed)) {
+      setItens(prev => [...prev, trimmed]);
+      setNovoItem("");
+    }
+  };
+
+  const removeItem = (item) => setItens(prev => prev.filter(i => i !== item));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <TrendingDown className="w-6 h-6 text-red-400" /> Controle de Perdas
+            <TrendingDown className="w-6 h-6 text-red-400" />
+            Controle de Perdas do Testor
           </h1>
-          <p className="text-sm text-muted-foreground">Registro e análise de perdas de produção por testor e turno</p>
+          <p className="text-sm text-muted-foreground">
+            Clique na célula para registrar · clique de novo para incrementar · 10x para limpar
+          </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="gap-2">
-          <Plus className="w-4 h-4" /> Registrar Perda
+        <Button variant="outline" className="gap-2" onClick={handlePrint}>
+          <Printer className="w-4 h-4" /> Imprimir / PDF
         </Button>
       </div>
 
-      {/* Filtros */}
+      {/* Controles */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="flex gap-1 bg-muted/40 p-1 rounded-lg">
-          {[
-            { k: "diario", label: "Diário", Ic: Calendar },
-            { k: "semanal", label: "Semanal", Ic: BarChart3 },
-            { k: "mensal", label: "Mensal", Ic: FileText },
-          ].map(({ k, label, Ic }) => (
-            <button
-              key={k}
-              onClick={() => setPeriodo(k)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${periodo === k ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <Ic className="w-3.5 h-3.5" /> {label}
-            </button>
-          ))}
+        {/* Navegação de data */}
+        <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
+          <button
+            onClick={() => setSelectedDate(format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))}
+            className="p-1 hover:text-primary rounded"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="border-0 bg-transparent h-7 w-36 text-sm text-center p-0 focus-visible:ring-0"
+          />
+          <button
+            onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))}
+            className="p-1 hover:text-primary rounded"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
-        <Select value={turnoFiltro} onValueChange={setTurnoFiltro}>
-          <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
+
+        <Select value={selectedTurno} onValueChange={setSelectedTurno}>
+          <SelectTrigger className="w-48 h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos os Turnos</SelectItem>
-            <SelectItem value="primeiro">1º Turno</SelectItem>
-            <SelectItem value="segundo">2º Turno</SelectItem>
-            <SelectItem value="terceiro">3º Turno</SelectItem>
+            {TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Badge variant="outline" className="text-xs px-3 py-1.5 border-primary/30 text-primary">
-          {filteredByPeriod.length} registros
-        </Badge>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <Input
+            placeholder="Novo item..."
+            value={novoItem}
+            onChange={e => setNovoItem(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addItem()}
+            className="h-9 w-48 text-sm"
+          />
+          <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()}>
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        {[
-          { label: "Planejado", value: totalPlanejado, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20", icon: Car },
-          { label: "Produzido", value: totalProduzido, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20", icon: Car },
-          { label: "Perdido", value: totalPerdido, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20", icon: TrendingDown },
-          { label: "Tempo Parado", value: `${totalParado}min`, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20", icon: Clock },
-          { label: "Eficiência", value: `${eficiencia}%`, color: eficiencia >= 85 ? "text-green-400" : eficiencia >= 70 ? "text-yellow-400" : "text-red-400", bg: eficiencia >= 85 ? "bg-green-500/10" : "bg-red-500/10", border: eficiencia >= 85 ? "border-green-500/20" : "border-red-500/20", icon: BarChart3 },
-        ].map(kpi => (
-          <Card key={kpi.label} className={`p-4 border ${kpi.border}`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-                <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-              </div>
-              <div>
-                <p className={`text-xl font-bold ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-[11px] text-muted-foreground">{kpi.label}</p>
-              </div>
-            </div>
-          </Card>
-        ))}
+      {/* Planilha */}
+      <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
+        <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 60}px` }}>
+          <thead>
+            {/* Título */}
+            <tr>
+              <th
+                colSpan={turnoAtual.horas.length + 1}
+                className="border border-border bg-muted/80 px-4 py-2.5 text-center font-black text-sm tracking-widest uppercase"
+              >
+                CONTROLE DE PERDAS DO TESTOR
+                <span className="ml-4 text-primary font-bold text-base">{dateLabel}</span>
+                <span className="ml-3 text-muted-foreground font-normal text-xs">{turnoAtual.label}</span>
+              </th>
+            </tr>
+            {/* Cabeçalho de horas */}
+            <tr className="bg-muted/50">
+              <th className="border border-border px-3 py-2 text-left font-bold text-xs" style={{ minWidth: 200 }}>
+                ITEM
+              </th>
+              {turnoAtual.horas.map(h => (
+                <th key={h} className="border border-border px-1 py-2 text-center font-bold text-xs" style={{ minWidth: 56 }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((item, idx) => (
+              <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-primary/5 transition-colors`}>
+                <td className="border border-border px-3 py-1.5 font-medium text-xs whitespace-nowrap flex items-center justify-between gap-1">
+                  <span>{item}</span>
+                  <button
+                    onClick={() => removeItem(item)}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all text-[10px] leading-none ml-1"
+                    title="Remover item"
+                  >✕</button>
+                </td>
+                {turnoAtual.horas.map(hora => {
+                  const cell = cellMap[item]?.[hora];
+                  return (
+                    <td
+                      key={hora}
+                      onClick={() => handleCellClick(item, hora)}
+                      title={cell ? `${cell.count} perda(s) — clique para incrementar` : "Clique para registrar perda"}
+                      className={`border border-border text-center cursor-pointer select-none transition-all h-8 text-sm font-bold ${
+                        cell
+                          ? "bg-red-500/20 text-red-400 hover:bg-red-500/35"
+                          : "hover:bg-primary/15 text-transparent"
+                      }`}
+                    >
+                      {cell ? (cell.count > 1 ? cell.count : "✓") : "·"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* Linha de Produção */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-primary" />
-            {periodo === "diario" ? "Produção do Dia por Turno" : periodo === "semanal" ? "Produção Diária da Semana" : "Produção Diária do Mês"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {linhaDiaria.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={linhaDiaria}>
-                <CartesianGrid {...gridStyle} />
-                <XAxis dataKey="label" tick={axisStyle} />
-                <YAxis tick={axisStyle} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="Planejado" stroke="hsl(215,16%,55%)" strokeDasharray="5 5" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="Produzido" stroke="hsl(217,91%,60%)" strokeWidth={2.5} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="Perdido" stroke="hsl(0,72%,51%)" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-12">Nenhum dado para o período selecionado.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Perdas por Testor + Motivos */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-orange-400" /> Perdas por Testor
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {perdasPorTestor.length > 0 ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={perdasPorTestor} layout="vertical" barGap={4}>
-                  <CartesianGrid {...gridStyle} horizontal={false} />
-                  <XAxis type="number" tick={axisStyle} />
-                  <YAxis type="category" dataKey="name" tick={axisStyle} width={60} />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Produzidos" fill="hsl(217,91%,60%)" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="Perdidos" fill="hsl(0,72%,51%)" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-red-400" /> Perdas por Motivo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {motivoData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={motivoData} cx="50%" cy="50%" outerRadius={85} innerRadius={35} dataKey="value"
-                    label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}>
-                    {motivoData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [v, n]} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>
-            )}
-          </CardContent>
-        </Card>
+      {/* Legenda */}
+      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground border border-border/40 rounded-lg px-4 py-2.5 bg-muted/20">
+        <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-red-500/20 border border-red-500/30 rounded flex items-center justify-center text-red-400 font-bold text-[10px]">✓</span> 1 perda</span>
+        <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-red-500/20 border border-red-500/30 rounded flex items-center justify-center text-red-400 font-bold text-[10px]">3</span> múltiplas perdas</span>
+        <span>· Célula vazia = sem perda</span>
+        <span>Clique 10× na célula para apagar</span>
+        <span>Passe o mouse sobre o item e clique ✕ para remover a linha</span>
       </div>
-
-      {/* Perdas por Turno */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="w-4 h-4 text-yellow-400" /> Distribuição de Perdas por Turno
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {perdasPorTurno.some(d => d.Perdidos > 0) ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={perdasPorTurno}>
-                <CartesianGrid {...gridStyle} />
-                <XAxis dataKey="name" tick={axisStyle} />
-                <YAxis tick={axisStyle} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="Perdidos" radius={[6, 6, 0, 0]}>
-                  {perdasPorTurno.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">Sem perdas registradas.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tabela de registros */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="w-4 h-4" /> Registros Detalhados
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredByPeriod.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum registro no período.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground text-xs">
-                    <th className="text-left py-2 pr-4">Data</th>
-                    <th className="text-left py-2 pr-4">Testor</th>
-                    <th className="text-left py-2 pr-4">Turno</th>
-                    <th className="text-right py-2 pr-4">Planejado</th>
-                    <th className="text-right py-2 pr-4">Produzido</th>
-                    <th className="text-right py-2 pr-4">Perdido</th>
-                    <th className="text-left py-2 pr-4">Motivo</th>
-                    <th className="text-right py-2">Parado(min)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredByPeriod.map(l => (
-                    <tr key={l.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="py-2 pr-4 text-muted-foreground">{l.data?.slice(5)}</td>
-                      <td className="py-2 pr-4 font-medium">{l.testor_nome}</td>
-                      <td className="py-2 pr-4"><Badge variant="outline" className="text-[10px]">{TURNO_LABELS[l.turno]}</Badge></td>
-                      <td className="py-2 pr-4 text-right text-blue-400">{l.carros_planejados}</td>
-                      <td className="py-2 pr-4 text-right text-green-400">{l.carros_produzidos}</td>
-                      <td className="py-2 pr-4 text-right font-bold text-red-400">{l.carros_perdidos}</td>
-                      <td className="py-2 pr-4 text-muted-foreground text-xs">{MOTIVO_LABELS[l.motivo_perda] || l.motivo_perda}</td>
-                      <td className="py-2 text-right text-yellow-400">{l.tempo_parado_min || 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialog de registro */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <TrendingDown className="w-5 h-5 text-red-400" /> Registrar Perda de Produção
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Testor *</Label>
-                <Select value={form.testor_nome} onValueChange={v => setForm(f => ({ ...f, testor_nome: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {testores.map(t => <SelectItem key={t.id} value={t.nome}>{t.nome}</SelectItem>)}
-                    <SelectItem value="Outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Turno *</Label>
-                <Select value={form.turno} onValueChange={v => setForm(f => ({ ...f, turno: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="primeiro">1º Turno</SelectItem>
-                    <SelectItem value="segundo">2º Turno</SelectItem>
-                    <SelectItem value="terceiro">3º Turno</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Data *</Label>
-                <Input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Motivo da Perda</Label>
-                <Select value={form.motivo_perda} onValueChange={v => setForm(f => ({ ...f, motivo_perda: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(MOTIVO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Carros Planejados *</Label>
-                <Input type="number" min="0" value={form.carros_planejados} onChange={e => setForm(f => ({ ...f, carros_planejados: e.target.value }))} placeholder="0" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Carros Produzidos *</Label>
-                <Input type="number" min="0" value={form.carros_produzidos} onChange={e => setForm(f => ({ ...f, carros_produzidos: e.target.value }))} placeholder="0" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Tempo Parado (min)</Label>
-                <Input type="number" min="0" value={form.tempo_parado_min} onChange={e => setForm(f => ({ ...f, tempo_parado_min: e.target.value }))} placeholder="0" />
-              </div>
-            </div>
-            {form.carros_planejados && form.carros_produzidos && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
-                <span className="text-red-400 font-bold text-lg">{Math.max(0, Number(form.carros_planejados) - Number(form.carros_produzidos))}</span>
-                <span className="text-muted-foreground text-sm ml-2">carros perdidos calculados</span>
-              </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-xs">Responsável</Label>
-              <Input value={form.responsavel} onChange={e => setForm(f => ({ ...f, responsavel: e.target.value }))} placeholder="Nome do responsável" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Observações</Label>
-              <Input value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Detalhes adicionais..." />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={createMutation.isPending || !form.testor_nome || !form.carros_planejados}>
-                {createMutation.isPending ? "Salvando..." : "Registrar Perda"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
