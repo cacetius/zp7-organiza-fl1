@@ -109,8 +109,6 @@ export default function LossControl() {
         .item-col { text-align: left; min-width: 140px; font-size: 8.5px; }
         .title-row th { font-size: 13px; font-weight: 900; letter-spacing: 2px; background: #f5f5f5; }
         .marked { background: #ffe5e5; font-weight: bold; color: #cc0000; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .header h1 { font-size: 11px; margin: 0; }
       </style>
     `;
 
@@ -124,7 +122,7 @@ export default function LossControl() {
 
     const headerCols = turnoAtual.horas.map(h => `<th>${h}</th>`).join("");
 
-    const html = `<!DOCTYPE html><html><head>${style}</head><body>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">${style}</head><body>
       <table>
         <thead>
           <tr class="title-row">
@@ -136,12 +134,17 @@ export default function LossControl() {
         </thead>
         <tbody>${rows}</tbody>
       </table>
+      <script>window.onload = function() { window.print(); }<\/script>
     </body></html>`;
 
-    const win = window.open("", "_blank");
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => { win.print(); win.close(); };
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   const addItem = () => {
@@ -155,27 +158,26 @@ export default function LossControl() {
   const removeItem = (item) => setItens(prev => prev.filter(i => i !== item));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20 lg:pb-0">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <TrendingDown className="w-6 h-6 text-red-400" />
-            Controle de Perdas do Testor
+          <h1 className="text-lg font-bold flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-red-400" />
+            Controle de Perdas
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Clique na célula para registrar · clique de novo para incrementar · 10x para limpar
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            Toque na célula para registrar · de novo para incrementar · 10× para limpar
           </p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={handlePrint}>
-          <Printer className="w-4 h-4" /> Imprimir / PDF
+        <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
+          <Printer className="w-4 h-4" /> PDF
         </Button>
       </div>
 
       {/* Controles */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {/* Navegação de data */}
-        <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1 w-full sm:w-auto">
           <button
             onClick={() => setSelectedDate(format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))}
             className="p-1 hover:text-primary rounded"
@@ -186,7 +188,7 @@ export default function LossControl() {
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="border-0 bg-transparent h-7 w-36 text-sm text-center p-0 focus-visible:ring-0"
+            className="border-0 bg-transparent h-7 flex-1 sm:w-36 text-sm text-center p-0 focus-visible:ring-0"
           />
           <button
             onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))}
@@ -197,19 +199,19 @@ export default function LossControl() {
         </div>
 
         <Select value={selectedTurno} onValueChange={setSelectedTurno}>
-          <SelectTrigger className="w-48 h-9"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full sm:w-52"><SelectValue /></SelectTrigger>
           <SelectContent>
             {TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 sm:ml-auto">
           <Input
             placeholder="Novo item..."
             value={novoItem}
             onChange={e => setNovoItem(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addItem()}
-            className="h-9 w-48 text-sm"
+            className="h-9 flex-1 text-sm"
           />
           <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()}>
             <Plus className="w-3.5 h-3.5" />
