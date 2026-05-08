@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import {
   BarChart3, Car, Clock, AlertTriangle, Gauge, CheckCircle2,
-  TrendingUp, Activity, TrendingDown, Calendar, CalendarDays
+  TrendingUp, Activity, TrendingDown, Calendar, CalendarDays, FileDown
 } from "lucide-react";
 import {
   format, subDays, subWeeks, subMonths, startOfWeek, endOfWeek,
@@ -197,6 +197,89 @@ export default function Reports() {
   const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
   const lossChartData = periodoPerda === "semana" ? lossWeeklyData : lossMonthlyData;
 
+  const handleExportPDF = () => {
+    const hora = new Date().toLocaleString("pt-BR");
+    const turnoLabel = TURNO_LABELS[turno];
+
+    const testoresRows = filteredTestores.map(t => `
+      <tr>
+        <td>${t.nome}</td>
+        <td>${t.status}</td>
+        <td>${t.tempo_medio_carro > 0 ? Math.round(60 / t.tempo_medio_carro) : (t.carros_por_hora || 0)}</td>
+        <td>${t.carros_testados_turno || 0}</td>
+        <td>${t.falhas_turno || 0}</td>
+        <td>${Math.max(0, (t.carros_testados_turno || 0) - (t.falhas_turno || 0))}</td>
+        <td>${t.carros_testados_turno > 0 ? Math.min(100, Math.round(((t.carros_testados_turno - (t.falhas_turno||0)) / t.carros_testados_turno) * 100)) : 0}%</td>
+        <td>${t.tempo_total_parado || 0} min</td>
+        <td>${t.risco_score || 0}%</td>
+      </tr>`).join("");
+
+    const prodRows = filteredProduction.slice(0, 14).map(p => `
+      <tr>
+        <td>${p.data || "—"}</td>
+        <td>${p.turno || "—"}</td>
+        <td>${p.producao_planejada || 0}</td>
+        <td>${p.producao_realizada || 0}</td>
+        <td>${((p.producao_realizada || 0) - (p.producao_planejada || 0)) >= 0 ? "+" : ""}${(p.producao_realizada || 0) - (p.producao_planejada || 0)}</td>
+      </tr>`).join("");
+
+    const lossRows = lossItemRanking.map(r => `
+      <tr><td>${r.name}</td><td>${r.Perdas}</td></tr>`).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      @page { size: A4; margin: 12mm; }
+      body { font-family: Arial, sans-serif; font-size: 10px; color: #111; }
+      h1 { font-size: 16px; margin: 0 0 2px; color: #1a1a2e; }
+      .subtitle { font-size: 10px; color: #666; margin-bottom: 14px; }
+      h2 { font-size: 12px; margin: 16px 0 6px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 8px; }
+      th { background: #e8eaf0; padding: 5px 6px; text-align: left; border: 1px solid #bbb; font-size: 9px; }
+      td { padding: 4px 6px; border: 1px solid #ddd; font-size: 9px; }
+      tr:nth-child(even) { background: #f7f8fb; }
+      .kpi-grid { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+      .kpi { background: #f0f2f9; border: 1px solid #d0d4e8; border-radius: 6px; padding: 8px 12px; min-width: 100px; }
+      .kpi .val { font-size: 18px; font-weight: bold; color: #2244bb; }
+      .kpi .lbl { font-size: 8px; color: #666; margin-top: 1px; }
+      .footer { margin-top: 20px; font-size: 8px; color: #aaa; border-top: 1px solid #eee; padding-top: 6px; }
+    </style></head><body>
+    <h1>Relatório ZP7 — ${turnoLabel}</h1>
+    <div class="subtitle">Gerado em: ${hora} &nbsp;|&nbsp; Turno: ${turnoLabel}</div>
+
+    <div class="kpi-grid">
+      <div class="kpi"><div class="val">${totalCarros}</div><div class="lbl">Carros Testados</div></div>
+      <div class="kpi"><div class="val">${totalFalhas}</div><div class="lbl">Falhas</div></div>
+      <div class="kpi"><div class="val">${Math.max(0, totalCarros - totalFalhas)}</div><div class="lbl">Produção Líquida</div></div>
+      <div class="kpi"><div class="val">${eficiencia}%</div><div class="lbl">Eficiência Geral</div></div>
+      <div class="kpi"><div class="val">${totalParado} min</div><div class="lbl">Tempo Parado</div></div>
+      <div class="kpi"><div class="val">${totalPerdasPeriodo}</div><div class="lbl">Perdas no Período</div></div>
+    </div>
+
+    ${testoresRows ? `<h2>Desempenho dos Testores</h2>
+    <table><thead><tr>
+      <th>Testor</th><th>Status</th><th>Previsto/h</th><th>Real</th>
+      <th>Falhas</th><th>Líquido</th><th>Efic.</th><th>T.Perdido</th><th>Risco</th>
+    </tr></thead><tbody>${testoresRows}</tbody></table>` : ""}
+
+    ${prodRows ? `<h2>Histórico de Produção (últimos 14 registros)</h2>
+    <table><thead><tr>
+      <th>Data</th><th>Turno</th><th>Planejado</th><th>Realizado</th><th>Diferença</th>
+    </tr></thead><tbody>${prodRows}</tbody></table>` : ""}
+
+    ${lossRows ? `<h2>Top Perdas no Período</h2>
+    <table><thead><tr><th>Item / Motivo</th><th>Carros Perdidos</th></tr></thead><tbody>${lossRows}</tbody></table>` : ""}
+
+    <div class="footer">ZP7 Organização — Relatório gerado automaticamente pelo sistema.</div>
+    <script>window.onload = function(){ window.print(); }<\/script>
+    </body></html>`;
+
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
   return (
     <div className="space-y-5 pb-20 lg:pb-0">
       {/* Header */}
@@ -207,11 +290,14 @@ export default function Reports() {
           </h1>
           <p className="text-sm text-muted-foreground">Análise interativa — {TURNO_LABELS[turno]}</p>
         </div>
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap items-center">
           {Object.entries(TURNO_LABELS).map(([k, label]) => (
             <Button key={k} size="sm" variant={turno === k ? "default" : "outline"} onClick={() => setTurno(k)}
               className={turno !== k ? "text-muted-foreground" : ""}>{label}</Button>
           ))}
+          <Button size="sm" variant="outline" onClick={handleExportPDF} className="gap-1.5 text-muted-foreground hover:text-foreground ml-1">
+            <FileDown className="w-3.5 h-3.5" /> Exportar PDF
+          </Button>
         </div>
       </div>
 
