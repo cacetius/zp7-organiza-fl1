@@ -35,16 +35,46 @@ function getRiskColor(s) {
 }
 
 async function notifyTeam(testor, oldStatus, newStatus) {
-  const profiles = await base44.entities.UserProfile.filter({});
-  const recipients = profiles.filter(p => ["lider", "monitor", "manutencao"].includes(p.funcao) && p.user_email);
+  const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const from = statusConfig[oldStatus]?.label || oldStatus;
   const to = statusConfig[newStatus]?.label || newStatus;
+  const isAlert = ["parado", "manutencao"].includes(newStatus);
+
+  const profiles = await base44.entities.UserProfile.filter({});
+  const recipients = profiles.filter(p => ["lider", "monitor", "manutencao"].includes(p.funcao) && p.user_email);
+
+  const subject = isAlert
+    ? `🚨 [ZP7] ALERTA — ${testor} ${statusConfig[newStatus]?.label}`
+    : `[ZP7] Alteração de status — ${testor}`;
+
+  const body = isAlert
+    ? `⚠️ ALERTA DE PARADA DE MÁQUINA\n\nTestor: ${testor}\nStatus: ${to}\nHorário: ${hora}\n\nAção necessária: verifique o equipamento imediatamente.\n\n— ZP7 Organização`
+    : `Olá ${"{nome}"},\n\nO testor ${testor} teve seu status alterado:\n\n${from} → ${to}\n\nAcesse o sistema ZP7.\n\n— ZP7 Organização`;
+
   for (const r of recipients) {
     base44.integrations.Core.SendEmail({
       to: r.user_email,
-      subject: `[ZP7] Alteração de status — ${testor}`,
-      body: `Olá ${r.nome},\n\nO testor <b>${testor}</b> teve seu status alterado:\n\n<b>${from}</b> → <b>${to}</b>\n\nAcesse o sistema ZP7.\n\n— ZP7 Organização`,
+      subject,
+      body: body.replace("{nome}", r.nome || ""),
     }).catch(() => {});
+  }
+
+  // Alerta via WhatsApp (API Evolution/Twilio/WPP Connect)
+  // Para ativar: configure WHATSAPP_API_URL e WHATSAPP_TOKEN como secrets no painel
+  if (isAlert) {
+    const apiUrl = import.meta.env.VITE_WHATSAPP_API_URL;
+    const token = import.meta.env.VITE_WHATSAPP_TOKEN;
+    const numbers = import.meta.env.VITE_WHATSAPP_NUMBERS; // ex: "5511999999999,5511888888888"
+    if (apiUrl && token && numbers) {
+      const msg = `🚨 *ALERTA ZP7*\n\n*Testor:* ${testor}\n*Status:* ${to}\n*Horário:* ${hora}\n\nVerifique o equipamento imediatamente.`;
+      for (const num of numbers.split(",")) {
+        fetch(`${apiUrl}/message/sendText`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": token },
+          body: JSON.stringify({ number: num.trim(), text: msg }),
+        }).catch(() => {});
+      }
+    }
   }
 }
 
