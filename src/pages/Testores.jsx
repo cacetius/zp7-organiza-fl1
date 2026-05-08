@@ -3,14 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Gauge, Clock, Car, Activity, Pencil, Trash2, AlertTriangle, CheckCircle2, Wrench, ZapOff, ShieldAlert } from "lucide-react";
+import { Plus, Gauge, CheckCircle2, AlertTriangle, Wrench, ZapOff, ShieldAlert } from "lucide-react";
+import TestorCard from "@/components/testores/TestorCard";
+import HourlyCloseModal from "@/components/testores/HourlyCloseModal";
+import TestorProductionPanel from "@/components/testores/TestorProductionPanel";
 
 const statusConfig = {
   rodando:    { label: "Rodando",    color: "bg-green-500/15 text-green-400 border-green-500/40",   dot: "bg-green-400",  icon: CheckCircle2 },
@@ -27,13 +28,6 @@ const emptyForm = {
   ultima_manutencao: "", proxima_manutencao: "", risco_score: "",
 };
 
-function getRiskColor(s) {
-  if (s <= 30) return { text: "text-green-400", bar: "bg-green-500" };
-  if (s <= 60) return { text: "text-yellow-400", bar: "bg-yellow-500" };
-  if (s <= 80) return { text: "text-orange-400", bar: "bg-orange-500" };
-  return { text: "text-red-400", bar: "bg-red-500" };
-}
-
 async function notifyTeam(testor, oldStatus, newStatus) {
   const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const from = statusConfig[oldStatus]?.label || oldStatus;
@@ -47,24 +41,17 @@ async function notifyTeam(testor, oldStatus, newStatus) {
     ? `🚨 [ZP7] ALERTA — ${testor} ${statusConfig[newStatus]?.label}`
     : `[ZP7] Alteração de status — ${testor}`;
 
-  const body = isAlert
-    ? `⚠️ ALERTA DE PARADA DE MÁQUINA\n\nTestor: ${testor}\nStatus: ${to}\nHorário: ${hora}\n\nAção necessária: verifique o equipamento imediatamente.\n\n— ZP7 Organização`
-    : `Olá ${"{nome}"},\n\nO testor ${testor} teve seu status alterado:\n\n${from} → ${to}\n\nAcesse o sistema ZP7.\n\n— ZP7 Organização`;
-
   for (const r of recipients) {
-    base44.integrations.Core.SendEmail({
-      to: r.user_email,
-      subject,
-      body: body.replace("{nome}", r.nome || ""),
-    }).catch(() => {});
+    const body = isAlert
+      ? `⚠️ ALERTA DE PARADA DE MÁQUINA\n\nTestor: ${testor}\nStatus: ${to}\nHorário: ${hora}\n\nAção necessária: verifique o equipamento imediatamente.\n\n— ZP7 Organização`
+      : `Olá ${r.nome || ""},\n\nO testor ${testor} teve seu status alterado:\n\n${from} → ${to}\n\nAcesse o sistema ZP7.\n\n— ZP7 Organização`;
+    base44.integrations.Core.SendEmail({ to: r.user_email, subject, body }).catch(() => {});
   }
 
-  // Alerta via WhatsApp (API Evolution/Twilio/WPP Connect)
-  // Para ativar: configure WHATSAPP_API_URL e WHATSAPP_TOKEN como secrets no painel
   if (isAlert) {
     const apiUrl = import.meta.env.VITE_WHATSAPP_API_URL;
     const token = import.meta.env.VITE_WHATSAPP_TOKEN;
-    const numbers = import.meta.env.VITE_WHATSAPP_NUMBERS; // ex: "5511999999999,5511888888888"
+    const numbers = import.meta.env.VITE_WHATSAPP_NUMBERS;
     if (apiUrl && token && numbers) {
       const msg = `🚨 *ALERTA ZP7*\n\n*Testor:* ${testor}\n*Status:* ${to}\n*Horário:* ${hora}\n\nVerifique o equipamento imediatamente.`;
       for (const num of numbers.split(",")) {
@@ -78,9 +65,21 @@ async function notifyTeam(testor, oldStatus, newStatus) {
   }
 }
 
+function calcCarrosPorHora(t) {
+  if (t.tempo_medio_carro > 0) return Math.round(60 / t.tempo_medio_carro);
+  return t.carros_por_hora || 0;
+}
+
 function TestorForm({ initial, onSave, isPending, onCancel }) {
   const [form, setForm] = useState(initial || emptyForm);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Auto-calcula carros/hora quando tempo médio muda
+  const handleTempoMedio = (v) => {
+    set("tempo_medio_carro", v);
+    const num = Number(v);
+    if (num > 0) set("carros_por_hora", Math.round(60 / num));
+  };
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="space-y-4">
@@ -103,15 +102,16 @@ function TestorForm({ initial, onSave, isPending, onCancel }) {
           <Input type="number" min="0" max="100" value={form.risco_score} onChange={e => set("risco_score", e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Tempo médio/carro (min)</Label>
-          <Input type="number" value={form.tempo_medio_carro} onChange={e => set("tempo_medio_carro", e.target.value)} />
+          <Label className="text-xs">Tempo médio/carro (min) *</Label>
+          <Input type="number" value={form.tempo_medio_carro} onChange={e => handleTempoMedio(e.target.value)} placeholder="Ex: 4" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Carros/hora</Label>
-          <Input type="number" value={form.carros_por_hora} onChange={e => set("carros_por_hora", e.target.value)} />
+          <Label className="text-xs">Carros/hora (auto)</Label>
+          <Input type="number" value={form.carros_por_hora} onChange={e => set("carros_por_hora", e.target.value)}
+            className="bg-primary/5 border-primary/30" placeholder="Calculado automaticamente" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Carros no turno</Label>
+          <Label className="text-xs">Produção real no turno</Label>
           <Input type="number" value={form.carros_testados_turno} onChange={e => set("carros_testados_turno", e.target.value)} />
         </div>
         <div className="space-y-1.5">
@@ -139,11 +139,14 @@ function TestorForm({ initial, onSave, isPending, onCancel }) {
           <Input type="date" value={form.proxima_manutencao} onChange={e => set("proxima_manutencao", e.target.value)} />
         </div>
       </div>
+      {form.tempo_medio_carro > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 text-xs text-primary">
+          IA: 60 ÷ {form.tempo_medio_carro}min = <strong>{Math.round(60 / form.tempo_medio_carro)} carros/hora previstos</strong>
+        </div>
+      )}
       <div className="flex gap-2 pt-2">
         {onCancel && <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>Cancelar</Button>}
-        <Button type="submit" className="flex-1" disabled={isPending}>
-          {isPending ? "Salvando..." : "Salvar"}
-        </Button>
+        <Button type="submit" className="flex-1" disabled={isPending}>{isPending ? "Salvando..." : "Salvar"}</Button>
       </div>
     </form>
   );
@@ -153,9 +156,9 @@ export default function Testores() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [hourlyTarget, setHourlyTarget] = useState(null);
   const qc = useQueryClient();
 
-  // Real-time sync via WebSocket
   useEffect(() => {
     const unsub = base44.entities.Testor.subscribe((event) => {
       qc.setQueryData(["testores"], (prev = []) => {
@@ -209,7 +212,83 @@ export default function Testores() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["testores"] }),
   });
 
-  // Summary counts
+  // Fechamento de hora: acumula na produção real + falhas do testor
+  const handleHourlyClose = ({ testor, carros_real, falhas }) => {
+    const novo_real = (testor.carros_testados_turno || 0) + carros_real;
+    const novo_falhas = (testor.falhas_turno || 0) + falhas;
+    base44.entities.Testor.update(testor.id, {
+      carros_testados_turno: novo_real,
+      falhas_turno: novo_falhas,
+    }).then(() => qc.invalidateQueries({ queryKey: ["testores"] }));
+  };
+
+  // Exportar PDF
+  const handleExportPDF = () => {
+    const hora = new Date().toLocaleString("pt-BR");
+    const rows = testores.map(t => {
+      const cph = calcCarrosPorHora(t);
+      const real = t.carros_testados_turno || 0;
+      const falhas = t.falhas_turno || 0;
+      const liquido = Math.max(0, real - falhas);
+      const ef = real > 0 ? Math.min(100, Math.round((liquido / real) * 100)) : 0;
+      return `<tr>
+        <td>${t.nome}</td><td>${t.status}</td><td>${cph}</td><td>${real}</td>
+        <td>${falhas}</td><td>${liquido}</td><td>${ef}%</td>
+        <td>${t.tempo_total_parado || 0}min</td><td>${t.risco_score || 0}%</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      @page{size:A4 landscape;margin:10mm}
+      body{font-family:Arial;font-size:10px;color:#000}
+      h1{font-size:14px;margin-bottom:4px}
+      p{font-size:9px;color:#666;margin:0 0 10px}
+      table{border-collapse:collapse;width:100%}
+      th{background:#e0e0e0;padding:5px;text-align:left;border:1px solid #999;font-size:9px}
+      td{padding:4px 5px;border:1px solid #ccc;font-size:9px}
+      tr:nth-child(even){background:#f9f9f9}
+    </style></head><body>
+    <h1>Relatório de Testores — ZP7</h1>
+    <p>Gerado em: ${hora}</p>
+    <table>
+      <thead><tr>
+        <th>Testor</th><th>Status</th><th>Previsto/h</th><th>Real</th>
+        <th>Falhas</th><th>Líquido</th><th>Efic.</th><th>T.Perdido</th><th>Risco</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload=function(){window.print()}<\/script>
+    </body></html>`;
+
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
+  // Exportar Excel (CSV)
+  const handleExportExcel = () => {
+    const headers = ["Testor","Status","Previsto/h","Produção Real","Falhas","Produção Líquida","Eficiência","Tempo Perdido (min)","Risco (%)"];
+    const rows = testores.map(t => {
+      const cph = calcCarrosPorHora(t);
+      const real = t.carros_testados_turno || 0;
+      const falhas = t.falhas_turno || 0;
+      const liquido = Math.max(0, real - falhas);
+      const ef = real > 0 ? Math.min(100, Math.round((liquido / real) * 100)) : 0;
+      return [t.nome, t.status, cph, real, falhas, liquido, `${ef}%`, t.tempo_total_parado || 0, t.risco_score || 0].join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `testores-zp7-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
   const counts = { rodando: 0, atencao: 0, parado: 0, manutencao: 0, bloqueado: 0 };
   testores.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
 
@@ -219,7 +298,7 @@ export default function Testores() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Testores</h1>
-          <p className="text-xs text-muted-foreground">{testores.length} cadastrados · sincronização em tempo real</p>
+          <p className="text-xs text-muted-foreground">{testores.length} cadastrados · painel inteligente de produção</p>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="flex items-center gap-1 text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">
@@ -237,7 +316,7 @@ export default function Testores() {
         </div>
       </div>
 
-      {/* Status summary pills */}
+      {/* Status pills */}
       <div className="flex flex-wrap gap-2">
         {Object.entries(statusConfig).map(([k, cfg]) => (
           <div key={k} className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.color}`}>
@@ -247,12 +326,19 @@ export default function Testores() {
         ))}
       </div>
 
+      {/* Painel de produção */}
+      {testores.length > 0 && (
+        <TestorProductionPanel
+          testores={testores}
+          onExportPDF={handleExportPDF}
+          onExportExcel={handleExportExcel}
+        />
+      )}
+
       {/* Cards */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-48 rounded-xl bg-muted/30 animate-pulse" />
-          ))}
+          {[...Array(6)].map((_, i) => <div key={i} className="h-64 rounded-xl bg-muted/30 animate-pulse" />)}
         </div>
       ) : testores.length === 0 ? (
         <Card>
@@ -266,115 +352,26 @@ export default function Testores() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {testores.map((t) => {
-            const cfg = statusConfig[t.status] || statusConfig.rodando;
-            const risk = t.risco_score || 0;
-            const riskStyle = getRiskColor(risk);
-            const StatusIcon = cfg.icon;
-
-            return (
-              <Card key={t.id} className={`overflow-hidden border-l-4 transition-all hover:shadow-lg ${
-                t.status === "rodando" ? "border-l-green-500" :
-                t.status === "atencao" ? "border-l-yellow-500" :
-                t.status === "parado" ? "border-l-red-500" :
-                t.status === "manutencao" ? "border-l-orange-500" : "border-l-gray-500"
-              }`}>
-                <CardContent className="p-4 space-y-3">
-                  {/* Top row */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${cfg.color}`}>
-                        <StatusIcon className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm truncate">{t.nome}</p>
-                        <Badge variant="outline" className={`text-[10px] border mt-0.5 ${cfg.color}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full mr-1 ${cfg.dot}`} />
-                          {cfg.label}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button onClick={() => setEditTarget(t)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => setDeleteTarget(t)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Quick status change */}
-                  <Select value={t.status} onValueChange={v => updateStatus.mutate({ id: t.id, status: v })}>
-                    <SelectTrigger className="h-8 text-xs w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(statusConfig).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-
-                  {/* Metrics grid */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 rounded-lg bg-muted/40">
-                      <Car className="w-3.5 h-3.5 mx-auto mb-1 text-muted-foreground" />
-                      <p className="text-base font-bold leading-tight">{t.carros_testados_turno || 0}</p>
-                      <p className="text-[9px] text-muted-foreground mt-0.5">Carros/turno</p>
-                    </div>
-                    <div className="text-center p-2 rounded-lg bg-muted/40">
-                      <Activity className="w-3.5 h-3.5 mx-auto mb-1 text-muted-foreground" />
-                      <p className="text-base font-bold leading-tight">{t.carros_por_hora || 0}</p>
-                      <p className="text-[9px] text-muted-foreground mt-0.5">Carros/hora</p>
-                    </div>
-                    <div className="text-center p-2 rounded-lg bg-muted/40">
-                      <Clock className="w-3.5 h-3.5 mx-auto mb-1 text-muted-foreground" />
-                      <p className="text-base font-bold leading-tight">{t.tempo_medio_carro || 0}<span className="text-[10px] font-normal">m</span></p>
-                      <p className="text-[9px] text-muted-foreground mt-0.5">T. médio</p>
-                    </div>
-                  </div>
-
-                  {/* Risk bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Índice de Risco</span>
-                      <span className={`font-bold ${riskStyle.text}`}>{risk}%</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${riskStyle.bar}`} style={{ width: `${risk}%` }} />
-                    </div>
-                  </div>
-
-                  {/* Stats row */}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Falhas</span>
-                      <span className={`font-semibold ${(t.falhas_turno || 0) > 0 ? "text-orange-400" : ""}`}>{t.falhas_turno || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Reprovações</span>
-                      <span className={`font-semibold ${(t.reprovacoes || 0) > 0 ? "text-red-400" : ""}`}>{t.reprovacoes || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Paradas curtas</span>
-                      <span className="font-semibold">{t.paradas_curtas || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">T. parado</span>
-                      <span className={`font-semibold ${(t.tempo_total_parado || 0) > 0 ? "text-yellow-400" : ""}`}>{t.tempo_total_parado || 0}min</span>
-                    </div>
-                  </div>
-
-                  {/* Maintenance */}
-                  {(t.ultima_manutencao || t.proxima_manutencao) && (
-                    <div className="text-[10px] text-muted-foreground border-t border-border pt-2 flex justify-between">
-                      {t.ultima_manutencao && <span>Última: {t.ultima_manutencao}</span>}
-                      {t.proxima_manutencao && <span className="text-yellow-400">Próxima: {t.proxima_manutencao}</span>}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+          {testores.map(t => (
+            <TestorCard
+              key={t.id}
+              t={t}
+              onEdit={setEditTarget}
+              onDelete={setDeleteTarget}
+              onStatusChange={(id, status) => updateStatus.mutate({ id, status })}
+              onHourlyClose={setHourlyTarget}
+            />
+          ))}
         </div>
       )}
+
+      {/* Fechamento de hora */}
+      <HourlyCloseModal
+        testor={hourlyTarget}
+        open={!!hourlyTarget}
+        onClose={() => setHourlyTarget(null)}
+        onSave={handleHourlyClose}
+      />
 
       {/* Edit dialog */}
       <Dialog open={!!editTarget} onOpenChange={v => !v && setEditTarget(null)}>
