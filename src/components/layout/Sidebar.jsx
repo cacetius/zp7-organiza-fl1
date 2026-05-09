@@ -12,6 +12,7 @@ import {
   KeyRound,
   Brain,
   TrendingDown,
+  Factory,
   X,
   ChevronLeft,
   ChevronRight
@@ -28,6 +29,7 @@ const navItems = [
   { path: "/manutencao", icon: Wrench, label: "Manutenção" },
   { path: "/ia-preditiva", icon: Brain, label: "IA Preditiva" },
   { path: "/controle-perdas", icon: TrendingDown, label: "Controle de Perdas" },
+  { path: "/controle-producao", icon: Factory, label: "Controle de Produção" },
   { path: "/relatorios", icon: BarChart3, label: "Relatórios" },
   { path: "/senha-diaria", icon: KeyRound, label: "Senha Diária" },
 ];

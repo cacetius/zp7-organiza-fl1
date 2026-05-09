@@ -1,13 +1,13 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Gauge, AlertTriangle, ClipboardList, TrendingDown } from "lucide-react";
+import { LayoutDashboard, Gauge, AlertTriangle, ClipboardList, Factory } from "lucide-react";
 
 const mobileNav = [
   { path: "/", icon: LayoutDashboard, label: "Painel" },
   { path: "/testores", icon: Gauge, label: "Testores" },
   { path: "/ocorrencias", icon: AlertTriangle, label: "Ocorrências" },
   { path: "/tarefas", icon: ClipboardList, label: "Tarefas" },
-  { path: "/controle-perdas", icon: TrendingDown, label: "Perdas" },
+  { path: "/controle-producao", icon: Factory, label: "Produção" },
 ];
 
 export default function MobileNav() {

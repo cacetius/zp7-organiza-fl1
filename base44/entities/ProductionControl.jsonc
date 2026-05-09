@@ -1,0 +1,44 @@
+{
+  "name": "ProductionControl",
+  "type": "object",
+  "properties": {
+    "testor_id": {
+      "type": "string",
+      "description": "ID do testor"
+    },
+    "testor_nome": {
+      "type": "string",
+      "description": "Nome do testor"
+    },
+    "data": {
+      "type": "string",
+      "format": "date",
+      "description": "Data do registro"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ],
+      "description": "Turno de produ\u00e7\u00e3o"
+    },
+    "hora": {
+      "type": "string",
+      "description": "Hora do registro (ex: 15:00)"
+    },
+    "carros_produzidos": {
+      "type": "number",
+      "description": "Quantidade de carros produzidos na hora"
+    }
+  },
+  "required": [
+    "testor_id",
+    "testor_nome",
+    "data",
+    "turno",
+    "hora",
+    "carros_produzidos"
+  ]
+}
