@@ -9,29 +9,36 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Plus, AlertTriangle, CheckCircle2, Clock, Trash2, Printer } from "lucide-react";
 
 const gravConfig = {
-  baixa: "bg-blue-500/10 text-blue-400 border-blue-500/30",
-  media: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
-  alta: "bg-orange-500/10 text-orange-400 border-orange-500/30",
-  critica: "bg-red-500/10 text-red-400 border-red-500/30",
+  baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  media: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  alta: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  critica: "bg-red-500/15 text-red-400 border-red-500/30",
 };
 
 const statusConfig = {
-  aberta: "bg-blue-500/10 text-blue-400 border-blue-500/30",
-  em_andamento: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
-  resolvida: "bg-green-500/10 text-green-400 border-green-500/30",
+  aberta: "bg-red-500/15 text-red-400 border-red-500/30",
+  em_andamento: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  resolvida: "bg-green-500/15 text-green-400 border-green-500/30",
 };
 
-const emptyForm = { tipo: "", testor: "", carro: "", local: "", responsavel: "", gravidade: "media", acao_tomada: "", tempo_parada: "", impacto_producao: "", status: "aberta", descricao: "" };
+const tipoLabel = {
+  falha_mecanica: "Falha Mecânica", falha_eletrica: "Falha Elétrica",
+  qualidade: "Qualidade", seguranca: "Segurança", parada: "Parada", outro: "Outro"
+};
+
+const emptyForm = { tipo: "outro", testor: "", gravidade: "media", acao_tomada: "", tempo_parada: "", impacto_producao: "", status: "aberta", descricao: "" };
 
 export default function Occurrences() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [filter, setFilter] = useState("todas");
   const qc = useQueryClient();
 
-  // ── Real-time sync ──
   useEffect(() => {
     const unsub = base44.entities.Occurrence.subscribe((event) => {
       qc.setQueryData(["occurrences"], (prev = []) => {
@@ -50,109 +57,170 @@ export default function Occurrences() {
   });
 
   const createMut = useMutation({
-    mutationFn: (d) => base44.entities.Occurrence.create({ ...d, tempo_parada: Number(d.tempo_parada) || 0, impacto_producao: Number(d.impacto_producao) || 0 }),
+    mutationFn: (d) => base44.entities.Occurrence.create({ ...d, tempo_parada: Number(d.tempo_parada) || 0, impacto_producao: Number(d.impacto_producao) || 0, data: new Date().toISOString().slice(0, 10), hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["occurrences"] }); setOpen(false); setForm(emptyForm); },
   });
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, status }) => base44.entities.Occurrence.update(id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["occurrences"] }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.Occurrence.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["occurrences"] }); setDeleteTarget(null); },
+  });
+
+  const filtered = filter === "todas" ? occurrences : occurrences.filter(o => o.status === filter);
+
+  const handlePrint = () => {
+    const hora = new Date().toLocaleString("pt-BR");
+    const rows = occurrences.map(o => `<tr>
+      <td>${o.data || "—"} ${o.hora || ""}</td>
+      <td>${tipoLabel[o.tipo] || o.tipo || "—"}</td>
+      <td>${o.testor || "—"}</td>
+      <td>${o.gravidade || "—"}</td>
+      <td>${o.status?.replace(/_/g, " ") || "—"}</td>
+      <td>${o.tempo_parada ? o.tempo_parada + " min" : "—"}</td>
+      <td>${o.impacto_producao || 0}</td>
+      <td>${o.descricao || "—"}</td>
+    </tr>`).join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      @page{size:A4 landscape;margin:10mm} body{font-family:Arial;font-size:9px;color:#111}
+      h1{font-size:14px;margin:0 0 4px} p{font-size:9px;color:#666;margin:0 0 8px}
+      table{border-collapse:collapse;width:100%} th{background:#e0e0e0;padding:4px 6px;border:1px solid #999;text-align:left;font-size:8px}
+      td{padding:3px 6px;border:1px solid #ccc;font-size:8px} tr:nth-child(even){background:#f9f9f9}
+    </style></head><body>
+    <h1>Ocorrências ZP7</h1><p>Gerado em: ${hora}</p>
+    <table><thead><tr><th>Data/Hora</th><th>Tipo</th><th>Testor</th><th>Gravidade</th><th>Status</th><th>T.Parada</th><th>Carros</th><th>Descrição</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <script>window.onload=function(){window.print()}<\/script></body></html>`;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.target = "_blank"; a.click();
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 pb-20 lg:pb-0">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Ocorrências</h1>
-          <p className="text-sm text-muted-foreground">Registre e acompanhe ocorrências do ZP7</p>
+          <h1 className="text-xl font-bold flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-orange-400" /> Ocorrências</h1>
+          <p className="text-xs text-muted-foreground">{occurrences.length} registradas · {occurrences.filter(o => o.status === "aberta").length} abertas</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="w-4 h-4 mr-2" />Nova Ocorrência</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Registrar Ocorrência</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(form); }} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Tipo</Label>
-                  <Select value={form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="falha_mecanica">Falha Mecânica</SelectItem>
-                      <SelectItem value="falha_eletrica">Falha Elétrica</SelectItem>
-                      <SelectItem value="qualidade">Qualidade</SelectItem>
-                      <SelectItem value="seguranca">Segurança</SelectItem>
-                      <SelectItem value="parada">Parada</SelectItem>
-                      <SelectItem value="outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5"><Printer className="w-4 h-4" /> PDF</Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="w-4 h-4 mr-1" /> Nova</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>Registrar Ocorrência</DialogTitle></DialogHeader>
+              <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(form); }} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Tipo *</Label>
+                    <Select value={form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(tipoLabel).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Gravidade</Label>
+                    <Select value={form.gravidade} onValueChange={(v) => setForm({ ...form, gravidade: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="baixa">Baixa</SelectItem>
+                        <SelectItem value="media">Média</SelectItem>
+                        <SelectItem value="alta">Alta</SelectItem>
+                        <SelectItem value="critica">🔴 Crítica</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Gravidade</Label>
-                  <Select value={form.gravidade} onValueChange={(v) => setForm({ ...form, gravidade: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="baixa">Baixa</SelectItem>
-                      <SelectItem value="media">Média</SelectItem>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="critica">Crítica</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Testor</Label>
+                  <Input value={form.testor} onChange={(e) => setForm({ ...form, testor: e.target.value })} placeholder="Ex: Testor 1" />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Testor</Label><Input value={form.testor} onChange={(e) => setForm({ ...form, testor: e.target.value })} placeholder="Ex: Testor 1" /></div>
-                <div className="space-y-2"><Label>Carro</Label><Input value={form.carro} onChange={(e) => setForm({ ...form, carro: e.target.value })} placeholder="Nº carro" /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Local</Label><Input value={form.local} onChange={(e) => setForm({ ...form, local: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Responsável</Label><Input value={form.responsavel} onChange={(e) => setForm({ ...form, responsavel: e.target.value })} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Tempo parada (min)</Label><Input type="number" value={form.tempo_parada} onChange={(e) => setForm({ ...form, tempo_parada: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Carros perdidos</Label><Input type="number" value={form.impacto_producao} onChange={(e) => setForm({ ...form, impacto_producao: e.target.value })} /></div>
-              </div>
-              <div className="space-y-2"><Label>Descrição / Ação</Label><Textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></div>
-              <Button type="submit" className="w-full" disabled={createMut.isPending}>Registrar</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label className="text-xs">Parada (min)</Label><Input type="number" value={form.tempo_parada} onChange={(e) => setForm({ ...form, tempo_parada: e.target.value })} placeholder="0" /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">Carros perdidos</Label><Input type="number" value={form.impacto_producao} onChange={(e) => setForm({ ...form, impacto_producao: e.target.value })} placeholder="0" /></div>
+                </div>
+                <div className="space-y-1.5"><Label className="text-xs">Descrição / Ação tomada</Label><Textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} rows={3} /></div>
+                <Button type="submit" className="w-full" size="lg" disabled={createMut.isPending}>Registrar Ocorrência</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="space-y-3">
+      {/* Filtros */}
+      <div className="flex gap-2 flex-wrap">
+        {[["todas", "Todas"], ["aberta", "Abertas"], ["em_andamento", "Em Andamento"], ["resolvida", "Resolvidas"]].map(([k, l]) => (
+          <Button key={k} variant={filter === k ? "default" : "outline"} size="sm" onClick={() => setFilter(k)}>{l}</Button>
+        ))}
+      </div>
+
+      <div className="space-y-2">
         {isLoading ? (
-          <p className="text-muted-foreground text-sm">Carregando...</p>
-        ) : occurrences.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <AlertTriangle className="w-12 h-12 text-muted-foreground mb-3" />
-              <p className="text-muted-foreground">Nenhuma ocorrência registrada.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          occurrences.map((occ) => (
-            <Card key={occ.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="font-semibold text-sm">{occ.tipo?.replace(/_/g, " ")}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {occ.testor && `Testor: ${occ.testor}`} {occ.carro && `• Carro: ${occ.carro}`} {occ.local && `• ${occ.local}`}
-                    </p>
-                    {occ.descricao && <p className="text-xs text-muted-foreground mt-1">{occ.descricao}</p>}
-                    {(occ.tempo_parada > 0 || occ.impacto_producao > 0) && (
-                      <p className="text-xs text-red-400">
-                        {occ.tempo_parada > 0 && `Parada: ${occ.tempo_parada}min`}
-                        {occ.impacto_producao > 0 && ` • ${occ.impacto_producao} carros perdidos`}
-                      </p>
-                    )}
+          <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-muted/30 animate-pulse" />)}</div>
+        ) : filtered.length === 0 ? (
+          <Card><CardContent className="flex flex-col items-center justify-center py-12">
+            <CheckCircle2 className="w-12 h-12 text-green-400 mb-3" />
+            <p className="text-muted-foreground font-medium">Nenhuma ocorrência {filter !== "todas" ? `com status "${filter}"` : "registrada"}.</p>
+          </CardContent></Card>
+        ) : filtered.map((occ) => (
+          <Card key={occ.id} className={`border ${occ.gravidade === "critica" ? "border-red-500/30" : "border-border"}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-sm">{tipoLabel[occ.tipo] || occ.tipo || "Ocorrência"}</p>
+                    <Badge className={`text-[10px] border ${gravConfig[occ.gravidade] || gravConfig.media}`}>{occ.gravidade}</Badge>
+                    <Badge className={`text-[10px] border ${statusConfig[occ.status] || statusConfig.aberta}`}>{occ.status?.replace(/_/g, " ")}</Badge>
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <Badge className={`text-[10px] border ${gravConfig[occ.gravidade]}`}>{occ.gravidade}</Badge>
-                    <Badge className={`text-[10px] border ${statusConfig[occ.status]}`}>{occ.status?.replace(/_/g, " ")}</Badge>
+                  {occ.testor && <p className="text-xs text-muted-foreground">Testor: <span className="text-foreground font-medium">{occ.testor}</span></p>}
+                  {occ.descricao && <p className="text-xs text-muted-foreground">{occ.descricao}</p>}
+                  <div className="flex gap-3 text-xs flex-wrap">
+                    {occ.tempo_parada > 0 && <span className="flex items-center gap-1 text-orange-400"><Clock className="w-3 h-3" /> {occ.tempo_parada} min parado</span>}
+                    {occ.impacto_producao > 0 && <span className="text-red-400">🚗 {occ.impacto_producao} carros perdidos</span>}
+                    {occ.data && <span className="text-muted-foreground">{occ.data} {occ.hora && `às ${occ.hora}`}</span>}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
+                <div className="flex flex-col gap-2 items-end shrink-0">
+                  {occ.status !== "resolvida" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 text-green-400 border-green-500/30 hover:bg-green-500/10"
+                      onClick={() => updateMut.mutate({ id: occ.id, status: occ.status === "aberta" ? "em_andamento" : "resolvida" })}
+                    >
+                      {occ.status === "aberta" ? "Iniciar" : "Resolver"}
+                    </Button>
+                  )}
+                  <button onClick={() => setDeleteTarget(occ)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Ocorrência</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground" onClick={() => deleteMut.mutate(deleteTarget.id)}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

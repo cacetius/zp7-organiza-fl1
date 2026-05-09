@@ -21,16 +21,16 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Painel" },
-  { path: "/tarefas", icon: ClipboardList, label: "Tarefas" },
   { path: "/testores", icon: Gauge, label: "Testores" },
+  { path: "/controle-producao", icon: Factory, label: "Produção" },
+  { path: "/controle-perdas", icon: TrendingDown, label: "Perdas" },
   { path: "/ocorrencias", icon: AlertTriangle, label: "Ocorrências" },
-  { path: "/checklist", icon: CheckSquare, label: "Checklist" },
-  { path: "/passagem-turno", icon: ArrowRightLeft, label: "Passagem Turno" },
   { path: "/manutencao", icon: Wrench, label: "Manutenção" },
-  { path: "/ia-preditiva", icon: Brain, label: "IA Preditiva" },
-  { path: "/controle-perdas", icon: TrendingDown, label: "Controle de Perdas" },
-  { path: "/controle-producao", icon: Factory, label: "Controle de Produção" },
+  { path: "/tarefas", icon: ClipboardList, label: "Tarefas" },
+  { path: "/checklist", icon: CheckSquare, label: "Checklist" },
+  { path: "/passagem-turno", icon: ArrowRightLeft, label: "Passagem de Turno" },
   { path: "/relatorios", icon: BarChart3, label: "Relatórios" },
+  { path: "/ia-preditiva", icon: Brain, label: "IA Preditiva" },
   { path: "/senha-diaria", icon: KeyRound, label: "Senha Diária" },
 ];
 
