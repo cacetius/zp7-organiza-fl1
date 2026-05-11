@@ -248,6 +248,7 @@ export default function ShiftHandoff() {
           </DialogContent>
           </Dialog>
         </div>
+      </div>
 
       <div className="space-y-3">
         {isLoading ? (
