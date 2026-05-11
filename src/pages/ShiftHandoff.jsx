@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, ArrowRightLeft, Printer, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Plus, ArrowRightLeft, Printer, RefreshCw, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
 import { format } from "date-fns";
 
 const turnoLabels = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" };
@@ -100,6 +101,13 @@ export default function ShiftHandoff() {
     }
   };
 
+  const handleExportCsv = () => {
+    exportCsv("passagens_turno_zp7",
+      ["Data", "Turno Saindo", "Turno Entrando", "Responsável", "Planejado", "Realizado", "Diferença", "Testores Problema", "Ocorrências", "Ações", "Alertas"],
+      handoffs.map(h => [h.data || "", turnoLabels[h.turno_saindo] || h.turno_saindo, turnoLabels[h.turno_entrando] || h.turno_entrando, h.responsavel || "", h.producao_planejada || 0, h.producao_realizada || 0, (h.producao_realizada || 0) - (h.producao_planejada || 0), h.testores_com_problema || "", h.ocorrencias_criticas || "", h.acoes_em_andamento || "", h.alertas_proximo_turno || ""])
+    );
+  };
+
   const handlePrint = (h) => {
     const diff = (h.producao_realizada || 0) - (h.producao_planejada || 0);
     const pct = h.producao_planejada > 0 ? Math.round((h.producao_realizada / h.producao_planejada) * 100) : 0;
@@ -149,7 +157,9 @@ export default function ShiftHandoff() {
           <h1 className="text-xl font-bold flex items-center gap-2"><ArrowRightLeft className="w-5 h-5 text-primary" /> Passagem de Turno</h1>
           <p className="text-xs text-muted-foreground">{handoffs.length} passagens registradas · PDF gerado automaticamente ao encerrar</p>
         </div>
-        <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setForm(emptyForm); }}>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
+          <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setForm(emptyForm); }}>
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-1" /> Nova Passagem</Button>
           </DialogTrigger>
@@ -236,8 +246,8 @@ export default function ShiftHandoff() {
               </Button>
             </form>
           </DialogContent>
-        </Dialog>
-      </div>
+          </Dialog>
+        </div>
 
       <div className="space-y-3">
         {isLoading ? (

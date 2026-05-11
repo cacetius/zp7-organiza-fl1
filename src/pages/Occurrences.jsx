@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, AlertTriangle, CheckCircle2, Clock, Trash2, Printer } from "lucide-react";
+import { Plus, AlertTriangle, CheckCircle2, Clock, Trash2, Printer, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
 
 const gravConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -73,6 +74,12 @@ export default function Occurrences() {
 
   const filtered = filter === "todas" ? occurrences : occurrences.filter(o => o.status === filter);
 
+  const handleExportCsv = () => {
+    exportCsv("ocorrencias_zp7", ["Data", "Hora", "Tipo", "Testor", "Gravidade", "Status", "T.Parada(min)", "Carros Perdidos", "Descrição"],
+      occurrences.map(o => [o.data || "", o.hora || "", tipoLabel[o.tipo] || o.tipo || "", o.testor || "", o.gravidade || "", o.status || "", o.tempo_parada || 0, o.impacto_producao || 0, o.descricao || ""])
+    );
+  };
+
   const handlePrint = () => {
     const hora = new Date().toLocaleString("pt-BR");
     const rows = occurrences.map(o => `<tr>
@@ -108,6 +115,7 @@ export default function Occurrences() {
           <p className="text-xs text-muted-foreground">{occurrences.length} registradas · {occurrences.filter(o => o.status === "aberta").length} abertas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
           <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5"><Printer className="w-4 h-4" /> PDF</Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

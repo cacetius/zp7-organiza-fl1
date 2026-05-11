@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Wrench, Clock, AlertTriangle, CheckCircle2, Printer, Trash2 } from "lucide-react";
+import { Plus, Wrench, Clock, AlertTriangle, CheckCircle2, Printer, Trash2, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
 
 const prioConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -69,6 +70,12 @@ export default function Maintenance() {
     concluido: requests.filter(r => r.status === "concluido").length,
   };
 
+  const handleExportCsv = () => {
+    exportCsv("manutencao_zp7", ["Testor", "Tipo Falha", "Prioridade", "Status", "T.Reparo(min)", "Carros Impactados", "Responsável", "Peças", "Descrição"],
+      requests.map(r => [r.testor_nome || "", tipoFalhaLabel[r.tipo_falha] || r.tipo_falha || "", r.prioridade, r.status, r.tempo_estimado_reparo || 0, r.impacto_carros || 0, r.responsavel || "", r.pecas_necessarias || "", r.descricao || ""])
+    );
+  };
+
   const handlePrint = () => {
     const rows = requests.map(r => `<tr>
       <td>${r.testor_nome || "—"}</td>
@@ -100,6 +107,7 @@ export default function Maintenance() {
           <p className="text-xs text-muted-foreground">{counts.aberto} abertos · {counts.em_andamento} em andamento · {counts.concluido} concluídos</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
           <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5"><Printer className="w-4 h-4" /> PDF</Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

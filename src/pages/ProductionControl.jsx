@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, RotateCcw } from "lucide-react";
+import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, RotateCcw, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 
 const TURNOS = [
@@ -108,6 +109,13 @@ export default function ProductionControl() {
   const totalPerdas = losses.reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
   const producaoLiquida = Math.max(0, totalGeral - totalPerdas);
 
+  const handleExportCsv = () => {
+    const headers = ["Testor", ...turnoAtual.horas, "Total"];
+    const rows = testores.map(t => [t.nome, ...turnoAtual.horas.map(h => cellMap[t.id]?.[h]?.value || 0), totalPorTestor(t)]);
+    rows.push(["TOTAL/HORA", ...turnoAtual.horas.map(h => totalPorHora[h] || 0), totalGeral]);
+    exportCsv(`producao_${selectedDate}_${selectedTurno}`, headers, rows);
+  };
+
   const handlePrint = () => {
     const dateLabel = format(parseISO(selectedDate), "dd/MM/yyyy");
     const headerCols = turnoAtual.horas.map(h => `<th>${h}</th>`).join("");
@@ -142,7 +150,10 @@ export default function ProductionControl() {
           <h1 className="text-xl font-bold flex items-center gap-2"><Factory className="w-5 h-5 text-blue-400" /> Controle de Produção</h1>
           <p className="text-xs text-muted-foreground hidden sm:block">Toque na célula para incrementar · Segure para zerar</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}><Printer className="w-4 h-4" /> PDF</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}><Printer className="w-4 h-4" /> PDF</Button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">

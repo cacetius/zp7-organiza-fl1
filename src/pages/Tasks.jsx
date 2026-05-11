@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, ClipboardList, Trash2, Printer } from "lucide-react";
+import { Plus, ClipboardList, Trash2, Printer, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
 
 const prioConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -82,6 +83,12 @@ export default function Tasks() {
 
   const filtered = filter === "todos" ? tasks : tasks.filter(t => t.status === filter);
 
+  const handleExportCsv = () => {
+    exportCsv("tarefas_zp7", ["Tarefa", "Responsável", "Prioridade", "Status", "Prazo", "Descrição"],
+      tasks.map(t => [t.titulo, t.responsavel || "", t.prioridade, t.status, t.prazo || "", t.descricao || ""])
+    );
+  };
+
   const handlePrint = () => {
     const rows = tasks.map(t => `<tr>
       <td>${t.titulo}</td><td>${t.responsavel || "—"}</td><td>${t.prioridade}</td>
@@ -108,6 +115,7 @@ export default function Tasks() {
           <p className="text-xs text-muted-foreground">{counts.aberta} abertas · {counts.em_andamento} em andamento · {counts.concluida} concluídas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
           <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5"><Printer className="w-4 h-4" /> PDF</Button>
           <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyTask); setEditId(null); } }}>
             <DialogTrigger asChild>

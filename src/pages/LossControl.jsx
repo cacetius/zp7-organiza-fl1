@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingDown, Plus, ChevronLeft, ChevronRight, Printer, X } from "lucide-react";
+import { TrendingDown, Plus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 
 const DEFAULT_ITEMS = [
@@ -84,6 +85,13 @@ export default function LossControl() {
     if (t && !itens.includes(t)) { setItens(prev => [...prev, t]); setNovoItem(""); }
   };
 
+  const handleExportCsv = () => {
+    const headers = ["Item de Perda", ...turnoAtual.horas, "Total"];
+    const rows = itens.map(item => [item, ...turnoAtual.horas.map(h => cellMap[item]?.[h]?.count || 0), totalPorItem(item)]);
+    rows.push(["TOTAL/HORA", ...turnoAtual.horas.map(h => totalPorHora[h] || 0), totalGeral]);
+    exportCsv(`perdas_${selectedDate}_${selectedTurno}`, headers, rows);
+  };
+
   const handlePrint = () => {
     const headerCols = turnoAtual.horas.map(h => `<th>${h}</th>`).join("");
     const rows = itens.map(item => {
@@ -123,7 +131,10 @@ export default function LossControl() {
           <h1 className="text-xl font-bold flex items-center gap-2"><TrendingDown className="w-5 h-5 text-red-400" /> Controle de Perdas</h1>
           <p className="text-xs text-muted-foreground hidden sm:block">Toque na célula para registrar · de novo para incrementar · 10× para limpar</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}><Printer className="w-4 h-4" /> PDF</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}><Printer className="w-4 h-4" /> PDF</Button>
+        </div>
       </div>
 
       {/* Controles */}
