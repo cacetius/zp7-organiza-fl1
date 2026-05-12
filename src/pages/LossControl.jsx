@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingDown, Plus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
+import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 
@@ -31,6 +31,7 @@ export default function LossControl() {
   const [selectedTurno, setSelectedTurno] = useState("segundo");
   const [itens, setItens] = useState(DEFAULT_ITEMS);
   const [novoItem, setNovoItem] = useState("");
+  const longPressTimers = useRef({});
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
   const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
@@ -61,15 +62,38 @@ export default function LossControl() {
     cellMap[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
   });
 
-  const handleCellClick = (item, hora) => {
+  const saveCell = (item, hora, newVal) => {
     const cell = cellMap[item]?.[hora];
-    if (cell) {
-      const next = cell.count + 1;
-      if (next > 9) deleteCell.mutate(cell.id);
-      else updateCell.mutate({ id: cell.id, carros_perdidos: next });
-    } else {
-      createCell.mutate({ item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: 1, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro" });
+    if (newVal <= 0) {
+      if (cell) deleteCell.mutate(cell.id);
+      return;
     }
+    if (cell) updateCell.mutate({ id: cell.id, carros_perdidos: newVal });
+    else createCell.mutate({ item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro" });
+  };
+
+  const handleIncrement = (item, hora) => {
+    const cell = cellMap[item]?.[hora];
+    saveCell(item, hora, (cell?.count || 0) + 1);
+  };
+
+  const handleDecrement = (item, hora) => {
+    const cell = cellMap[item]?.[hora];
+    saveCell(item, hora, (cell?.count || 0) - 1);
+  };
+
+  const handleReset = (item, hora) => {
+    const cell = cellMap[item]?.[hora];
+    if (cell) deleteCell.mutate(cell.id);
+  };
+
+  const startLongPress = (item, hora) => {
+    const key = `${item}-${hora}`;
+    longPressTimers.current[key] = setTimeout(() => handleReset(item, hora), 800);
+  };
+  const cancelLongPress = (item, hora) => {
+    const key = `${item}-${hora}`;
+    clearTimeout(longPressTimers.current[key]);
   };
 
   // Cálculos
@@ -204,10 +228,31 @@ export default function LossControl() {
                   </td>
                   {turnoAtual.horas.map(hora => {
                     const cell = cellMap[item]?.[hora];
+                    const val = cell?.count || 0;
                     return (
-                      <td key={hora} onClick={() => handleCellClick(item, hora)} title={cell ? `${cell.count} perda(s) — clique para incrementar` : "Clique para registrar"}
-                        className={`border border-border text-center cursor-pointer select-none transition-all h-8 font-bold ${cell ? "bg-red-500/20 text-red-400 hover:bg-red-500/35 text-sm" : "hover:bg-red-500/10 text-transparent"}`}>
-                        {cell ? (cell.count > 1 ? cell.count : "✓") : "·"}
+                      <td key={hora} className="border border-border p-1">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <button
+                            onPointerDown={() => startLongPress(item, hora)}
+                            onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
+                            onPointerLeave={() => cancelLongPress(item, hora)}
+                            className={`w-full h-10 rounded-md font-black text-base transition-all select-none
+                              ${val > 0
+                                ? "bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
+                                : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"
+                              }`}
+                          >
+                            {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
+                          </button>
+                          {val > 0 && (
+                            <button
+                              onClick={() => handleDecrement(item, hora)}
+                              className="text-muted-foreground/40 hover:text-red-400 transition-colors p-0.5"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     );
                   })}
@@ -228,7 +273,7 @@ export default function LossControl() {
         </table>
       </div>
 
-      <p className="text-xs text-muted-foreground">Toque na célula para registrar 1 perda · toque de novo para incrementar · 10× para apagar · ✕ na linha para remover item</p>
+      <p className="text-xs text-muted-foreground">Toque para +1 · Segure (~1s) para zerar · Use − para diminuir · ✕ na linha para remover item</p>
     </div>
   );
 }
