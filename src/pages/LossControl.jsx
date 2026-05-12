@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -32,14 +32,20 @@ export default function LossControl() {
   const [itens, setItens] = useState(DEFAULT_ITEMS);
   const [novoItem, setNovoItem] = useState("");
   const longPressTimers = useRef({});
+  const [userEmail, setUserEmail] = useState(null);
+
+  useEffect(() => {
+    base44.auth.me().then(u => setUserEmail(u.email));
+  }, []);
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
-  const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
+  const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}-${userEmail}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
-    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno, created_by: userEmail }),
+    enabled: !!userEmail,
   });
 
   const optimisticUpdate = (updater) => {
