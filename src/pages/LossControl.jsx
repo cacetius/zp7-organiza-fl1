@@ -42,16 +42,29 @@ export default function LossControl() {
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
+  const optimisticUpdate = (updater) => {
+    qc.setQueryData([sheetKey], (old = []) => updater(old));
+  };
+
   const createCell = useMutation({
     mutationFn: (data) => base44.entities.LossControl.create(data),
+    onMutate: (data) => {
+      optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const updateCell = useMutation({
     mutationFn: ({ id, carros_perdidos }) => base44.entities.LossControl.update(id, { carros_perdidos }),
+    onMutate: ({ id, carros_perdidos }) => {
+      optimisticUpdate(old => old.map(r => r.id === id ? { ...r, carros_perdidos } : r));
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const deleteCell = useMutation({
     mutationFn: (id) => base44.entities.LossControl.delete(id),
+    onMutate: (id) => {
+      optimisticUpdate(old => old.filter(r => r.id !== id));
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
 

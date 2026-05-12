@@ -40,16 +40,29 @@ export default function ProductionControl() {
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
+  const optimisticUpdate = (updater) => {
+    qc.setQueryData([sheetKey], (old = []) => updater(old));
+  };
+
   const createRec = useMutation({
     mutationFn: (data) => base44.entities.ProductionControl.create(data),
+    onMutate: (data) => {
+      optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const updateRec = useMutation({
     mutationFn: ({ id, carros_produzidos }) => base44.entities.ProductionControl.update(id, { carros_produzidos }),
+    onMutate: ({ id, carros_produzidos }) => {
+      optimisticUpdate(old => old.map(r => r.id === id ? { ...r, carros_produzidos } : r));
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const deleteRec = useMutation({
     mutationFn: (id) => base44.entities.ProductionControl.delete(id),
+    onMutate: (id) => {
+      optimisticUpdate(old => old.filter(r => r.id !== id));
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
 
