@@ -21,6 +21,9 @@ export default function ProductionControl() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState("segundo");
   const longPressTimers = useRef({});
+  const clickCounters = useRef({});
+  const clickTimers = useRef({});
+  const [editingCell, setEditingCell] = useState(null); // { testorId, hora, value }
   const [userEmail, setUserEmail] = useState(null);
 
   useEffect(() => {
@@ -108,20 +111,50 @@ export default function ProductionControl() {
     if (cell) deleteRec.mutate(cell.id);
   };
 
-  // Long press to reset
+  // Long press → abre input para digitar número
   const startLongPress = (testor, hora) => {
     const key = `${testor.id}-${hora}`;
-    longPressTimers.current[key] = setTimeout(() => handleReset(testor, hora), 800);
+    longPressTimers.current[key] = setTimeout(() => {
+      const cell = cellMap[testor.id]?.[hora];
+      setEditingCell({ testorId: testor.id, testor, hora, value: String(cell?.value || "") });
+    }, 600);
   };
   const cancelLongPress = (testor, hora) => {
     const key = `${testor.id}-${hora}`;
     clearTimeout(longPressTimers.current[key]);
   };
 
+  // 4 cliques rápidos → zera
+  const handleIncrementWithReset = (testor, hora) => {
+    const key = `${testor.id}-${hora}`;
+    clickCounters.current[key] = (clickCounters.current[key] || 0) + 1;
+    clearTimeout(clickTimers.current[key]);
+    if (clickCounters.current[key] >= 4) {
+      clickCounters.current[key] = 0;
+      handleReset(testor, hora);
+      return;
+    }
+    clickTimers.current[key] = setTimeout(() => { clickCounters.current[key] = 0; }, 600);
+    handleIncrement(testor, hora);
+  };
+
+  const confirmEditCell = () => {
+    if (!editingCell) return;
+    const num = parseInt(editingCell.value, 10);
+    if (!isNaN(num)) saveCell(editingCell.testor, editingCell.hora, num);
+    setEditingCell(null);
+  };
+
   // Cálculos
   const totalPorHora = {};
   turnoAtual.horas.forEach(h => {
     totalPorHora[h] = testores.reduce((acc, t) => acc + (cellMap[t.id]?.[h]?.value || 0), 0);
+  });
+
+  // Perdas por hora (somando todos os itens de perda daquela hora)
+  const perdasPorHora = {};
+  turnoAtual.horas.forEach(h => {
+    perdasPorHora[h] = losses.filter(l => l.hora === h).reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
   });
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[t.id]?.[h]?.value || 0), 0);
@@ -165,10 +198,32 @@ export default function ProductionControl() {
 
   return (
     <div className="space-y-4 pb-20 lg:pb-0">
+      {/* Modal edição direta */}
+      {editingCell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingCell(null)}>
+          <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-64" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold mb-3 text-foreground">Digite o valor da célula</p>
+            <input
+              autoFocus
+              type="number"
+              min="0"
+              value={editingCell.value}
+              onChange={e => setEditingCell(prev => ({ ...prev, value: e.target.value }))}
+              onKeyDown={e => { if (e.key === "Enter") confirmEditCell(); if (e.key === "Escape") setEditingCell(null); }}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-2xl font-black text-center focus:outline-none focus:ring-2 focus:ring-primary mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setEditingCell(null)} className="flex-1 py-2 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
+              <button onClick={confirmEditCell} className="flex-1 py-2 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Factory className="w-5 h-5 text-blue-400" /> Controle de Produção</h1>
-          <p className="text-xs text-muted-foreground hidden sm:block">Toque na célula para incrementar · Segure para zerar</p>
+          <p className="text-xs text-muted-foreground hidden sm:block">Toque para +1 · 4× rápido para zerar · Segure para digitar número</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
@@ -239,11 +294,11 @@ export default function ProductionControl() {
                       return (
                         <td key={hora} className="border border-border p-1">
                           <div className="flex flex-col items-center gap-0.5">
-                            {/* Valor — clique para +1, segure para zerar */}
+                            {/* Valor — clique para +1 (4x zera), segure para digitar */}
                             <button
-                              onPointerDown={() => startLongPress(testor, hora)}
-                              onPointerUp={() => { cancelLongPress(testor, hora); handleIncrement(testor, hora); }}
-                              onPointerLeave={() => cancelLongPress(testor, hora)}
+                             onPointerDown={() => startLongPress(testor, hora)}
+                             onPointerUp={() => { cancelLongPress(testor, hora); handleIncrementWithReset(testor, hora); }}
+                             onPointerLeave={() => cancelLongPress(testor, hora)}
                               className={`w-full h-10 rounded-md font-black text-base transition-all select-none
                                 ${val > 0
                                   ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/35 active:scale-95"
@@ -278,12 +333,19 @@ export default function ProductionControl() {
                 ))}
                 <td className="border border-border text-center font-black text-white bg-blue-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
               </tr>
+              <tr className="bg-red-500/10 font-bold">
+                <td className="border border-border px-3 py-2 font-black text-red-400 uppercase text-xs">PERDAS/HORA</td>
+                {turnoAtual.horas.map(h => (
+                  <td key={h} className="border border-border text-center font-bold text-red-400 py-2 text-sm">{perdasPorHora[h] > 0 ? perdasPorHora[h] : "—"}</td>
+                ))}
+                <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalPerdas > 0 ? totalPerdas : "—"}</td>
+              </tr>
             </tbody>
           </table>
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">Toque para +1 · Segure (~1s) para zerar · Use − para diminuir</p>
+      <p className="text-xs text-muted-foreground">Toque para +1 · 4× rápido para zerar · Segure para digitar número · Use − para diminuir</p>
     </div>
   );
 }
