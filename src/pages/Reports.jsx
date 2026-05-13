@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import {
   BarChart3, Car, Clock, AlertTriangle, Gauge, CheckCircle2,
-  TrendingUp, Activity, TrendingDown, Calendar, CalendarDays, FileDown
+  TrendingUp, Activity, TrendingDown, Calendar, CalendarDays, FileDown, FileText
 } from "lucide-react";
 import {
   format, subDays, subWeeks, subMonths, startOfWeek, endOfWeek,
@@ -39,6 +39,7 @@ const axisStyle = { fontSize: 11, fill: "hsl(215,16%,55%)" };
 const gridStyle = { strokeDasharray: "3 3", stroke: "hsl(217,19%,18%)" };
 
 const TABS = [
+  { key: "resumo", label: "Resumo Diário", icon: FileText },
   { key: "producao", label: "Produção", icon: TrendingUp },
   { key: "testores", label: "Testores", icon: Gauge },
   { key: "perdas", label: "Controle de Perdas", icon: TrendingDown },
@@ -46,9 +47,14 @@ const TABS = [
 
 export default function Reports() {
   const [turno, setTurno] = useState("todos");
-  const [tab, setTab] = useState("producao");
-  const [periodoPerda, setPeriodoPerda] = useState("semana"); // "semana" | "mes"
+  const [tab, setTab] = useState("resumo");
+  const [periodoPerda, setPeriodoPerda] = useState("semana");
+  const [resumoDate, setResumoDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [resumoTurno, setResumoTurno] = useState("segundo");
+  const [userEmail, setUserEmail] = useState(null);
   const qc = useQueryClient();
+
+  useEffect(() => { base44.auth.me().then(u => setUserEmail(u.email)); }, []);
 
   const today = new Date();
 
@@ -60,6 +66,144 @@ export default function Reports() {
     queryKey: ["loss-all"],
     queryFn: () => base44.entities.LossControl.list("-created_date", 500),
   });
+
+  // Dados do resumo diário
+  const resumoSheetKey = `prod-ctrl-resumo-${resumoDate}-${resumoTurno}-${userEmail}`;
+  const resumoLossKey = `loss-resumo-${resumoDate}-${resumoTurno}-${userEmail}`;
+
+  const RESUMO_TURNOS = [
+    { label: "2º Turno (15h–23h45)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
+    { label: "3º Turno (01h–05h)", key: "terceiro", horas: ["01:00","02:00","03:00","04:00","05:00"] },
+    { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
+  ];
+  const resumoTurnoObj = RESUMO_TURNOS.find(t => t.key === resumoTurno);
+
+  const { data: prodRecords = [] } = useQuery({
+    queryKey: [resumoSheetKey],
+    queryFn: () => base44.entities.ProductionControl.filter({ data: resumoDate, turno: resumoTurno }),
+    enabled: tab === "resumo",
+  });
+
+  const { data: lossDay = [] } = useQuery({
+    queryKey: [resumoLossKey],
+    queryFn: () => base44.entities.LossControl.filter({ data: resumoDate, turno: resumoTurno }),
+    enabled: tab === "resumo",
+  });
+
+  const { data: occDay = [] } = useQuery({
+    queryKey: [`occ-resumo-${resumoDate}-${resumoTurno}`],
+    queryFn: () => base44.entities.Occurrence.list("-created_date", 100),
+    enabled: tab === "resumo",
+  });
+
+  // Cálculos resumo
+  const resumoTotalProd = prodRecords.reduce((acc, r) => acc + (r.carros_produzidos || 0), 0);
+  const lossDayBruto = lossDay.filter(r => r.motivo_perda !== "ganho").reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
+  const lossDayGanho = lossDay.filter(r => r.motivo_perda === "ganho").reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
+  const perdaReal = Math.max(0, lossDayBruto - lossDayGanho);
+  const producaoLiquida = Math.max(0, resumoTotalProd - perdaReal);
+
+  // Produção por hora
+  const prodPorHora = {};
+  resumoTurnoObj.horas.forEach(h => {
+    prodPorHora[h] = prodRecords.reduce((acc, r) => acc + (r.hora === h ? (r.carros_produzidos || 0) : 0), 0);
+  });
+
+  // Perdas por item (ranking)
+  const lossByItemMap = {};
+  lossDay.filter(r => r.motivo_perda !== "ganho").forEach(r => {
+    if (!r.item_perda) return;
+    lossByItemMap[r.item_perda] = (lossByItemMap[r.item_perda] || 0) + (r.carros_perdidos || 0);
+  });
+  const lossRanking = Object.entries(lossByItemMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+  // Ocorrências do dia filtradas por turno
+  const occFiltered = occDay.filter(o => {
+    const d = o.created_date ? o.created_date.slice(0, 10) : "";
+    return d === resumoDate && (resumoTurno === "todos" || o.turno === resumoTurno);
+  });
+
+  // Produção por testor
+  const prodByTestor = {};
+  prodRecords.forEach(r => {
+    if (!r.testor_nome) return;
+    prodByTestor[r.testor_nome] = (prodByTestor[r.testor_nome] || 0) + (r.carros_produzidos || 0);
+  });
+
+  const handleExportResumoPDF = () => {
+    const hora = new Date().toLocaleString("pt-BR");
+    const turnoLabel = resumoTurnoObj.label;
+    const dateLabel = format(parseISO(resumoDate), "dd/MM/yyyy");
+
+    const prodHoraRows = resumoTurnoObj.horas.map(h =>
+      `<tr><td>${h}</td><td>${prodPorHora[h] || 0}</td></tr>`
+    ).join("");
+
+    const testorRows = Object.entries(prodByTestor).map(([nome, total]) =>
+      `<tr><td>${nome}</td><td>${total}</td></tr>`
+    ).join("");
+
+    const lossRows = lossRanking.map(([item, val]) =>
+      `<tr><td>${item}</td><td>${val}</td></tr>`
+    ).join("");
+
+    const occRows = occFiltered.map(o =>
+      `<tr><td>${o.tipo?.replace(/_/g," ") || "—"}</td><td>${o.testor || "—"}</td><td>${o.gravidade || "—"}</td><td>${o.descricao || "—"}</td><td>${o.status || "—"}</td></tr>`
+    ).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      @page { size: A4; margin: 12mm; }
+      body { font-family: Arial, sans-serif; font-size: 10px; color: #111; }
+      h1 { font-size: 16px; margin: 0 0 2px; color: #1a1a2e; }
+      .subtitle { font-size: 10px; color: #666; margin-bottom: 14px; }
+      h2 { font-size: 12px; margin: 16px 0 6px; color: #333; border-bottom: 2px solid #1d4ed8; padding-bottom: 4px; }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+      th { background: #dbeafe; padding: 5px 6px; text-align: left; border: 1px solid #93c5fd; font-size: 9px; color: #1e3a8a; }
+      td { padding: 4px 6px; border: 1px solid #ddd; font-size: 9px; }
+      tr:nth-child(even) { background: #f7f8fb; }
+      .kpi-grid { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+      .kpi { background: #f0f2f9; border: 1px solid #d0d4e8; border-radius: 6px; padding: 8px 12px; min-width: 110px; text-align: center; }
+      .kpi .val { font-size: 22px; font-weight: bold; }
+      .kpi .lbl { font-size: 8px; color: #666; margin-top: 1px; }
+      .blue .val { color: #1d4ed8; }
+      .red .val { color: #dc2626; }
+      .green .val { color: #16a34a; }
+      .orange .val { color: #ea580c; }
+      .footer { margin-top: 20px; font-size: 8px; color: #aaa; border-top: 1px solid #eee; padding-top: 6px; }
+    </style></head><body>
+    <h1>RESUMO DIÁRIO — ZP7</h1>
+    <div class="subtitle">Data: ${dateLabel} &nbsp;|&nbsp; Turno: ${turnoLabel} &nbsp;|&nbsp; Gerado em: ${hora}</div>
+
+    <div class="kpi-grid">
+      <div class="kpi blue"><div class="val">${resumoTotalProd}</div><div class="lbl">Produção Bruta</div></div>
+      <div class="kpi red"><div class="val">${lossDayBruto}</div><div class="lbl">Perdas Brutas</div></div>
+      <div class="kpi green"><div class="val">${lossDayGanho}</div><div class="lbl">Carros Ganhos</div></div>
+      <div class="kpi orange"><div class="val">${perdaReal}</div><div class="lbl">Perda Real</div></div>
+      <div class="kpi green"><div class="val">${producaoLiquida}</div><div class="lbl">Produção Líquida</div></div>
+      <div class="kpi red"><div class="val">${occFiltered.length}</div><div class="lbl">Ocorrências</div></div>
+    </div>
+
+    <h2>Produção por Hora</h2>
+    <table><thead><tr><th>Hora</th><th>Carros Produzidos</th></tr></thead><tbody>${prodHoraRows}</tbody></table>
+
+    ${testorRows ? `<h2>Produção por Testor</h2>
+    <table><thead><tr><th>Testor</th><th>Total de Carros</th></tr></thead><tbody>${testorRows}</tbody></table>` : ""}
+
+    ${lossRows ? `<h2>Ranking de Perdas</h2>
+    <table><thead><tr><th>Item de Perda</th><th>Carros Perdidos</th></tr></thead><tbody>${lossRows}</tbody></table>` : ""}
+
+    ${occRows ? `<h2>Ocorrências do Dia</h2>
+    <table><thead><tr><th>Tipo</th><th>Testor</th><th>Gravidade</th><th>Descrição</th><th>Status</th></tr></thead><tbody>${occRows}</tbody></table>` : ""}
+
+    <div class="footer">ZP7 — Resumo Diário gerado automaticamente pelo sistema.</div>
+    <script>window.onload = function(){ window.print(); }<\/script>
+    </body></html>`;
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    a.target = "_blank"; a.click();
+  };
 
   useEffect(() => {
     const subs = [
@@ -338,6 +482,158 @@ export default function Reports() {
           </Card>
         ))}
       </div>
+
+      {/* ═══ TAB: RESUMO DIÁRIO ═══ */}
+      {tab === "resumo" && (
+        <div className="space-y-4">
+          {/* Controles de data e turno */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <input type="date" value={resumoDate} onChange={e => setResumoDate(e.target.value)}
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+            <div className="flex gap-1 bg-muted/40 border border-border rounded-lg p-0.5">
+              {RESUMO_TURNOS.map(t => (
+                <button key={t.key} onClick={() => setResumoTurno(t.key)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${resumoTurno === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  {t.label.split(" ")[0]} {t.label.split(" ")[1]}
+                </button>
+              ))}
+            </div>
+            <Button size="sm" variant="outline" onClick={handleExportResumoPDF} className="gap-1.5 ml-auto">
+              <FileDown className="w-3.5 h-3.5" /> Exportar PDF
+            </Button>
+          </div>
+
+          {/* KPIs principais */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              { label: "Produção Bruta", value: resumoTotalProd, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+              { label: "Perdas Brutas", value: lossDayBruto, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
+              { label: "Carros Ganhos", value: lossDayGanho, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
+              { label: "Perda Real", value: perdaReal, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
+              { label: "Produção Líquida", value: producaoLiquida, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+              { label: "Ocorrências", value: occFiltered.length, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
+            ].map(k => (
+              <Card key={k.label} className={`border ${k.bg}`}>
+                <CardContent className="p-4 text-center">
+                  <p className={`text-4xl font-black ${k.color}`}>{k.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* Produção por hora */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-400" /> Produção por Hora
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {resumoTotalProd > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={resumoTurnoObj.horas.map(h => ({ hora: h, Carros: prodPorHora[h] || 0 }))}>
+                      <CartesianGrid {...gridStyle} />
+                      <XAxis dataKey="hora" tick={{ ...axisStyle, fontSize: 9 }} />
+                      <YAxis tick={axisStyle} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Bar dataKey="Carros" fill="hsl(217,91%,60%)" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : <p className="text-sm text-muted-foreground text-center py-12">Sem dados de produção.</p>}
+              </CardContent>
+            </Card>
+
+            {/* Produção por testor */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-primary" /> Produção por Testor
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {Object.keys(prodByTestor).length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={Object.entries(prodByTestor).map(([nome, total]) => ({ nome: nome.replace("Testor ","T"), total }))}>
+                      <CartesianGrid {...gridStyle} />
+                      <XAxis dataKey="nome" tick={axisStyle} />
+                      <YAxis tick={axisStyle} />
+                      <Tooltip contentStyle={tooltipStyle} />
+                      <Bar dataKey="total" name="Carros" fill="hsl(142,71%,45%)" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : <p className="text-sm text-muted-foreground text-center py-12">Sem dados de testor.</p>}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Ranking de perdas */}
+          {lossRanking.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingDown className="w-4 h-4 text-red-400" /> Ranking de Perdas do Dia
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {lossRanking.map(([item, val], i) => (
+                    <div key={item} className="flex items-center gap-3">
+                      <span className={`text-xs font-black w-5 text-center ${i === 0 ? "text-red-400" : i <= 2 ? "text-orange-400" : "text-muted-foreground"}`}>{i + 1}</span>
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-0.5">
+                          <span className="text-xs font-medium truncate">{item}</span>
+                          <span className="text-xs font-bold text-red-400 ml-2">{val}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-red-500/70" style={{ width: `${Math.round((val / (lossRanking[0]?.[1] || 1)) * 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ocorrências do dia */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-400" /> Ocorrências do Dia
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {occFiltered.length > 0 ? (
+                <div className="space-y-2">
+                  {occFiltered.map(o => (
+                    <div key={o.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        o.gravidade === "critica" ? "bg-red-500/20 text-red-400" :
+                        o.gravidade === "alta" ? "bg-orange-500/20 text-orange-400" :
+                        o.gravidade === "media" ? "bg-yellow-500/20 text-yellow-400" :
+                        "bg-muted text-muted-foreground"
+                      }`}>{o.gravidade?.toUpperCase() || "—"}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold">{o.tipo?.replace(/_/g," ") || "Sem tipo"} {o.testor ? `· ${o.testor}` : ""}</p>
+                        {o.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{o.descricao}</p>}
+                      </div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                        o.status === "resolvida" ? "bg-green-500/20 text-green-400" :
+                        o.status === "em_andamento" ? "bg-blue-500/20 text-blue-400" :
+                        "bg-muted text-muted-foreground"
+                      }`}>{o.status?.replace(/_/g," ") || "aberta"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">Nenhuma ocorrência registrada para este turno/dia.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ═══ TAB: PRODUÇÃO ═══ */}
       {tab === "producao" && (
