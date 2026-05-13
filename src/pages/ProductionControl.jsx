@@ -111,10 +111,14 @@ export default function ProductionControl() {
     if (cell) deleteRec.mutate(cell.id);
   };
 
+  const longPressTriggered = useRef({});
+
   // Long press → abre input para digitar número
   const startLongPress = (testor, hora) => {
     const key = `${testor.id}-${hora}`;
+    longPressTriggered.current[key] = false;
     longPressTimers.current[key] = setTimeout(() => {
+      longPressTriggered.current[key] = true;
       const cell = cellMap[testor.id]?.[hora];
       setEditingCell({ testorId: testor.id, testor, hora, value: String(cell?.value || "") });
     }, 600);
@@ -127,6 +131,8 @@ export default function ProductionControl() {
   // 4 cliques rápidos → zera
   const handleIncrementWithReset = (testor, hora) => {
     const key = `${testor.id}-${hora}`;
+    // Se foi long press, não incrementa
+    if (longPressTriggered.current[key]) return;
     clickCounters.current[key] = (clickCounters.current[key] || 0) + 1;
     clearTimeout(clickTimers.current[key]);
     if (clickCounters.current[key] >= 4) {
