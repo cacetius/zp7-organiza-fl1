@@ -53,18 +53,16 @@
     "resultado"
   ],
   "rls": {
-    "create": {
-      "created_by": "{{user.email}}"
-    },
+    "create": true,
     "read": {
       "$or": [
-        {
-          "created_by": "{{user.email}}"
-        },
         {
           "user_condition": {
             "role": "admin"
           }
+        },
+        {
+          "created_by": "{{user.email}}"
         },
         {
           "data.turno": "{{user.data.turno}}"
@@ -74,27 +72,24 @@
     "update": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
-        },
-        {
           "user_condition": {
             "role": "admin"
           }
         },
         {
-          "data.turno": "{{user.data.turno}}"
+          "created_by": "{{user.email}}"
         }
       ]
     },
     "delete": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
-        },
-        {
           "user_condition": {
             "role": "admin"
           }
+        },
+        {
+          "created_by": "{{user.email}}"
         }
       ]
     }
