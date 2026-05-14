@@ -89,17 +89,12 @@
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
-          }
-        },
-        {
-          "user_condition": {
-            "data.funcao": "manutencao"
+            "funcao": "monitor"
           }
         }
       ]
@@ -114,17 +109,12 @@
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
-          }
-        },
-        {
-          "user_condition": {
-            "data.funcao": "manutencao"
+            "funcao": "monitor"
           }
         }
       ]
