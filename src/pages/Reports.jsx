@@ -794,6 +794,28 @@ export default function Reports() {
           <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 w-36 text-xs" />
           <span className="text-xs text-muted-foreground">Até:</span>
           <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 w-36 text-xs" />
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => { setDateFrom(yesterday); setDateTo(yesterday); }}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all border ${dateFrom === yesterday && dateTo === yesterday ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"}`}>
+              Ontem
+            </button>
+            <button
+              onClick={() => { setDateFrom(format(new Date(), "yyyy-MM-dd")); setDateTo(format(new Date(), "yyyy-MM-dd")); }}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all border ${dateFrom === format(new Date(), "yyyy-MM-dd") && dateTo === format(new Date(), "yyyy-MM-dd") ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"}`}>
+              Hoje
+            </button>
+            <button
+              onClick={() => { setDateFrom(format(subDays(new Date(), 6), "yyyy-MM-dd")); setDateTo(format(new Date(), "yyyy-MM-dd")); }}
+              className="px-3 py-1 rounded-full text-xs font-semibold transition-all border bg-muted/40 text-muted-foreground border-border hover:text-foreground">
+              7 dias
+            </button>
+            <button
+              onClick={() => { setDateFrom(format(subDays(new Date(), 29), "yyyy-MM-dd")); setDateTo(format(new Date(), "yyyy-MM-dd")); }}
+              className="px-3 py-1 rounded-full text-xs font-semibold transition-all border bg-muted/40 text-muted-foreground border-border hover:text-foreground">
+              30 dias
+            </button>
+          </div>
           <Badge variant="outline" className="ml-auto text-primary border-primary/30 text-xs">{dateRangeLabel}</Badge>
         </div>
       )}
