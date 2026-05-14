@@ -24,7 +24,7 @@ const TURNOS = [
   { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
 ];
 
-const DEFAULT_GANHOS = ["RETRABALHO APROVADO", "HORA EXTRA", "RECUPERAÇÃO"];
+// Ganhos agora são selecionados da lista de itens de perda
 
 export default function LossControl() {
   const qc = useQueryClient();
@@ -32,9 +32,9 @@ export default function LossControl() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState("segundo");
   const [itens, setItens] = useState(DEFAULT_ITEMS);
-  const [itensGanho, setItensGanho] = useState(DEFAULT_GANHOS);
+  const [itensGanho, setItensGanho] = useState([]);
   const [novoItem, setNovoItem] = useState("");
-  const [novoGanho, setNovoGanho] = useState("");
+  const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
@@ -161,10 +161,14 @@ export default function LossControl() {
     const t = novoItem.trim().toUpperCase();
     if (t && !itens.includes(t)) { setItens(prev => [...prev, t]); setNovoItem(""); }
   };
-  const addGanho = () => {
-    const t = novoGanho.trim().toUpperCase();
-    if (t && !itensGanho.includes(t)) { setItensGanho(prev => [...prev, t]); setNovoGanho(""); }
+  const addGanhoItem = () => {
+    if (ganhoSelecionado && !itensGanho.includes(ganhoSelecionado)) {
+      setItensGanho(prev => [...prev, ganhoSelecionado]);
+      setGanhoSelecionado("");
+    }
   };
+  // Items disponíveis para ganho = items de perda que ainda não foram adicionados como ganho
+  const itensDisponiveisGanho = itens.filter(i => !itensGanho.includes(i));
 
   const handleExportCsv = () => {
     const headers = ["Item de Perda", ...turnoAtual.horas, "Total"];
@@ -205,7 +209,7 @@ export default function LossControl() {
   };
 
   return (
-    <div className="space-y-4 pb-24 lg:pb-6">
+    <div className="space-y-4 pb-20 lg:pb-0">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -232,8 +236,18 @@ export default function LossControl() {
         <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
           <Input placeholder="+ Item de perda..." value={novoItem} onChange={e => setNovoItem(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} className="h-9 text-sm w-40" />
           <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400"><Plus className="w-3.5 h-3.5" /></Button>
-          <Input placeholder="+ Item de ganho..." value={novoGanho} onChange={e => setNovoGanho(e.target.value)} onKeyDown={e => e.key === "Enter" && addGanho()} className="h-9 text-sm w-40" />
-          <Button size="sm" variant="outline" onClick={addGanho} disabled={!novoGanho.trim()} className="border-green-500/40 text-green-400"><Plus className="w-3.5 h-3.5" /></Button>
+          <Select value={ganhoSelecionado} onValueChange={setGanhoSelecionado}>
+            <SelectTrigger className="h-9 w-48 text-sm border-green-500/40 text-green-400">
+              <SelectValue placeholder="Selecionar ganho..." />
+            </SelectTrigger>
+            <SelectContent>
+              {itensDisponiveisGanho.length === 0
+                ? <SelectItem value="_none" disabled>Todos já adicionados</SelectItem>
+                : itensDisponiveisGanho.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)
+              }
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={addGanhoItem} disabled={!ganhoSelecionado} className="border-green-500/40 text-green-400"><Plus className="w-3.5 h-3.5" /></Button>
         </div>
       </div>
 
