@@ -7,17 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Legend, RadarChart, Radar,
+  PieChart, Pie, Cell, Legend, RadarChart, Radar,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, AreaChart, Area
 } from "recharts";
 import {
   BarChart3, Car, Clock, AlertTriangle, Gauge, CheckCircle2,
-  TrendingUp, Activity, TrendingDown, Calendar, CalendarDays, FileDown, FileText,
-  Filter, Printer
+  TrendingUp, Activity, TrendingDown, Calendar, FileText,
+  Filter, Printer, Send
 } from "lucide-react";
-import {
-  format, subDays, parseISO, eachDayOfInterval, isWithinInterval
-} from "date-fns";
+import { format, subDays, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import html2canvas from "html2canvas";
 
@@ -40,44 +38,28 @@ const axisStyle = { fontSize: 11, fill: "hsl(215,16%,55%)" };
 const gridStyle = { strokeDasharray: "3 3", stroke: "hsl(217,19%,18%)" };
 
 const TABS = [
-  { key: "resumo", label: "Resumo Diário", icon: FileText },
+  { key: "resumo", label: "Resumo", icon: FileText },
   { key: "producao", label: "Produção", icon: TrendingUp },
   { key: "testores", label: "Testores", icon: Gauge },
-  { key: "perdas", label: "Controle de Perdas", icon: TrendingDown },
+  { key: "perdas", label: "Perdas", icon: TrendingDown },
 ];
 
 const RESUMO_TURNOS = [
   { label: "2º Turno (15h–23h45)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
-  { label: "3º Turno (01h–05h)", key: "terceiro", horas: ["01:00","02:00","03:00","04:00","05:00"] },
-  { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
+  { label: "3º Turno (01h–05h)",   key: "terceiro", horas: ["01:00","02:00","03:00","04:00","05:00"] },
+  { label: "1º Turno (06h–14h)",   key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
 ];
-
-// Capture all charts in a container as base64 images
-async function captureChartsInContainer(container) {
-  const charts = container.querySelectorAll(".recharts-responsive-container, .chart-capture");
-  const images = [];
-  for (const el of charts) {
-    try {
-      const canvas = await html2canvas(el, { backgroundColor: "#16202e", scale: 1.5, logging: false });
-      images.push({ title: el.getAttribute("data-title") || "", src: canvas.toDataURL("image/png") });
-    } catch (_) {}
-  }
-  return images;
-}
 
 export default function Reports() {
   const [turno, setTurno] = useState("todos");
   const [tab, setTab] = useState("resumo");
-  const [periodoPerda, setPeriodoPerda] = useState("semana");
   const [resumoDate, setResumoDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [resumoTurno, setResumoTurno] = useState("segundo");
-
-  // Date range filter for non-resumo tabs
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [showDateFilter, setShowDateFilter] = useState(false);
-
   const [exporting, setExporting] = useState(false);
+  const [exportingTurno, setExportingTurno] = useState(false);
   const reportRef = useRef(null);
   const qc = useQueryClient();
 
@@ -92,22 +74,20 @@ export default function Reports() {
     queryFn: () => base44.entities.LossControl.list("-created_date", 500),
   });
 
-  const resumoSheetKey = `prod-ctrl-resumo-${resumoDate}-${resumoTurno}`;
-  const resumoLossKey = `loss-resumo-${resumoDate}-${resumoTurno}`;
   const resumoTurnoObj = RESUMO_TURNOS.find(t => t.key === resumoTurno);
 
   const { data: prodRecords = [] } = useQuery({
-    queryKey: [resumoSheetKey],
+    queryKey: [`prod-ctrl-${resumoDate}-${resumoTurno}`],
     queryFn: () => base44.entities.ProductionControl.filter({ data: resumoDate, turno: resumoTurno }),
   });
 
   const { data: lossDay = [] } = useQuery({
-    queryKey: [resumoLossKey],
+    queryKey: [`loss-${resumoDate}-${resumoTurno}`],
     queryFn: () => base44.entities.LossControl.filter({ data: resumoDate, turno: resumoTurno }),
   });
 
   const { data: occDay = [] } = useQuery({
-    queryKey: [`occ-resumo-${resumoDate}-${resumoTurno}`],
+    queryKey: [`occ-${resumoDate}-${resumoTurno}`],
     queryFn: () => base44.entities.Occurrence.list("-created_date", 100),
     enabled: tab === "resumo",
   });
@@ -123,19 +103,14 @@ export default function Reports() {
     return () => subs.forEach(u => u());
   }, [qc]);
 
-  // ── Date range helpers ──
   const fromDate = useMemo(() => { try { return parseISO(dateFrom); } catch { return subDays(today, 29); } }, [dateFrom]);
   const toDate = useMemo(() => { try { return parseISO(dateTo); } catch { return today; } }, [dateTo]);
 
   const inRange = (dateStr) => {
     if (!dateStr) return false;
-    try {
-      const d = parseISO(dateStr);
-      return d >= fromDate && d <= toDate;
-    } catch { return false; }
+    try { const d = parseISO(dateStr); return d >= fromDate && d <= toDate; } catch { return false; }
   };
 
-  // ── Filtered data by date range ──
   const filteredTestores    = useMemo(() => turno === "todos" ? testores    : testores.filter(t => t.turno === turno), [testores, turno]);
   const filteredOccurrences = useMemo(() => {
     let list = turno === "todos" ? occurrences : occurrences.filter(o => o.turno === turno);
@@ -148,7 +123,7 @@ export default function Reports() {
   }, [production, turno, dateFrom, dateTo]);
   const filteredLoss = useMemo(() => lossRecords.filter(r => inRange(r.data)), [lossRecords, dateFrom, dateTo]);
 
-  // ── Resumo cálculos ──
+  // Resumo calculations
   const resumoTotalProd = prodRecords.reduce((acc, r) => acc + (r.carros_produzidos || 0), 0);
   const lossDayBruto = lossDay.filter(r => r.motivo_perda !== "ganho").reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
   const lossDayGanho = lossDay.filter(r => r.motivo_perda === "ganho").reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
@@ -178,7 +153,7 @@ export default function Reports() {
     prodByTestor[r.testor_nome] = (prodByTestor[r.testor_nome] || 0) + (r.carros_produzidos || 0);
   });
 
-  // ── KPIs (usando range de datas) ──
+  // Global KPIs
   const totalCarros  = filteredTestores.reduce((s, t) => s + (t.carros_testados_turno || 0), 0);
   const totalFalhas  = filteredTestores.reduce((s, t) => s + (t.falhas_turno || 0), 0);
   const totalParado  = filteredTestores.reduce((s, t) => s + (t.tempo_total_parado || 0), 0);
@@ -187,7 +162,6 @@ export default function Reports() {
   const tasksOpen    = filteredTasks.filter(t => t.status === "aberta").length;
   const tasksLate    = filteredTasks.filter(t => t.status === "atrasada").length;
 
-  // ── Produção charts (range) ──
   const prodLineData = useMemo(() => {
     return filteredProduction.slice(0, 30).reverse().map((p, i) => ({
       label: p.data ? p.data.slice(5) : `D${i + 1}`,
@@ -196,7 +170,6 @@ export default function Reports() {
     }));
   }, [filteredProduction]);
 
-  // ── Testores charts ──
   const testorBarData = filteredTestores.map(t => ({
     name: t.nome?.replace("Testor ", "T"),
     Carros: t.carros_testados_turno || 0,
@@ -219,7 +192,6 @@ export default function Reports() {
     Disponib: t.status === "rodando" ? 100 : t.status === "atencao" ? 60 : 20,
   }));
 
-  // ── PERDAS usando range de datas ──
   const lossByDay = useMemo(() => {
     const days = eachDayOfInterval({ start: fromDate, end: toDate });
     return days.map(day => {
@@ -268,143 +240,282 @@ export default function Reports() {
   }, [filteredLoss]);
 
   const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
-
   const dateRangeLabel = `${format(fromDate, "dd/MM/yyyy")} – ${format(toDate, "dd/MM/yyyy")}`;
 
-  // ── Export PDF com gráficos ──
-  const handleExportPDF = async () => {
-    setExporting(true);
+  // PDF Consolidado por Turno (novo botão)
+  const handleExportResumoPDFConsolidado = async () => {
+    setExportingTurno(true);
     try {
-      const container = reportRef.current;
-      const chartEls = container ? container.querySelectorAll("[data-chart]") : [];
-      const chartImages = [];
-
-      for (const el of chartEls) {
-        try {
-          const canvas = await html2canvas(el, {
-            backgroundColor: "#16202e",
-            scale: 1.8,
-            logging: false,
-            useCORS: true,
-          });
-          chartImages.push({ title: el.getAttribute("data-title") || "", src: canvas.toDataURL("image/png") });
-        } catch (_) {}
-      }
-
       const hora = new Date().toLocaleString("pt-BR");
-      const turnoLabel = TURNO_LABELS[turno];
+      const dateLabel = format(parseISO(resumoDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      const turnoLabel = resumoTurnoObj.label;
 
-      const testoresRows = filteredTestores.map(t => `
-        <tr>
-          <td>${t.nome}</td>
-          <td><span class="badge ${t.status === 'rodando' ? 'badge-green' : t.status === 'parado' ? 'badge-red' : 'badge-yellow'}">${t.status}</span></td>
-          <td>${t.carros_testados_turno || 0}</td>
-          <td>${t.falhas_turno || 0}</td>
-          <td>${Math.max(0, (t.carros_testados_turno || 0) - (t.falhas_turno || 0))}</td>
-          <td>${t.carros_testados_turno > 0 ? Math.min(100, Math.round(((t.carros_testados_turno - (t.falhas_turno||0)) / t.carros_testados_turno) * 100)) : 0}%</td>
-          <td>${t.tempo_total_parado || 0} min</td>
-          <td><span class="badge ${(t.risco_score||0) <= 30 ? 'badge-green' : (t.risco_score||0) <= 60 ? 'badge-yellow' : 'badge-red'}">${t.risco_score || 0}%</span></td>
-        </tr>`).join("");
+      const efic = resumoTotalProd > 0
+        ? Math.round(((resumoTotalProd - perdaReal) / resumoTotalProd) * 100)
+        : 0;
 
-      const prodRows = filteredProduction.slice(0, 20).map(p => {
-        const diff = (p.producao_realizada || 0) - (p.producao_planejada || 0);
+      const prodHoraRows = resumoTurnoObj.horas.map(h => {
+        const val = prodPorHora[h] || 0;
         return `<tr>
-          <td>${p.data || "—"}</td>
-          <td>${p.turno || "—"}</td>
-          <td>${p.producao_planejada || 0}</td>
-          <td>${p.producao_realizada || 0}</td>
-          <td class="${diff >= 0 ? 'positive' : 'negative'}">${diff >= 0 ? "+" : ""}${diff}</td>
+          <td><strong>${h}</strong></td>
+          <td style="text-align:center">${val}</td>
+          <td>
+            <div style="background:#e2e8f0;border-radius:4px;height:8px;width:100%">
+              <div style="background:#2563eb;height:8px;border-radius:4px;width:${resumoTotalProd > 0 ? Math.round((val / (resumoTotalProd / resumoTurnoObj.horas.length)) * 100) : 0}%"></div>
+            </div>
+          </td>
         </tr>`;
       }).join("");
 
-      const lossRows = lossItemRanking.map(r => `
-        <tr><td>${r.name}</td><td>${r.Perdas}</td></tr>`).join("");
+      const testorRows = Object.entries(prodByTestor).map(([nome, total]) =>
+        `<tr><td>${nome}</td><td style="text-align:center;font-weight:700">${total}</td></tr>`
+      ).join("");
 
-      const chartImagesHtml = chartImages.map(img => `
-        <div class="chart-block">
-          ${img.title ? `<p class="chart-label">${img.title}</p>` : ""}
-          <img src="${img.src}" style="width:100%;border-radius:8px;"/>
-        </div>
-      `).join("");
+      const lossRows = lossRanking.map(([item, val], i) =>
+        `<tr>
+          <td><span style="background:${i===0?'#fee2e2':i<=2?'#fff7ed':'#eff6ff'};color:${i===0?'#991b1b':i<=2?'#9a3412':'#1e40af'};padding:2px 7px;border-radius:999px;font-size:9px;font-weight:700">${i+1}°</span> ${item}</td>
+          <td style="text-align:center;font-weight:700;color:${i===0?'#dc2626':i<=2?'#ea580c':'#3b82f6'}">${val}</td>
+        </tr>`
+      ).join("");
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <title>Relatório ZP7 — ${dateRangeLabel}</title>
+      const occRows = occFiltered.map(o =>
+        `<tr>
+          <td>${o.tipo?.replace(/_/g," ") || "—"}</td>
+          <td>${o.testor || "—"}</td>
+          <td><span style="background:${o.gravidade==='critica'?'#fee2e2':o.gravidade==='alta'?'#ffedd5':'#fef3c7'};color:${o.gravidade==='critica'?'#991b1b':o.gravidade==='alta'?'#9a3412':'#92400e'};padding:2px 7px;border-radius:999px;font-size:8px;font-weight:700">${o.gravidade?.toUpperCase() || "—"}</span></td>
+          <td>${o.descricao || "—"}</td>
+          <td><span style="background:${o.status==='resolvida'?'#d1fae5':'#dbeafe'};color:${o.status==='resolvida'?'#065f46':'#1e40af'};padding:2px 7px;border-radius:999px;font-size:8px;font-weight:700">${o.status?.replace(/_/g," ") || "aberta"}</span></td>
+        </tr>`
+      ).join("");
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+      <meta charset="utf-8">
+      <title>Resumo de Turno ZP7 — ${dateLabel}</title>
       <style>
-        @page { size: A4; margin: 12mm; }
+        @page { size: A4; margin: 14mm 12mm; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; color: #1a2035; background: #fff; }
-        .header { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); color: white; padding: 16px 20px; border-radius: 10px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center; }
-        .header h1 { font-size: 18px; margin: 0; font-weight: 900; letter-spacing:1px; }
-        .header .meta { font-size: 9px; opacity: 0.85; margin-top: 4px; }
-        .header .logo { font-size: 32px; font-weight: 900; opacity: 0.3; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; color: #1e293b; background: #fff; }
+
+        .header {
+          background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 60%, #1e1b4b 100%);
+          color: white; padding: 20px 24px; border-radius: 12px;
+          margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .header-left h1 { font-size: 20px; font-weight: 900; letter-spacing: 1px; margin-bottom: 4px; }
+        .header-left .sub { font-size: 9px; opacity: 0.75; }
+        .header-right { text-align: right; }
+        .header-right .turno-badge {
+          display: inline-block; background: rgba(255,255,255,0.15);
+          border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+          padding: 6px 14px; font-size: 11px; font-weight: 700; margin-bottom: 4px;
+        }
+        .header-right .date { font-size: 9px; opacity: 0.7; }
+
         .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-        .kpi { border-radius: 8px; padding: 12px 14px; border: 1px solid #e2e8f0; text-align: center; }
-        .kpi .val { font-size: 26px; font-weight: 900; }
-        .kpi .lbl { font-size: 8px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .kpi-blue { background: #eff6ff; } .kpi-blue .val { color: #1d4ed8; }
-        .kpi-red { background: #fef2f2; } .kpi-red .val { color: #dc2626; }
-        .kpi-green { background: #f0fdf4; } .kpi-green .val { color: #16a34a; }
-        .kpi-orange { background: #fff7ed; } .kpi-orange .val { color: #ea580c; }
-        .kpi-purple { background: #faf5ff; } .kpi-purple .val { color: #7c3aed; }
-        h2 { font-size: 13px; margin: 18px 0 8px; color: #1e3a8a; border-bottom: 2px solid #dbeafe; padding-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-        h2::before { content: "▸"; color: #3b82f6; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; border-radius: 6px; overflow: hidden; }
-        th { background: #1e40af; color: white; padding: 6px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; font-size: 9px; }
-        tr:nth-child(even) td { background: #f8fafc; }
+        .kpi {
+          border-radius: 10px; padding: 14px 12px; text-align: center;
+          border: 1px solid #e2e8f0; position: relative; overflow: hidden;
+        }
+        .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .kpi-blue::before { background: #2563eb; }
+        .kpi-red::before { background: #dc2626; }
+        .kpi-green::before { background: #16a34a; }
+        .kpi-orange::before { background: #ea580c; }
+        .kpi-emerald::before { background: #059669; }
+        .kpi-yellow::before { background: #d97706; }
+        .kpi-blue { background: #eff6ff; }
+        .kpi-red { background: #fef2f2; }
+        .kpi-green { background: #f0fdf4; }
+        .kpi-orange { background: #fff7ed; }
+        .kpi-emerald { background: #ecfdf5; }
+        .kpi-yellow { background: #fffbeb; }
+        .kpi .val { font-size: 30px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+        .kpi-blue .val { color: #1d4ed8; }
+        .kpi-red .val { color: #dc2626; }
+        .kpi-green .val { color: #16a34a; }
+        .kpi-orange .val { color: #ea580c; }
+        .kpi-emerald .val { color: #059669; }
+        .kpi-yellow .val { color: #d97706; }
+        .kpi .lbl { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .kpi .sub-val { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+
+        .efic-bar-wrap { margin: 0 0 18px; }
+        .efic-bar-wrap .efic-label { font-size: 10px; font-weight: 700; color: #1e40af; margin-bottom: 6px; display: flex; justify-content: space-between; }
+        .efic-track { background: #e2e8f0; border-radius: 8px; height: 14px; overflow: hidden; }
+        .efic-fill { height: 14px; border-radius: 8px; background: linear-gradient(90deg, #2563eb, #16a34a); display: flex; align-items: center; padding-left: 8px; }
+        .efic-fill span { color: white; font-size: 9px; font-weight: 700; white-space: nowrap; }
+
+        h2 {
+          font-size: 12px; font-weight: 800; color: #1e3a8a;
+          border-bottom: 2px solid #dbeafe; padding-bottom: 5px;
+          margin: 18px 0 8px; display: flex; align-items: center; gap: 6px;
+        }
+        h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; display: inline-block; }
+
+        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; border-radius: 8px; overflow: hidden; }
+        th {
+          background: linear-gradient(90deg, #1e40af, #1d4ed8);
+          color: white; padding: 7px 10px; text-align: left;
+          font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 9px; }
         tr:last-child td { border-bottom: none; }
-        .badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 8px; font-weight: 700; }
-        .badge-green { background: #d1fae5; color: #065f46; }
-        .badge-red { background: #fee2e2; color: #991b1b; }
-        .badge-yellow { background: #fef3c7; color: #92400e; }
-        .positive { color: #16a34a; font-weight: 700; }
-        .negative { color: #dc2626; font-weight: 700; }
-        .charts-section { margin: 18px 0; }
-        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .chart-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
-        .chart-label { font-size: 10px; font-weight: 700; color: #1e40af; margin: 0 0 6px; }
-        .footer { margin-top: 22px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; }
+        tr:nth-child(even) td { background: #f8fafc; }
+        tr:hover td { background: #f0f9ff; }
+
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+        .section-box { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .section-box table { margin: 0; }
+
+        .alert-row { display: flex; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+        .alert-row:last-child { border-bottom: none; }
+        .alert-badge { padding: 2px 8px; border-radius: 999px; font-size: 8px; font-weight: 700; white-space: nowrap; }
+        .alert-content .title { font-size: 9px; font-weight: 600; }
+        .alert-content .desc { font-size: 8.5px; color: #64748b; margin-top: 1px; }
+
+        .no-data { text-align: center; color: #94a3b8; font-size: 9px; padding: 16px; }
+
+        .footer {
+          margin-top: 24px; font-size: 8px; color: #94a3b8;
+          border-top: 1px solid #e2e8f0; padding-top: 10px;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .footer .brand { font-weight: 700; color: #64748b; }
         .page-break { page-break-before: always; }
-        .section-divider { border: none; border-top: 1px solid #e2e8f0; margin: 12px 0; }
+        .whatsapp-hint {
+          background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+          padding: 8px 12px; margin-bottom: 16px;
+          font-size: 9px; color: #166534; display: flex; gap: 8px; align-items: center;
+        }
+        .section-divider { border: none; border-top: 1px solid #f1f5f9; margin: 12px 0; }
       </style></head><body>
 
+      <!-- HEADER -->
       <div class="header">
-        <div>
-          <h1>Relatório ZP7</h1>
-          <div class="meta">Período: ${dateRangeLabel} &nbsp;|&nbsp; Turno: ${turnoLabel} &nbsp;|&nbsp; Gerado em: ${hora}</div>
+        <div class="header-left">
+          <h1>📋 Resumo de Turno — ZP7</h1>
+          <div class="sub">Volkswagen Taubaté · Zona de Produção 7 · Gerado em ${hora}</div>
         </div>
-        <div class="logo">ZP7</div>
+        <div class="header-right">
+          <div class="turno-badge">⏱ ${turnoLabel}</div>
+          <div class="date">📅 ${dateLabel}</div>
+        </div>
       </div>
 
+      <!-- HINT envio -->
+      <div class="whatsapp-hint">
+        ✅ <span>Relatório pronto para envio via WhatsApp, e-mail ou impressão para o grupo do turno.</span>
+      </div>
+
+      <!-- KPIs PRINCIPAIS -->
       <div class="kpi-grid">
-        <div class="kpi kpi-blue"><div class="val">${totalCarros}</div><div class="lbl">Carros Testados</div></div>
-        <div class="kpi kpi-red"><div class="val">${totalFalhas}</div><div class="lbl">Falhas</div></div>
-        <div class="kpi kpi-green"><div class="val">${Math.max(0, totalCarros - totalFalhas)}</div><div class="lbl">Produção Líquida</div></div>
-        <div class="kpi kpi-purple"><div class="val">${eficiencia}%</div><div class="lbl">Eficiência Geral</div></div>
-        <div class="kpi kpi-orange"><div class="val">${totalParado} min</div><div class="lbl">Tempo Parado</div></div>
-        <div class="kpi kpi-red"><div class="val">${totalPerdasPeriodo}</div><div class="lbl">Perdas no Período</div></div>
+        <div class="kpi kpi-blue">
+          <div class="val">${resumoTotalProd}</div>
+          <div class="lbl">Produção Bruta</div>
+          <div class="sub-val">carros no turno</div>
+        </div>
+        <div class="kpi kpi-red">
+          <div class="val">${lossDayBruto}</div>
+          <div class="lbl">Perdas Brutas</div>
+          <div class="sub-val">carros perdidos</div>
+        </div>
+        <div class="kpi kpi-green">
+          <div class="val">${lossDayGanho}</div>
+          <div class="lbl">Carros Ganhos</div>
+          <div class="sub-val">recuperados</div>
+        </div>
+        <div class="kpi kpi-orange">
+          <div class="val">${perdaReal}</div>
+          <div class="lbl">Perda Real</div>
+          <div class="sub-val">bruto − ganhos</div>
+        </div>
+        <div class="kpi kpi-emerald">
+          <div class="val">${producaoLiquida}</div>
+          <div class="lbl">Produção Líquida</div>
+          <div class="sub-val">bruto − perda real</div>
+        </div>
+        <div class="kpi kpi-yellow">
+          <div class="val">${occFiltered.length}</div>
+          <div class="lbl">Ocorrências</div>
+          <div class="sub-val">registradas</div>
+        </div>
       </div>
 
-      ${testoresRows ? `<h2>Desempenho dos Testores</h2>
-      <table><thead><tr>
-        <th>Testor</th><th>Status</th><th>Carros</th><th>Falhas</th><th>Líquido</th><th>Efic.</th><th>T.Parado</th><th>Risco</th>
-      </tr></thead><tbody>${testoresRows}</tbody></table>` : ""}
+      <!-- BARRA DE EFICIÊNCIA -->
+      <div class="efic-bar-wrap">
+        <div class="efic-label">
+          <span>📊 Eficiência do Turno</span>
+          <span style="color:#059669;font-size:12px">${efic}%</span>
+        </div>
+        <div class="efic-track">
+          <div class="efic-fill" style="width:${efic}%">
+            <span>${efic}% de eficiência</span>
+          </div>
+        </div>
+      </div>
 
-      ${prodRows ? `<h2>Histórico de Produção</h2>
-      <table><thead><tr>
-        <th>Data</th><th>Turno</th><th>Planejado</th><th>Realizado</th><th>Diferença</th>
-      </tr></thead><tbody>${prodRows}</tbody></table>` : ""}
+      <!-- PRODUÇÃO POR HORA e TESTOR -->
+      <div class="two-col">
+        <div>
+          <h2><span class="dot"></span> Produção por Hora</h2>
+          <div class="section-box">
+            <table>
+              <thead><tr><th>Hora</th><th style="text-align:center">Carros</th><th>Barra</th></tr></thead>
+              <tbody>${prodHoraRows || '<tr><td colspan="3" class="no-data">Sem dados</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h2><span class="dot"></span> Produção por Testor</h2>
+          <div class="section-box">
+            ${testorRows
+              ? `<table><thead><tr><th>Testor</th><th style="text-align:center">Total</th></tr></thead><tbody>${testorRows}</tbody></table>`
+              : `<div class="no-data">Sem dados de testor</div>`
+            }
+          </div>
+        </div>
+      </div>
 
-      ${lossRows ? `<h2>Top Perdas no Período</h2>
-      <table><thead><tr><th>Item / Motivo</th><th>Carros Perdidos</th></tr></thead><tbody>${lossRows}</tbody></table>` : ""}
+      <!-- RANKING DE PERDAS -->
+      ${lossRows ? `
+      <h2><span class="dot" style="background:#dc2626"></span> Ranking de Perdas do Turno</h2>
+      <div class="section-box">
+        <table>
+          <thead><tr><th>#</th><th>Item de Perda</th><th style="text-align:center">Carros Perdidos</th></tr></thead>
+          <tbody>
+            ${lossRanking.map(([item, val], i) => `
+              <tr>
+                <td>${i+1}°</td>
+                <td>${item}</td>
+                <td style="text-align:center;font-weight:700;color:${i===0?'#dc2626':i<=2?'#ea580c':'#3b82f6'}">${val}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : ""}
 
-      ${chartImages.length > 0 ? `
-      <div class="page-break"></div>
-      <h2>Gráficos</h2>
-      <div class="charts-grid">${chartImagesHtml}</div>` : ""}
+      <!-- OCORRÊNCIAS -->
+      ${occFiltered.length > 0 ? `
+      <h2><span class="dot" style="background:#f59e0b"></span> Ocorrências do Turno</h2>
+      <div class="section-box">
+        <table>
+          <thead>
+            <tr><th>Tipo</th><th>Testor</th><th>Gravidade</th><th>Descrição</th><th>Status</th></tr>
+          </thead>
+          <tbody>${occRows}</tbody>
+        </table>
+      </div>` : `
+      <h2><span class="dot" style="background:#16a34a"></span> Ocorrências do Turno</h2>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;text-align:center;color:#166534;font-size:9px;font-weight:700">
+        ✅ Nenhuma ocorrência registrada neste turno!
+      </div>`}
 
+      <!-- FOOTER -->
       <div class="footer">
-        <span>ZP7 — Relatório gerado automaticamente pelo sistema.</span>
+        <div>
+          <span class="brand">ZP7 — Volkswagen Taubaté</span>
+          <span style="margin-left:12px">Resumo de Turno gerado automaticamente pelo sistema.</span>
+        </div>
         <span>${hora}</span>
       </div>
 
@@ -417,11 +528,12 @@ export default function Reports() {
       a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 15000);
     } finally {
-      setExporting(false);
+      setExportingTurno(false);
     }
   };
 
-  const handleExportResumoPDF = async () => {
+  // Export PDF geral
+  const handleExportPDF = async () => {
     setExporting(true);
     try {
       const container = reportRef.current;
@@ -435,209 +547,195 @@ export default function Reports() {
       }
 
       const hora = new Date().toLocaleString("pt-BR");
-      const dateLabel = format(parseISO(resumoDate), "dd/MM/yyyy");
-      const turnoLabel = resumoTurnoObj.label;
+      const turnoLabel = TURNO_LABELS[turno];
+      const testoresRows = filteredTestores.map(t => `
+        <tr>
+          <td>${t.nome}</td>
+          <td><span class="badge ${t.status === 'rodando' ? 'badge-green' : t.status === 'parado' ? 'badge-red' : 'badge-yellow'}">${t.status}</span></td>
+          <td>${t.carros_testados_turno || 0}</td>
+          <td>${t.falhas_turno || 0}</td>
+          <td>${t.tempo_total_parado || 0}min</td>
+          <td><span class="badge ${(t.risco_score||0)<=30?'badge-green':(t.risco_score||0)<=60?'badge-yellow':'badge-red'}">${t.risco_score||0}%</span></td>
+        </tr>`).join("");
+      const prodRows = filteredProduction.slice(0, 20).map(p => {
+        const diff = (p.producao_realizada||0)-(p.producao_planejada||0);
+        return `<tr><td>${p.data||"—"}</td><td>${p.turno||"—"}</td><td>${p.producao_planejada||0}</td><td>${p.producao_realizada||0}</td><td class="${diff>=0?'positive':'negative'}">${diff>=0?"+":""}${diff}</td></tr>`;
+      }).join("");
+      const lossRows2 = lossItemRanking.map(r => `<tr><td>${r.name}</td><td>${r.Perdas}</td></tr>`).join("");
+      const chartImagesHtml = chartImages.map(img => `<div class="chart-block">${img.title?`<p class="chart-label">${img.title}</p>`:""}<img src="${img.src}" style="width:100%;border-radius:8px;"/></div>`).join("");
 
-      const prodHoraRows = resumoTurnoObj.horas.map(h =>
-        `<tr><td>${h}</td><td>${prodPorHora[h] || 0}</td></tr>`
-      ).join("");
-
-      const testorRows = Object.entries(prodByTestor).map(([nome, total]) =>
-        `<tr><td>${nome}</td><td>${total}</td></tr>`
-      ).join("");
-
-      const lossRows2 = lossRanking.map(([item, val]) =>
-        `<tr><td>${item}</td><td>${val}</td></tr>`
-      ).join("");
-
-      const occRows = occFiltered.map(o =>
-        `<tr><td>${o.tipo?.replace(/_/g," ") || "—"}</td><td>${o.testor || "—"}</td>
-        <td><span class="badge ${o.gravidade === 'critica' ? 'badge-red' : o.gravidade === 'alta' ? 'badge-orange' : 'badge-yellow'}">${o.gravidade || "—"}</span></td>
-        <td>${o.descricao || "—"}</td>
-        <td><span class="badge ${o.status === 'resolvida' ? 'badge-green' : 'badge-blue'}">${o.status || "—"}</span></td></tr>`
-      ).join("");
-
-      const chartImagesHtml = chartImages.map(img => `
-        <div class="chart-block">
-          ${img.title ? `<p class="chart-label">${img.title}</p>` : ""}
-          <img src="${img.src}" style="width:100%;border-radius:8px;"/>
-        </div>
-      `).join("");
-
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <title>Resumo Diário ZP7 — ${dateLabel}</title>
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório ZP7</title>
       <style>
         @page { size: A4; margin: 12mm; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
         body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; color: #1a2035; background: #fff; }
-        .header { background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 100%); color: white; padding: 16px 20px; border-radius: 10px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center; }
+        .header { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); color: white; padding: 16px 20px; border-radius: 10px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center; }
         .header h1 { font-size: 18px; margin: 0; font-weight: 900; }
-        .header .meta { font-size: 9px; opacity: 0.8; margin-top: 4px; }
-        .header .logo { font-size: 32px; font-weight: 900; opacity: 0.25; }
+        .header .meta { font-size: 9px; opacity: 0.85; margin-top: 4px; }
         .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-        .kpi { border-radius: 8px; padding: 12px; border: 1px solid #e2e8f0; text-align: center; }
+        .kpi { border-radius: 8px; padding: 12px 14px; border: 1px solid #e2e8f0; text-align: center; }
         .kpi .val { font-size: 26px; font-weight: 900; }
-        .kpi .lbl { font-size: 8px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .kpi .lbl { font-size: 8px; color: #64748b; margin-top: 2px; text-transform: uppercase; }
         .kpi-blue { background: #eff6ff; } .kpi-blue .val { color: #1d4ed8; }
         .kpi-red { background: #fef2f2; } .kpi-red .val { color: #dc2626; }
         .kpi-green { background: #f0fdf4; } .kpi-green .val { color: #16a34a; }
         .kpi-orange { background: #fff7ed; } .kpi-orange .val { color: #ea580c; }
-        h2 { font-size: 13px; margin: 18px 0 8px; color: #1e3a8a; border-bottom: 2px solid #dbeafe; padding-bottom: 4px; }
+        .kpi-purple { background: #faf5ff; } .kpi-purple .val { color: #7c3aed; }
+        h2 { font-size: 13px; margin: 16px 0 8px; color: #1e3a8a; border-bottom: 2px solid #dbeafe; padding-bottom: 4px; }
         h2::before { content: "▸ "; color: #3b82f6; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; overflow: hidden; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; }
         th { background: #1e40af; color: white; padding: 6px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; }
         td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; font-size: 9px; }
         tr:nth-child(even) td { background: #f8fafc; }
         .badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 8px; font-weight: 700; }
         .badge-green { background: #d1fae5; color: #065f46; }
         .badge-red { background: #fee2e2; color: #991b1b; }
-        .badge-orange { background: #ffedd5; color: #9a3412; }
         .badge-yellow { background: #fef3c7; color: #92400e; }
-        .badge-blue { background: #dbeafe; color: #1e40af; }
-        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+        .positive { color: #16a34a; font-weight: 700; }
+        .negative { color: #dc2626; font-weight: 700; }
+        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .chart-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
         .chart-label { font-size: 10px; font-weight: 700; color: #1e40af; margin: 0 0 6px; }
         .footer { margin-top: 22px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; }
         .page-break { page-break-before: always; }
       </style></head><body>
-
-      <div class="header">
-        <div>
-          <h1>Resumo Diário — ZP7</h1>
-          <div class="meta">Data: ${dateLabel} &nbsp;|&nbsp; Turno: ${turnoLabel} &nbsp;|&nbsp; Gerado: ${hora}</div>
-        </div>
-        <div class="logo">ZP7</div>
-      </div>
-
+      <div class="header"><div><h1>Relatório ZP7</h1><div class="meta">Período: ${dateRangeLabel} | Turno: ${turnoLabel} | Gerado: ${hora}</div></div><div style="font-size:28px;font-weight:900;opacity:0.25">ZP7</div></div>
       <div class="kpi-grid">
-        <div class="kpi kpi-blue"><div class="val">${resumoTotalProd}</div><div class="lbl">Produção Bruta</div></div>
-        <div class="kpi kpi-red"><div class="val">${lossDayBruto}</div><div class="lbl">Perdas Brutas</div></div>
-        <div class="kpi kpi-green"><div class="val">${lossDayGanho}</div><div class="lbl">Carros Ganhos</div></div>
-        <div class="kpi kpi-orange"><div class="val">${perdaReal}</div><div class="lbl">Perda Real</div></div>
-        <div class="kpi kpi-green"><div class="val">${producaoLiquida}</div><div class="lbl">Produção Líquida</div></div>
-        <div class="kpi kpi-red"><div class="val">${occFiltered.length}</div><div class="lbl">Ocorrências</div></div>
+        <div class="kpi kpi-blue"><div class="val">${totalCarros}</div><div class="lbl">Carros Testados</div></div>
+        <div class="kpi kpi-red"><div class="val">${totalFalhas}</div><div class="lbl">Falhas</div></div>
+        <div class="kpi kpi-green"><div class="val">${Math.max(0,totalCarros-totalFalhas)}</div><div class="lbl">Produção Líquida</div></div>
+        <div class="kpi kpi-purple"><div class="val">${eficiencia}%</div><div class="lbl">Eficiência Geral</div></div>
+        <div class="kpi kpi-orange"><div class="val">${totalParado}min</div><div class="lbl">Tempo Parado</div></div>
+        <div class="kpi kpi-red"><div class="val">${totalPerdasPeriodo}</div><div class="lbl">Perdas no Período</div></div>
       </div>
-
-      <h2>Produção por Hora</h2>
-      <table><thead><tr><th>Hora</th><th>Carros Produzidos</th></tr></thead><tbody>${prodHoraRows}</tbody></table>
-
-      ${testorRows ? `<h2>Produção por Testor</h2>
-      <table><thead><tr><th>Testor</th><th>Total de Carros</th></tr></thead><tbody>${testorRows}</tbody></table>` : ""}
-
-      ${lossRows2 ? `<h2>Ranking de Perdas</h2>
-      <table><thead><tr><th>Item de Perda</th><th>Carros Perdidos</th></tr></thead><tbody>${lossRows2}</tbody></table>` : ""}
-
-      ${occRows ? `<h2>Ocorrências do Dia</h2>
-      <table><thead><tr><th>Tipo</th><th>Testor</th><th>Gravidade</th><th>Descrição</th><th>Status</th></tr></thead><tbody>${occRows}</tbody></table>` : ""}
-
-      ${chartImages.length > 0 ? `
-      <div class="page-break"></div>
-      <h2>Gráficos do Turno</h2>
-      <div class="charts-grid">${chartImagesHtml}</div>` : ""}
-
-      <div class="footer">
-        <span>ZP7 — Resumo Diário gerado automaticamente pelo sistema.</span>
-        <span>${hora}</span>
-      </div>
-      <script>window.onload = function(){ window.print(); }<\/script>
+      ${testoresRows?`<h2>Testores</h2><table><thead><tr><th>Testor</th><th>Status</th><th>Carros</th><th>Falhas</th><th>T.Parado</th><th>Risco</th></tr></thead><tbody>${testoresRows}</tbody></table>`:""}
+      ${prodRows?`<h2>Histórico de Produção</h2><table><thead><tr><th>Data</th><th>Turno</th><th>Planejado</th><th>Realizado</th><th>Diferença</th></tr></thead><tbody>${prodRows}</tbody></table>`:""}
+      ${lossRows2?`<h2>Top Perdas</h2><table><thead><tr><th>Item</th><th>Carros Perdidos</th></tr></thead><tbody>${lossRows2}</tbody></table>`:""}
+      ${chartImages.length>0?`<div class="page-break"></div><h2>Gráficos</h2><div class="charts-grid">${chartImagesHtml}</div>`:""}
+      <div class="footer"><span>ZP7 — Volkswagen Taubaté</span><span>${hora}</span></div>
+      <script>window.onload=function(){window.print();}<\/script>
       </body></html>`;
 
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-      a.target = "_blank"; a.click();
+      a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
     } finally {
       setExporting(false);
     }
   };
 
   return (
-    <div className="space-y-5 pb-20 lg:pb-0" ref={reportRef}>
+    <div className="space-y-4 pb-24 lg:pb-6" ref={reportRef}>
+
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-primary" /> Relatórios & Gráficos
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary shrink-0" />
+            Relatórios & Gráficos
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {tab === "resumo"
-              ? `Resumo · ${format(parseISO(resumoDate), "dd/MM/yyyy")} · ${resumoTurnoObj.label.split(" ")[0]} ${resumoTurnoObj.label.split(" ")[1]}`
-              : `Período: ${dateRangeLabel} · ${TURNO_LABELS[turno]}`
-            }
+              ? `${format(parseISO(resumoDate), "dd/MM/yyyy")} · ${resumoTurnoObj.label}`
+              : `${dateRangeLabel} · ${TURNO_LABELS[turno]}`}
           </p>
         </div>
-        <div className="flex gap-1.5 flex-wrap items-center">
-          {Object.entries(TURNO_LABELS).map(([k, label]) => (
-            <Button key={k} size="sm" variant={turno === k ? "default" : "outline"} onClick={() => setTurno(k)}
-              className={turno !== k ? "text-muted-foreground" : ""}>{label}</Button>
-          ))}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 flex-wrap">
           {tab !== "resumo" && (
             <Button size="sm" variant="outline" onClick={() => setShowDateFilter(v => !v)}
               className={`gap-1.5 ${showDateFilter ? "text-primary border-primary/50" : "text-muted-foreground"}`}>
               <Filter className="w-3.5 h-3.5" /> Datas
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={tab === "resumo" ? handleExportResumoPDF : handleExportPDF}
+          {tab === "resumo" && (
+            <Button size="sm" variant="outline"
+              onClick={handleExportResumoPDFConsolidado}
+              disabled={exportingTurno}
+              className="gap-1.5 text-green-400 border-green-500/30 hover:text-green-300 hover:bg-green-500/10">
+              {exportingTurno
+                ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Gerando...</>
+                : <><Send className="w-3.5 h-3.5" /> Resumo Turno</>
+              }
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={handleExportPDF}
             disabled={exporting}
-            className="gap-1.5 text-muted-foreground hover:text-foreground ml-1">
-            {exporting ? (
-              <><span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Gerando...</>
-            ) : (
-              <><Printer className="w-3.5 h-3.5" /> Exportar PDF</>
-            )}
+            className="gap-1.5 text-muted-foreground hover:text-foreground">
+            {exporting
+              ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Gerando...</>
+              : <><Printer className="w-3.5 h-3.5" /> PDF</>
+            }
           </Button>
         </div>
       </div>
 
-      {/* Date range filter panel */}
-      {showDateFilter && tab !== "resumo" && (
-        <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border">
-          <Calendar className="w-4 h-4 text-primary shrink-0" />
-          <span className="text-sm text-muted-foreground">De:</span>
-          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="h-8 w-36 text-sm" />
-          <span className="text-sm text-muted-foreground">Até:</span>
-          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="h-8 w-36 text-sm" />
-          <Badge variant="outline" className="ml-auto text-primary border-primary/30 text-xs">
-            {dateRangeLabel}
-          </Badge>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-muted/40 border border-border rounded-xl p-1 w-fit">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              tab === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <t.icon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{t.label}</span>
+      {/* Turno filter pills */}
+      <div className="flex gap-1.5 flex-wrap">
+        {Object.entries(TURNO_LABELS).map(([k, label]) => (
+          <button key={k}
+            onClick={() => setTurno(k)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              turno === k
+                ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"
+            }`}>
+            {label}
           </button>
         ))}
       </div>
 
-      {/* KPI Cards (global) */}
+      {/* Date range filter */}
+      {showDateFilter && tab !== "resumo" && (
+        <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
+          <Calendar className="w-4 h-4 text-primary shrink-0" />
+          <span className="text-xs text-muted-foreground">De:</span>
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 w-36 text-xs" />
+          <span className="text-xs text-muted-foreground">Até:</span>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 w-36 text-xs" />
+          <Badge variant="outline" className="ml-auto text-primary border-primary/30 text-xs">{dateRangeLabel}</Badge>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-0.5 bg-muted/30 border border-border rounded-xl p-1 overflow-x-auto">
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex-1 justify-center ${
+              tab === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}>
+            <t.icon className="w-3.5 h-3.5 shrink-0" />
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Global KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Carros Testados", value: totalCarros, icon: Car, color: "text-primary", bg: "bg-primary/10" },
-          { label: "Falhas Registradas", value: totalFalhas, icon: AlertTriangle, color: "text-orange-400", bg: "bg-orange-500/10" },
-          { label: "Tempo Parado (min)", value: totalParado, icon: Clock, color: "text-yellow-400", bg: "bg-yellow-500/10" },
-          { label: "Eficiência Geral", value: `${eficiencia}%`, icon: TrendingUp, color: eficiencia >= 80 ? "text-green-400" : "text-red-400", bg: eficiencia >= 80 ? "bg-green-500/10" : "bg-red-500/10" },
+          { label: "Carros Testados", value: totalCarros, icon: Car, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
+          { label: "Falhas", value: totalFalhas, icon: AlertTriangle, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+          { label: "T. Parado (min)", value: totalParado, icon: Clock, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" },
+          { label: "Eficiência", value: `${eficiencia}%`, icon: TrendingUp,
+            color: eficiencia >= 80 ? "text-green-400" : "text-red-400",
+            bg: eficiencia >= 80 ? "bg-green-500/10" : "bg-red-500/10",
+            border: eficiencia >= 80 ? "border-green-500/20" : "border-red-500/20" },
         ].map(kpi => (
-          <Card key={kpi.label} className="p-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
-                <kpi.icon className={`w-5 h-5 ${kpi.color}`} />
+          <Card key={kpi.label} className={`border ${kpi.border}`}>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
+                  <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-xl sm:text-2xl font-black ${kpi.color}`}>{kpi.value}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">{kpi.label}</p>
+                </div>
               </div>
-              <div>
-                <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-xs text-muted-foreground leading-tight">{kpi.label}</p>
-              </div>
-            </div>
+            </CardContent>
           </Card>
         ))}
       </div>
@@ -645,32 +743,34 @@ export default function Reports() {
       {/* ═══ TAB: RESUMO DIÁRIO ═══ */}
       {tab === "resumo" && (
         <div className="space-y-4">
+          {/* Date & Turno selector */}
           <div className="flex flex-wrap gap-2 items-center">
-            <Input type="date" value={resumoDate} onChange={e => setResumoDate(e.target.value)}
-              className="h-9 w-36 text-sm" />
-            <div className="flex gap-1 bg-muted/40 border border-border rounded-lg p-0.5">
+            <Input type="date" value={resumoDate} onChange={e => setResumoDate(e.target.value)} className="h-9 w-36 text-sm" />
+            <div className="flex gap-0.5 bg-muted/40 border border-border rounded-lg p-0.5 overflow-x-auto">
               {RESUMO_TURNOS.map(t => (
                 <button key={t.key} onClick={() => setResumoTurno(t.key)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${resumoTurno === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+                    resumoTurno === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
                   {t.label.split(" ")[0]} {t.label.split(" ")[1]}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* KPI mini cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
-              { label: "Produção Bruta", value: resumoTotalProd, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
-              { label: "Perdas Brutas", value: lossDayBruto, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
-              { label: "Carros Ganhos", value: lossDayGanho, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
-              { label: "Perda Real", value: perdaReal, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
-              { label: "Produção Líquida", value: producaoLiquida, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-              { label: "Ocorrências", value: occFiltered.length, color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
+              { label: "Produção Bruta", value: resumoTotalProd, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+              { label: "Perdas Brutas",  value: lossDayBruto,   color: "text-red-400",  bg: "bg-red-500/10",  border: "border-red-500/20" },
+              { label: "Carros Ganhos",  value: lossDayGanho,   color: "text-green-400",bg: "bg-green-500/10",border: "border-green-500/20" },
+              { label: "Perda Real",     value: perdaReal,      color: "text-orange-400",bg: "bg-orange-500/10",border:"border-orange-500/20" },
+              { label: "Prod. Líquida",  value: producaoLiquida,color: "text-emerald-400",bg:"bg-emerald-500/10",border:"border-emerald-500/20" },
+              { label: "Ocorrências",    value: occFiltered.length, color: "text-yellow-400",bg:"bg-yellow-500/10",border:"border-yellow-500/20" },
             ].map(k => (
-              <Card key={k.label} className={`border ${k.bg}`}>
-                <CardContent className="p-4 text-center">
-                  <p className={`text-4xl font-black ${k.color}`}>{k.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+              <Card key={k.label} className={`border ${k.border}`}>
+                <CardContent className="p-3 text-center">
+                  <p className={`text-3xl sm:text-4xl font-black ${k.color}`}>{k.value}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{k.label}</p>
                 </CardContent>
               </Card>
             ))}
@@ -678,15 +778,15 @@ export default function Reports() {
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-400" /> Produção por Hora
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {resumoTotalProd > 0 ? (
                   <div data-chart data-title="Produção por Hora">
-                    <ResponsiveContainer width="100%" height={220}>
+                    <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={resumoTurnoObj.horas.map(h => ({ hora: h, Carros: prodPorHora[h] || 0 }))}>
                         <CartesianGrid {...gridStyle} />
                         <XAxis dataKey="hora" tick={{ ...axisStyle, fontSize: 9 }} />
@@ -696,20 +796,20 @@ export default function Reports() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : <p className="text-sm text-muted-foreground text-center py-12">Sem dados de produção.</p>}
+                ) : <p className="text-xs text-muted-foreground text-center py-10">Sem dados de produção.</p>}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
                   <Gauge className="w-4 h-4 text-primary" /> Produção por Testor
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {Object.keys(prodByTestor).length > 0 ? (
                   <div data-chart data-title="Produção por Testor">
-                    <ResponsiveContainer width="100%" height={220}>
+                    <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={Object.entries(prodByTestor).map(([nome, total]) => ({ nome: nome.replace("Testor ","T"), total }))}>
                         <CartesianGrid {...gridStyle} />
                         <XAxis dataKey="nome" tick={axisStyle} />
@@ -719,15 +819,15 @@ export default function Reports() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : <p className="text-sm text-muted-foreground text-center py-12">Sem dados de testor.</p>}
+                ) : <p className="text-xs text-muted-foreground text-center py-10">Sem dados de testor.</p>}
               </CardContent>
             </Card>
           </div>
 
           {lossRanking.length > 0 && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
                   <TrendingDown className="w-4 h-4 text-red-400" /> Ranking de Perdas do Dia
                 </CardTitle>
               </CardHeader>
@@ -735,11 +835,11 @@ export default function Reports() {
                 <div className="space-y-2">
                   {lossRanking.map(([item, val], i) => (
                     <div key={item} className="flex items-center gap-3">
-                      <span className={`text-xs font-black w-5 text-center ${i === 0 ? "text-red-400" : i <= 2 ? "text-orange-400" : "text-muted-foreground"}`}>{i + 1}</span>
-                      <div className="flex-1">
+                      <span className={`text-xs font-black w-5 text-center shrink-0 ${i === 0 ? "text-red-400" : i <= 2 ? "text-orange-400" : "text-muted-foreground"}`}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
                         <div className="flex justify-between mb-0.5">
                           <span className="text-xs font-medium truncate">{item}</span>
-                          <span className="text-xs font-bold text-red-400 ml-2">{val}</span>
+                          <span className="text-xs font-bold text-red-400 ml-2 shrink-0">{val}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                           <div className="h-full rounded-full bg-red-500/70" style={{ width: `${Math.round((val / (lossRanking[0]?.[1] || 1)) * 100)}%` }} />
@@ -753,8 +853,8 @@ export default function Reports() {
           )}
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-yellow-400" /> Ocorrências do Dia
               </CardTitle>
             </CardHeader>
@@ -762,27 +862,24 @@ export default function Reports() {
               {occFiltered.length > 0 ? (
                 <div className="space-y-2">
                   {occFiltered.map(o => (
-                    <div key={o.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    <div key={o.id} className="flex items-start gap-2.5 p-3 rounded-lg bg-muted/30 border border-border">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                         o.gravidade === "critica" ? "bg-red-500/20 text-red-400" :
                         o.gravidade === "alta" ? "bg-orange-500/20 text-orange-400" :
-                        o.gravidade === "media" ? "bg-yellow-500/20 text-yellow-400" :
-                        "bg-muted text-muted-foreground"
+                        "bg-yellow-500/20 text-yellow-400"
                       }`}>{o.gravidade?.toUpperCase() || "—"}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold">{o.tipo?.replace(/_/g," ") || "Sem tipo"} {o.testor ? `· ${o.testor}` : ""}</p>
-                        {o.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{o.descricao}</p>}
+                        <p className="text-xs font-semibold">{o.tipo?.replace(/_/g," ")} {o.testor ? `· ${o.testor}` : ""}</p>
+                        {o.descricao && <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{o.descricao}</p>}
                       </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${
-                        o.status === "resolvida" ? "bg-green-500/20 text-green-400" :
-                        o.status === "em_andamento" ? "bg-blue-500/20 text-blue-400" :
-                        "bg-muted text-muted-foreground"
-                      }`}>{o.status?.replace(/_/g," ") || "aberta"}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+                        o.status === "resolvida" ? "bg-green-500/20 text-green-400" : "bg-blue-500/20 text-blue-400"
+                      }`}>{o.status?.replace(/_/g," ")}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">Nenhuma ocorrência registrada para este turno/dia.</p>
+                <p className="text-xs text-muted-foreground text-center py-8">Nenhuma ocorrência neste turno/dia.</p>
               )}
             </CardContent>
           </Card>
@@ -793,15 +890,15 @@ export default function Reports() {
       {tab === "producao" && (
         <div className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-primary" /> Histórico de Produção (Planejado vs Realizado)
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" /> Histórico — Planejado vs Realizado
               </CardTitle>
             </CardHeader>
             <CardContent>
               {prodLineData.length > 0 ? (
                 <div data-chart data-title="Produção: Planejado vs Realizado">
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={260}>
                     <AreaChart data={prodLineData}>
                       <defs>
                         <linearGradient id="gradPlan" x1="0" y1="0" x2="0" y2="1">
@@ -817,48 +914,46 @@ export default function Reports() {
                       <XAxis dataKey="label" tick={axisStyle} />
                       <YAxis tick={axisStyle} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Area type="monotone" dataKey="Planejado" stroke="hsl(215,16%,55%)" strokeDasharray="5 5" fill="url(#gradPlan)" strokeWidth={2} />
                       <Area type="monotone" dataKey="Realizado" stroke="hsl(217,91%,60%)" fill="url(#gradReal)" strokeWidth={2.5} dot={{ r: 3 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-12">Sem dados de produção no período.</p>
+                <p className="text-xs text-muted-foreground text-center py-12">Sem dados no período.</p>
               )}
             </CardContent>
           </Card>
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-400" /> Tarefas</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-400" /> Tarefas</CardTitle></CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <p className="text-2xl font-bold text-blue-400">{tasksOpen}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Abertas</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                    <p className="text-2xl font-bold text-green-400">{tasksDone}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Concluídas</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                    <p className="text-2xl font-bold text-red-400">{tasksLate}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Atrasadas</p>
-                  </div>
+                  {[
+                    { label: "Abertas", value: tasksOpen, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+                    { label: "Concluídas", value: tasksDone, color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
+                    { label: "Atrasadas", value: tasksLate, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
+                  ].map(i => (
+                    <div key={i.label} className={`p-3 rounded-lg border ${i.bg}`}>
+                      <p className={`text-2xl font-bold ${i.color}`}>{i.value}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">{i.label}</p>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Ocorrências por Tipo</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Ocorrências por Tipo</CardTitle></CardHeader>
               <CardContent>
                 {occPieData.length > 0 ? (
                   <div data-chart data-title="Ocorrências por Tipo">
                     <ResponsiveContainer width="100%" height={180}>
                       <PieChart>
                         <Pie data={occPieData} cx="50%" cy="50%" outerRadius={70} innerRadius={30} dataKey="value"
-                          label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}>
+                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>
                           {occPieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip contentStyle={tooltipStyle} />
@@ -866,9 +961,7 @@ export default function Reports() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">Sem ocorrências no período.</p>
-                )}
+                ) : <p className="text-xs text-muted-foreground text-center py-8">Sem ocorrências.</p>}
               </CardContent>
             </Card>
           </div>
@@ -880,67 +973,55 @@ export default function Reports() {
         <div className="space-y-4">
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Gauge className="w-4 h-4 text-primary" /> Carros Testados por Testor
-                </CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-primary" /> Carros por Testor</CardTitle></CardHeader>
               <CardContent>
                 {testorBarData.length > 0 ? (
                   <div data-chart data-title="Carros Testados por Testor">
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={240}>
                       <BarChart data={testorBarData} barGap={4}>
                         <CartesianGrid {...gridStyle} />
                         <XAxis dataKey="name" tick={axisStyle} />
                         <YAxis tick={axisStyle} />
                         <Tooltip contentStyle={tooltipStyle} />
-                        <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="Carros" fill="hsl(217,91%,60%)" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="Falhas" fill="hsl(0,72%,51%)" radius={[4, 4, 0, 0]} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="Carros" fill="hsl(217,91%,60%)" radius={[4,4,0,0]} />
+                        <Bar dataKey="Falhas" fill="hsl(0,72%,51%)" radius={[4,4,0,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (<p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>)}
+                ) : <p className="text-xs text-muted-foreground text-center py-12">Sem dados.</p>}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-orange-400" /> Ranking de Falhas
-                </CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-orange-400" /> Ranking de Falhas</CardTitle></CardHeader>
               <CardContent>
                 {falhasRankData.length > 0 ? (
                   <div data-chart data-title="Ranking de Falhas por Testor">
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={240}>
                       <BarChart data={falhasRankData} layout="vertical" barGap={4}>
                         <CartesianGrid {...gridStyle} horizontal={false} />
                         <XAxis type="number" tick={axisStyle} />
-                        <YAxis type="category" dataKey="name" tick={axisStyle} width={40} />
+                        <YAxis type="category" dataKey="name" tick={axisStyle} width={36} />
                         <Tooltip contentStyle={tooltipStyle} />
-                        <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="Falhas" fill="hsl(38,92%,50%)" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey="Paradas" fill="hsl(0,72%,51%)" radius={[0, 4, 4, 0]} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="Falhas" fill="hsl(38,92%,50%)" radius={[0,4,4,0]} />
+                        <Bar dataKey="Paradas" fill="hsl(0,72%,51%)" radius={[0,4,4,0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (<p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>)}
+                ) : <p className="text-xs text-muted-foreground text-center py-12">Sem dados.</p>}
               </CardContent>
             </Card>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-primary" /> Performance Radar
-                </CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Performance Radar</CardTitle></CardHeader>
               <CardContent>
                 {radarData.length > 0 ? (
                   <div data-chart data-title="Performance Radar dos Testores">
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={240}>
                       <RadarChart data={radarData}>
                         <PolarGrid stroke="hsl(217,19%,18%)" />
                         <PolarAngleAxis dataKey="name" tick={axisStyle} />
@@ -953,26 +1034,26 @@ export default function Reports() {
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (<p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>)}
+                ) : <p className="text-xs text-muted-foreground text-center py-12">Sem dados.</p>}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Score de Risco por Testor</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Score de Risco</CardTitle></CardHeader>
               <CardContent>
                 {filteredTestores.length > 0 ? (
                   <div data-chart data-title="Score de Risco por Testor">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={filteredTestores.map(t => ({ name: t.nome?.replace("Testor ", "T"), Risco: t.risco_score || 0 }))}>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={filteredTestores.map(t => ({ name: t.nome?.replace("Testor ","T"), Risco: t.risco_score || 0 }))}>
                         <CartesianGrid {...gridStyle} />
                         <XAxis dataKey="name" tick={axisStyle} />
                         <YAxis domain={[0, 100]} tick={axisStyle} />
                         <Tooltip contentStyle={tooltipStyle} />
-                        <Bar dataKey="Risco" radius={[4, 4, 0, 0]}>
+                        <Bar dataKey="Risco" radius={[4,4,0,0]}>
                           {filteredTestores.map((t, i) => (
                             <Cell key={i} fill={
-                              (t.risco_score || 0) <= 30 ? "hsl(142,71%,45%)"
-                              : (t.risco_score || 0) <= 60 ? "hsl(38,92%,50%)"
+                              (t.risco_score||0) <= 30 ? "hsl(142,71%,45%)"
+                              : (t.risco_score||0) <= 60 ? "hsl(38,92%,50%)"
                               : "hsl(0,72%,51%)"
                             } />
                           ))}
@@ -980,7 +1061,7 @@ export default function Reports() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (<p className="text-sm text-muted-foreground text-center py-8">Sem dados.</p>)}
+                ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados.</p>}
               </CardContent>
             </Card>
           </div>
@@ -990,23 +1071,22 @@ export default function Reports() {
       {/* ═══ TAB: CONTROLE DE PERDAS ═══ */}
       {tab === "perdas" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="ml-auto text-red-400 border-red-500/40">
+          <div className="flex items-center justify-end">
+            <Badge variant="outline" className="text-red-400 border-red-500/40 text-xs">
               {totalPerdasPeriodo} perdas no período
             </Badge>
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingDown className="w-4 h-4 text-red-400" />
-                Evolução de Perdas — {dateRangeLabel}
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-red-400" /> Evolução de Perdas — {dateRangeLabel}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {lossByDay.some(d => d.Perdas > 0) ? (
                 <div data-chart data-title="Evolução Diária de Perdas">
-                  <ResponsiveContainer width="100%" height={260}>
+                  <ResponsiveContainer width="100%" height={240}>
                     <AreaChart data={lossByDay}>
                       <defs>
                         <linearGradient id="gradLoss" x1="0" y1="0" x2="0" y2="1">
@@ -1018,33 +1098,27 @@ export default function Reports() {
                       <XAxis dataKey="label" tick={axisStyle} />
                       <YAxis tick={axisStyle} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Area type="monotone" dataKey="Perdas" stroke="hsl(0,72%,51%)" fill="url(#gradLoss)" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(0,72%,51%)" }} />
+                      <Area type="monotone" dataKey="Perdas" stroke="hsl(0,72%,51%)" fill="url(#gradLoss)" strokeWidth={2.5} dot={{ r: 3, fill: "hsl(0,72%,51%)" }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-12">Nenhuma perda registrada no período.</p>
-              )}
+              ) : <p className="text-xs text-muted-foreground text-center py-12">Nenhuma perda no período.</p>}
             </CardContent>
           </Card>
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-orange-400" /> Top 10 Itens com Mais Perdas
-                </CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-orange-400" /> Top 10 Perdas</CardTitle></CardHeader>
               <CardContent>
                 {lossItemRanking.length > 0 ? (
                   <div data-chart data-title="Top 10 Itens de Perda">
-                    <ResponsiveContainer width="100%" height={300}>
+                    <ResponsiveContainer width="100%" height={280}>
                       <BarChart data={lossItemRanking} layout="vertical">
                         <CartesianGrid {...gridStyle} horizontal={false} />
                         <XAxis type="number" tick={axisStyle} />
-                        <YAxis type="category" dataKey="name" tick={{ ...axisStyle, fontSize: 10 }} width={110} />
+                        <YAxis type="category" dataKey="name" tick={{ ...axisStyle, fontSize: 9 }} width={100} />
                         <Tooltip contentStyle={tooltipStyle} />
-                        <Bar dataKey="Perdas" radius={[0, 4, 4, 0]}>
+                        <Bar dataKey="Perdas" radius={[0,4,4,0]}>
                           {lossItemRanking.map((_, i) => (
                             <Cell key={i} fill={i === 0 ? "hsl(0,72%,51%)" : i <= 2 ? "hsl(38,92%,50%)" : "hsl(217,91%,60%)"} />
                           ))}
@@ -1052,61 +1126,47 @@ export default function Reports() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>
-                )}
+                ) : <p className="text-xs text-muted-foreground text-center py-12">Sem dados.</p>}
               </CardContent>
             </Card>
 
             <div className="space-y-4">
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-primary" /> Perdas por Turno
-                  </CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /> Perdas por Turno</CardTitle></CardHeader>
                 <CardContent>
                   {lossByTurno.length > 0 ? (
                     <div data-chart data-title="Perdas por Turno">
-                      <ResponsiveContainer width="100%" height={160}>
+                      <ResponsiveContainer width="100%" height={150}>
                         <PieChart>
-                          <Pie data={lossByTurno} cx="50%" cy="50%" outerRadius={60} innerRadius={25} dataKey="value"
+                          <Pie data={lossByTurno} cx="50%" cy="50%" outerRadius={55} innerRadius={22} dataKey="value"
                             label={({ name, value }) => `${name}: ${value}`}>
                             {lossByTurno.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                           </Pie>
                           <Tooltip contentStyle={tooltipStyle} />
-                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">Sem dados.</p>
-                  )}
+                  ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados.</p>}
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-primary" /> Perdas por Hora do Dia
-                  </CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Perdas por Hora</CardTitle></CardHeader>
                 <CardContent>
                   {lossByHour.length > 0 ? (
                     <div data-chart data-title="Perdas por Hora do Dia">
-                      <ResponsiveContainer width="100%" height={160}>
+                      <ResponsiveContainer width="100%" height={150}>
                         <BarChart data={lossByHour}>
                           <CartesianGrid {...gridStyle} />
                           <XAxis dataKey="hora" tick={{ ...axisStyle, fontSize: 9 }} />
                           <YAxis tick={axisStyle} />
                           <Tooltip contentStyle={tooltipStyle} />
-                          <Bar dataKey="Perdas" fill="hsl(280,65%,60%)" radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="Perdas" fill="hsl(280,65%,60%)" radius={[3,3,0,0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">Sem dados.</p>
-                  )}
+                  ) : <p className="text-xs text-muted-foreground text-center py-8">Sem dados.</p>}
                 </CardContent>
               </Card>
             </div>
