@@ -205,7 +205,7 @@ export default function LossControl() {
   };
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
+    <div className="space-y-4 pb-24 lg:pb-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>

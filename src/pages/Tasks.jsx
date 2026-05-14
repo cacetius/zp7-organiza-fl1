@@ -108,15 +108,15 @@ export default function Tasks() {
   const counts = { aberta: tasks.filter(t => t.status === "aberta").length, em_andamento: tasks.filter(t => t.status === "em_andamento").length, concluida: tasks.filter(t => t.status === "concluida").length };
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
-      <div className="flex items-center justify-between gap-2">
+    <div className="space-y-4 pb-24 lg:pb-6">
+      <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><ClipboardList className="w-5 h-5 text-yellow-400" /> Tarefas</h1>
           <p className="text-xs text-muted-foreground">{counts.aberta} abertas · {counts.em_andamento} em andamento · {counts.concluida} concluídas</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5"><Printer className="w-4 h-4" /> PDF</Button>
+        <div className="flex gap-1.5 flex-wrap justify-end">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1 text-muted-foreground"><FileSpreadsheet className="w-3.5 h-3.5" /><span className="hidden sm:inline">CSV</span></Button>
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1 text-muted-foreground"><Printer className="w-3.5 h-3.5" /><span className="hidden sm:inline">PDF</span></Button>
           <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setForm(emptyTask); setEditId(null); } }}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="w-4 h-4 mr-1" /> Nova</Button>
@@ -175,9 +175,10 @@ export default function Tasks() {
         </div>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {[["todos", "Todas"], ["aberta", "Abertas"], ["em_andamento", "Em Andamento"], ["concluida", "Concluídas"], ["atrasada", "Atrasadas"]].map(([k, l]) => (
-          <Button key={k} variant={filter === k ? "default" : "outline"} size="sm" onClick={() => setFilter(k)}>{l}</Button>
+      <div className="flex gap-1.5 flex-wrap">
+        {[["todos", "Todas"], ["aberta", "Abertas"], ["em_andamento", "Em And."], ["concluida", "Concluídas"], ["atrasada", "Atrasadas"]].map(([k, l]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${filter === k ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"}`}>{l}</button>
         ))}
       </div>
 

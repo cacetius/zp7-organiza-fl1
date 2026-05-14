@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +35,19 @@ export default function Maintenance() {
   const [filter, setFilter] = useState("todos");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const qc = useQueryClient();
+
+  // Tempo real — atualiza para todos os usuários
+  useEffect(() => {
+    const unsub = base44.entities.MaintenanceRequest.subscribe((event) => {
+      qc.setQueryData(["maintenance"], (prev = []) => {
+        if (event.type === "create") return [event.data, ...prev];
+        if (event.type === "update") return prev.map(r => r.id === event.id ? event.data : r);
+        if (event.type === "delete") return prev.filter(r => r.id !== event.id);
+        return prev;
+      });
+    });
+    return unsub;
+  }, [qc]);
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ["maintenance"],
@@ -100,18 +113,18 @@ export default function Maintenance() {
   };
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
-      <div className="flex items-center justify-between gap-2">
+    <div className="space-y-4 pb-24 lg:pb-6">
+      <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Wrench className="w-5 h-5 text-orange-400" /> Manutenção</h1>
           <p className="text-xs text-muted-foreground">{counts.aberto} abertos · {counts.em_andamento} em andamento · {counts.concluido} concluídos</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5"><Printer className="w-4 h-4" /> PDF</Button>
+        <div className="flex gap-1.5 flex-wrap justify-end">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1 text-muted-foreground"><FileSpreadsheet className="w-3.5 h-3.5" /><span className="hidden sm:inline">CSV</span></Button>
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1 text-muted-foreground"><Printer className="w-3.5 h-3.5" /><span className="hidden sm:inline">PDF</span></Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="sm"><Plus className="w-4 h-4 mr-1" /> Novo Chamado</Button>
+              <Button size="sm"><Plus className="w-4 h-4 mr-1" /><span className="hidden sm:inline">Novo </span>Chamado</Button>
             </DialogTrigger>
             <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Abrir Chamado de Manutenção</DialogTitle></DialogHeader>
@@ -174,9 +187,10 @@ export default function Maintenance() {
         </div>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap">
         {[["todos", "Todos"], ["aberto", "Abertos"], ["em_andamento", "Em Andamento"], ["concluido", "Concluídos"]].map(([k, l]) => (
-          <Button key={k} variant={filter === k ? "default" : "outline"} size="sm" onClick={() => setFilter(k)}>{l}</Button>
+          <button key={k} onClick={() => setFilter(k)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${filter === k ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"}`}>{l}</button>
         ))}
       </div>
 

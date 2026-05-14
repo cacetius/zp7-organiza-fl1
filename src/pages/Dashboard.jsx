@@ -62,7 +62,7 @@ export default function Dashboard() {
   const producaoLiquida = Math.max(0, totalProduzidoHoje - totalPerdidoHoje);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 pb-24 lg:pb-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -78,22 +78,28 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Produzido Hoje", value: totalProduzidoHoje, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-          { label: "Produção Líquida", value: producaoLiquida, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
+          { label: "Prod. Líquida", value: producaoLiquida, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
           { label: "Perdas Hoje", value: totalPerdidoHoje, icon: TrendingDown, color: totalPerdidoHoje > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoHoje > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoHoje > 0 ? "border-red-500/20" : "border-border" },
           { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl ${kpi.bg} flex items-center justify-center shrink-0`}>
-                <kpi.icon className={`w-5 h-5 ${kpi.color}`} />
+            <CardContent className="p-3 sm:p-4 flex items-center gap-2.5">
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${kpi.bg} flex items-center justify-center shrink-0`}>
+                <kpi.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${kpi.color}`} />
               </div>
-              <div>
-                <p className={`text-2xl font-black ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-[11px] text-muted-foreground leading-tight">{kpi.label}</p>
+              <div className="min-w-0">
+                <p className={`text-xl sm:text-2xl font-black ${kpi.color}`}>{kpi.value}</p>
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-tight">{kpi.label}</p>
               </div>
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Indicador tempo real */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse shrink-0" />
+        Dados em tempo real — atualizações automáticas para todos os usuários
       </div>
 
       {/* Pendências rápidas */}

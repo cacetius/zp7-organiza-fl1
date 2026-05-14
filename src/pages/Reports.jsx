@@ -239,6 +239,31 @@ export default function Reports() {
       .map(([hora, Perdas]) => ({ hora, Perdas }));
   }, [filteredLoss]);
 
+  // Ganhos por item (resumo)
+  const ganhoItemRanking = useMemo(() => {
+    const filtered = filteredLoss.filter(r => r.motivo_perda === "ganho");
+    const map = {};
+    filtered.forEach(r => {
+      if (!r.item_perda) return;
+      map[r.item_perda] = (map[r.item_perda] || 0) + (r.carros_perdidos || 0);
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([name, Ganhos]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, Ganhos }));
+  }, [filteredLoss]);
+
+  const totalGanhosPeriodo = ganhoItemRanking.reduce((s, r) => s + r.Ganhos, 0);
+  const perdaRealPeriodo = Math.max(0, totalPerdasPeriodo - totalGanhosPeriodo);
+
+  // Resumo por hora do turno (tab resumo)
+  const resumoByHora = useMemo(() => {
+    return resumoTurnoObj.horas.map(h => ({
+      hora: h,
+      Produção: prodPorHora[h] || 0,
+      Perdas: lossDay.filter(r => r.hora === h && r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos||0), 0),
+      Ganhos: lossDay.filter(r => r.hora === h && r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos||0), 0),
+    })).map(r => ({ ...r, Líquida: Math.max(0, r.Produção - Math.max(0, r.Perdas - r.Ganhos)) }));
+  }, [prodPorHora, lossDay, resumoTurnoObj]);
+
   const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
   const dateRangeLabel = `${format(fromDate, "dd/MM/yyyy")} – ${format(toDate, "dd/MM/yyyy")}`;
 
@@ -824,6 +849,56 @@ export default function Reports() {
             </Card>
           </div>
 
+          {/* Tabela consolidada por hora */}
+          {(resumoTotalProd > 0 || lossDayBruto > 0) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" /> Consolidado por Hora
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-muted/40 border-b border-border">
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Hora</th>
+                        <th className="text-center px-3 py-2 font-semibold text-blue-400">Produção</th>
+                        <th className="text-center px-3 py-2 font-semibold text-red-400">Perdas</th>
+                        <th className="text-center px-3 py-2 font-semibold text-green-400">Ganhos</th>
+                        <th className="text-center px-3 py-2 font-semibold text-orange-400">Perda Real</th>
+                        <th className="text-center px-3 py-2 font-semibold text-emerald-400">Líquida</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resumoByHora.map((r, i) => {
+                        const perdaRealH = Math.max(0, r.Perdas - r.Ganhos);
+                        return (
+                          <tr key={r.hora} className={i % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                            <td className="px-3 py-2 font-semibold">{r.hora}</td>
+                            <td className="px-3 py-2 text-center text-blue-400 font-bold">{r.Produção || "—"}</td>
+                            <td className="px-3 py-2 text-center text-red-400 font-bold">{r.Perdas > 0 ? r.Perdas : "—"}</td>
+                            <td className="px-3 py-2 text-center text-green-400 font-bold">{r.Ganhos > 0 ? r.Ganhos : "—"}</td>
+                            <td className="px-3 py-2 text-center text-orange-400 font-bold">{perdaRealH > 0 ? perdaRealH : "—"}</td>
+                            <td className="px-3 py-2 text-center text-emerald-400 font-bold">{r.Líquida > 0 ? r.Líquida : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-primary/10 border-t border-border font-black">
+                        <td className="px-3 py-2 text-foreground font-black">TOTAL</td>
+                        <td className="px-3 py-2 text-center text-blue-400">{resumoTotalProd}</td>
+                        <td className="px-3 py-2 text-center text-red-400">{lossDayBruto}</td>
+                        <td className="px-3 py-2 text-center text-green-400">{lossDayGanho}</td>
+                        <td className="px-3 py-2 text-center text-orange-400">{perdaReal}</td>
+                        <td className="px-3 py-2 text-center text-emerald-400">{producaoLiquida}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {lossRanking.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
@@ -1071,10 +1146,26 @@ export default function Reports() {
       {/* ═══ TAB: CONTROLE DE PERDAS ═══ */}
       {tab === "perdas" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-end">
-            <Badge variant="outline" className="text-red-400 border-red-500/40 text-xs">
-              {totalPerdasPeriodo} perdas no período
-            </Badge>
+          {/* KPIs de perdas/ganhos/perda real */}
+          <div className="grid grid-cols-3 gap-3">
+            <Card className="border-red-500/20">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl sm:text-3xl font-black text-red-400">{totalPerdasPeriodo}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Perdas Brutas</p>
+              </CardContent>
+            </Card>
+            <Card className="border-green-500/20">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl sm:text-3xl font-black text-green-400">{totalGanhosPeriodo}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Carros Ganhos</p>
+              </CardContent>
+            </Card>
+            <Card className="border-orange-500/20">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl sm:text-3xl font-black text-orange-400">{perdaRealPeriodo}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Perda Real</p>
+              </CardContent>
+            </Card>
           </div>
 
           <Card>
@@ -1171,6 +1262,35 @@ export default function Reports() {
               </Card>
             </div>
           </div>
+
+          {/* Ganhos por item */}
+          {ganhoItemRanking.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-400" /> Carros Ganhos por Item — {dateRangeLabel}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {ganhoItemRanking.map((r, i) => (
+                    <div key={r.name} className="flex items-center gap-3">
+                      <span className={`text-xs font-black w-5 text-center shrink-0 ${i === 0 ? "text-green-400" : "text-muted-foreground"}`}>{i+1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between mb-0.5">
+                          <span className="text-xs font-medium truncate">{r.name}</span>
+                          <span className="text-xs font-bold text-green-400 ml-2 shrink-0">{r.Ganhos}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-green-500/70" style={{ width: `${Math.round((r.Ganhos / (ganhoItemRanking[0]?.Ganhos || 1)) * 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>

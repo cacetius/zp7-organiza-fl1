@@ -293,7 +293,7 @@ export default function Testores() {
   testores.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
 
   return (
-    <div className="space-y-5 pb-20 lg:pb-0">
+    <div className="space-y-5 pb-24 lg:pb-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
