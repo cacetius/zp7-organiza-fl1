@@ -226,32 +226,101 @@ export default function LossControl() {
   const handlePrint = () => {
     const { header: ph, rows: pr } = buildPerdasRows();
     const { header: gh, rows: gr } = buildGanhosRows();
+    const now = new Date().toLocaleString("pt-BR");
 
-    const buildTable = (title, color, header, rows) => {
-      const ths = header.map(h => `<th>${h}</th>`).join("");
+    const buildTable = (title, accentColor, headerBg, header, rows, totalRows = 1) => {
+      const ths = header.map((h, i) => `<th style="text-align:${i===0?'left':'center'}">${h}</th>`).join("");
       const trs = rows.map((row, ri) => {
-        const tds = row.map((cell, ci) => `<td class="${ci === 0 ? "item-col" : ""} ${ri === rows.length - 1 || (ri >= rows.length - 2 && title.includes("Ganhos")) ? "total-cell" : ""}">${cell ?? ""}</td>`).join("");
-        return `<tr class="${ri >= rows.length - (title.includes("Ganhos") ? 2 : 1) ? "total-row" : ""}">${tds}</tr>`;
+        const isTotal = ri >= rows.length - totalRows;
+        const tds = row.map((cell, ci) => {
+          const val = cell === 0 ? "—" : cell;
+          return `<td class="${ci===0?"item-col":""}" style="${isTotal?"font-weight:900;":""}${ci>0&&ci<row.length&&cell>0?"color:#1e293b;font-weight:700;":""}">${val ?? ""}</td>`;
+        }).join("");
+        return `<tr class="${isTotal?"total-row":""}">${tds}</tr>`;
       }).join("");
-      return `<h2 style="color:${color};font-size:12px;margin:16px 0 4px;letter-spacing:2px">${title}</h2>
-      <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+      return `
+      <div class="section-header" style="background:${accentColor}">
+        <span>${title}</span>
+        <span style="font-weight:400;opacity:0.8;font-size:9px">${dateLabel} · ${turnoAtual.label}</span>
+      </div>
+      <table>
+        <thead><tr style="background:${headerBg}">${ths}</tr></thead>
+        <tbody>${trs}</tbody>
+      </table>`;
     };
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    const kpiBox = (label, value, color) =>
+      `<div class="kpi" style="border-top:3px solid ${color}">
+        <div class="kpi-val" style="color:${color}">${value}</div>
+        <div class="kpi-lbl">${label}</div>
+      </div>`;
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+    <title>Controle de Perdas ZP7 — ${dateLabel}</title>
     <style>
-      @page{size:A4 landscape;margin:10mm}body{font-family:Arial;font-size:8.5px;color:#111}
-      h1{font-size:14px;margin:0 0 2px;letter-spacing:2px}p{font-size:9px;color:#666;margin:0 0 8px}
-      table{border-collapse:collapse;width:100%;margin-bottom:8px}
-      th{background:#e0e0e0;padding:4px 5px;border:1px solid #999;text-align:center;font-size:8px}
-      td{padding:3px 4px;border:1px solid #ccc;text-align:center}
-      .item-col{text-align:left;min-width:140px}
-      .total-row td{font-weight:bold}
-      .total-cell{font-weight:bold}
+      @page { size: A4 landscape; margin: 10mm 12mm; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; color: #1e293b; background: #fff; }
+
+      .header {
+        display: flex; justify-content: space-between; align-items: center;
+        background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 70%, #1e1b4b 100%);
+        color: white; padding: 14px 20px; border-radius: 10px; margin-bottom: 12px;
+      }
+      .header-title { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
+      .header-sub { font-size: 8px; opacity: 0.7; margin-top: 3px; }
+      .header-badge { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 5px 12px; font-size: 10px; font-weight: 700; text-align: center; }
+      .header-date { font-size: 8px; opacity: 0.65; margin-top: 3px; text-align: right; }
+
+      .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+      .kpi { border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; text-align: center; }
+      .kpi-val { font-size: 26px; font-weight: 900; line-height: 1; margin-bottom: 3px; }
+      .kpi-lbl { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+
+      .section-header {
+        display: flex; justify-content: space-between; align-items: center;
+        color: white; padding: 7px 12px; font-size: 10px; font-weight: 800;
+        text-transform: uppercase; letter-spacing: 1px; border-radius: 6px 6px 0 0; margin-top: 12px;
+      }
+      table { border-collapse: collapse; width: 100%; margin-bottom: 0; }
+      thead tr { color: white; }
+      thead th { padding: 5px 6px; font-size: 8px; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.15); }
+      td { padding: 4px 5px; border: 1px solid #e2e8f0; font-size: 8.5px; text-align: center; }
+      td.item-col { text-align: left; min-width: 140px; font-weight: 600; }
+      tr:nth-child(even) td { background: #f8fafc; }
+      tr.total-row td { background: #eff6ff; border-top: 2px solid #bfdbfe; }
+
+      .footer { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+      .footer-brand { font-weight: 700; color: #64748b; }
     </style></head><body>
-    <h1>CONTROLE DE PERDAS — ZP7</h1>
-    <p>${dateLabel} | ${turnoAtual.label}</p>
-    ${buildTable("CONTROLE DE PERDAS", "#dc2626", ph, pr)}
-    ${buildTable("CARROS GANHOS", "#16a34a", gh, gr)}
+
+    <div class="header">
+      <div>
+        <div class="header-title">📋 Controle de Perdas — ZP7</div>
+        <div class="header-sub">Volkswagen Taubaté · Zona de Produção 7 · Gerado em ${now}</div>
+      </div>
+      <div>
+        <div class="header-badge">⏱ ${turnoAtual.label}</div>
+        <div class="header-date">📅 ${dateLabel}</div>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      ${kpiBox("Perdas Brutas", totalGeral, "#dc2626")}
+      ${kpiBox("Carros Ganhos", totalGeralGanho, "#16a34a")}
+      ${kpiBox("Perda Real", totalPerdaReal, "#ea580c")}
+    </div>
+
+    ${buildTable("🔴 Controle de Perdas", "#dc2626", "#991b1b", ph, pr, 1)}
+    ${buildTable("🟢 Carros Ganhos", "#16a34a", "#166534", gh, gr, 2)}
+
+    <div class="footer">
+      <span class="footer-brand">ZP7 — Volkswagen Taubaté</span>
+      <span>Sistema de Controle de Produção</span>
+      <span>${now}</span>
+    </div>
+
     <script>window.onload=function(){window.print()}<\/script></body></html>`;
 
     const a = document.createElement("a");

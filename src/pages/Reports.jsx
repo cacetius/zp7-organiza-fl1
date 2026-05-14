@@ -684,42 +684,77 @@ export default function Reports() {
       const lossRows2 = lossItemRanking.map(r => `<tr><td>${r.name}</td><td>${r.Perdas}</td></tr>`).join("");
       const chartImagesHtml = chartImages.map(img => `<div class="chart-block">${img.title?`<p class="chart-label">${img.title}</p>`:""}<img src="${img.src}" style="width:100%;border-radius:8px;"/></div>`).join("");
 
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório ZP7</title>
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Analítico ZP7</title>
       <style>
-        @page { size: A4; margin: 12mm; }
+        @page { size: A4; margin: 12mm 12mm; }
         @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; color: #1a2035; background: #fff; }
-        .header { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); color: white; padding: 16px 20px; border-radius: 10px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center; }
-        .header h1 { font-size: 18px; margin: 0; font-weight: 900; }
-        .header .meta { font-size: 9px; opacity: 0.85; margin-top: 4px; }
-        .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-        .kpi { border-radius: 8px; padding: 12px 14px; border: 1px solid #e2e8f0; text-align: center; }
-        .kpi .val { font-size: 26px; font-weight: 900; }
-        .kpi .lbl { font-size: 8px; color: #64748b; margin-top: 2px; text-transform: uppercase; }
-        .kpi-blue { background: #eff6ff; } .kpi-blue .val { color: #1d4ed8; }
-        .kpi-red { background: #fef2f2; } .kpi-red .val { color: #dc2626; }
-        .kpi-green { background: #f0fdf4; } .kpi-green .val { color: #16a34a; }
-        .kpi-orange { background: #fff7ed; } .kpi-orange .val { color: #ea580c; }
-        .kpi-purple { background: #faf5ff; } .kpi-purple .val { color: #7c3aed; }
-        h2 { font-size: 13px; margin: 16px 0 8px; color: #1e3a8a; border-bottom: 2px solid #dbeafe; padding-bottom: 4px; }
-        h2::before { content: "▸ "; color: #3b82f6; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; }
-        th { background: #1e40af; color: white; padding: 6px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; }
-        td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; font-size: 9px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9.5px; color: #1e293b; background: #fff; }
+
+        .header {
+          background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 60%, #312e81 100%);
+          color: white; padding: 18px 22px; border-radius: 12px; margin-bottom: 16px;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .header h1 { font-size: 20px; font-weight: 900; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .header .meta { font-size: 8.5px; opacity: 0.75; }
+        .header-badge { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 14px; text-align: center; }
+        .header-badge .turno { font-size: 11px; font-weight: 800; }
+        .header-badge .periodo { font-size: 8px; opacity: 0.7; margin-top: 2px; }
+
+        .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+        .kpi { border-radius: 10px; padding: 12px 14px; border: 1px solid #e2e8f0; text-align: center; position: relative; overflow: hidden; }
+        .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .kpi-blue { background: #eff6ff; } .kpi-blue::before { background: #2563eb; } .kpi-blue .val { color: #1d4ed8; }
+        .kpi-red { background: #fef2f2; } .kpi-red::before { background: #dc2626; } .kpi-red .val { color: #dc2626; }
+        .kpi-green { background: #f0fdf4; } .kpi-green::before { background: #16a34a; } .kpi-green .val { color: #16a34a; }
+        .kpi-orange { background: #fff7ed; } .kpi-orange::before { background: #ea580c; } .kpi-orange .val { color: #ea580c; }
+        .kpi-purple { background: #faf5ff; } .kpi-purple::before { background: #7c3aed; } .kpi-purple .val { color: #7c3aed; }
+        .kpi-yellow { background: #fffbeb; } .kpi-yellow::before { background: #d97706; } .kpi-yellow .val { color: #d97706; }
+        .kpi .val { font-size: 28px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+        .kpi .lbl { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+
+        .efic-bar { margin: 0 0 16px; padding: 12px 14px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; }
+        .efic-label { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: #0369a1; margin-bottom: 6px; }
+        .efic-track { background: #e0f2fe; border-radius: 8px; height: 12px; overflow: hidden; }
+        .efic-fill { height: 12px; border-radius: 8px; background: linear-gradient(90deg, #2563eb, #16a34a); }
+
+        h2 { font-size: 12px; font-weight: 800; color: #1e3a8a; border-bottom: 2px solid #dbeafe; padding-bottom: 5px; margin: 16px 0 8px; display: flex; align-items: center; gap: 5px; }
+        h2 .dot { width: 7px; height: 7px; border-radius: 50%; background: #3b82f6; display: inline-block; flex-shrink: 0; }
+
+        table { border-collapse: collapse; width: 100%; margin-bottom: 14px; border-radius: 8px; overflow: hidden; }
+        thead th { background: linear-gradient(90deg, #1e40af, #2563eb); color: white; padding: 6px 8px; text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; font-size: 8.5px; }
+        tr:last-child td { border-bottom: none; }
         tr:nth-child(even) td { background: #f8fafc; }
-        .badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 8px; font-weight: 700; }
+
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 7.5px; font-weight: 700; }
         .badge-green { background: #d1fae5; color: #065f46; }
         .badge-red { background: #fee2e2; color: #991b1b; }
         .badge-yellow { background: #fef3c7; color: #92400e; }
         .positive { color: #16a34a; font-weight: 700; }
         .negative { color: #dc2626; font-weight: 700; }
-        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .chart-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
-        .chart-label { font-size: 10px; font-weight: 700; color: #1e40af; margin: 0 0 6px; }
-        .footer { margin-top: 22px; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; }
+
+        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 10px; }
+        .chart-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+        .chart-label { font-size: 9px; font-weight: 700; color: #1e40af; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .footer { margin-top: 20px; font-size: 7.5px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .footer-brand { font-weight: 700; color: #64748b; }
         .page-break { page-break-before: always; }
       </style></head><body>
-      <div class="header"><div><h1>Relatório ZP7</h1><div class="meta">Período: ${dateRangeLabel} | Turno: ${turnoLabel} | Gerado: ${hora}</div></div><div style="font-size:28px;font-weight:900;opacity:0.25">ZP7</div></div>
+
+      <div class="header">
+        <div>
+          <h1>📊 Relatório Analítico — ZP7</h1>
+          <div class="meta">Volkswagen Taubaté · Período: ${dateRangeLabel} · Gerado em: ${hora}</div>
+        </div>
+        <div class="header-badge">
+          <div class="turno">⚙️ ${turnoLabel}</div>
+          <div class="periodo">${dateRangeLabel}</div>
+        </div>
+      </div>
+
       <div class="kpi-grid">
         <div class="kpi kpi-blue"><div class="val">${totalCarros}</div><div class="lbl">Carros Testados</div></div>
         <div class="kpi kpi-red"><div class="val">${totalFalhas}</div><div class="lbl">Falhas</div></div>
@@ -728,11 +763,22 @@ export default function Reports() {
         <div class="kpi kpi-orange"><div class="val">${totalParado}min</div><div class="lbl">Tempo Parado</div></div>
         <div class="kpi kpi-red"><div class="val">${totalPerdasPeriodo}</div><div class="lbl">Perdas no Período</div></div>
       </div>
-      ${testoresRows?`<h2>Testores</h2><table><thead><tr><th>Testor</th><th>Status</th><th>Carros</th><th>Falhas</th><th>T.Parado</th><th>Risco</th></tr></thead><tbody>${testoresRows}</tbody></table>`:""}
-      ${prodRows?`<h2>Histórico de Produção</h2><table><thead><tr><th>Data</th><th>Turno</th><th>Planejado</th><th>Realizado</th><th>Diferença</th></tr></thead><tbody>${prodRows}</tbody></table>`:""}
-      ${lossRows2?`<h2>Top Perdas</h2><table><thead><tr><th>Item</th><th>Carros Perdidos</th></tr></thead><tbody>${lossRows2}</tbody></table>`:""}
-      ${chartImages.length>0?`<div class="page-break"></div><h2>Gráficos</h2><div class="charts-grid">${chartImagesHtml}</div>`:""}
-      <div class="footer"><span>ZP7 — Volkswagen Taubaté</span><span>${hora}</span></div>
+
+      <div class="efic-bar">
+        <div class="efic-label"><span>📈 Eficiência Geral da Linha</span><span>${eficiencia}%</span></div>
+        <div class="efic-track"><div class="efic-fill" style="width:${eficiencia}%"></div></div>
+      </div>
+
+      ${testoresRows?`<h2><span class="dot"></span> Testores</h2><table><thead><tr><th>Testor</th><th>Status</th><th style="text-align:center">Carros</th><th style="text-align:center">Falhas</th><th style="text-align:center">T.Parado</th><th style="text-align:center">Risco</th></tr></thead><tbody>${testoresRows}</tbody></table>`:""}
+      ${prodRows?`<h2><span class="dot" style="background:#16a34a"></span> Histórico de Produção</h2><table><thead><tr><th>Data</th><th>Turno</th><th style="text-align:center">Planejado</th><th style="text-align:center">Realizado</th><th style="text-align:center">Diferença</th></tr></thead><tbody>${prodRows}</tbody></table>`:""}
+      ${lossRows2?`<h2><span class="dot" style="background:#dc2626"></span> Top 10 Perdas do Período</h2><table><thead><tr><th>Item de Perda</th><th style="text-align:center">Carros Perdidos</th></tr></thead><tbody>${lossRows2}</tbody></table>`:""}
+      ${chartImages.length>0?`<div class="page-break"></div><h2><span class="dot" style="background:#7c3aed"></span> Gráficos Analíticos</h2><div class="charts-grid">${chartImagesHtml}</div>`:""}
+
+      <div class="footer">
+        <span class="footer-brand">ZP7 — Volkswagen Taubaté</span>
+        <span>Relatório gerado automaticamente pelo sistema de controle.</span>
+        <span>${hora}</span>
+      </div>
       <script>window.onload=function(){window.print();}<\/script>
       </body></html>`;
 
