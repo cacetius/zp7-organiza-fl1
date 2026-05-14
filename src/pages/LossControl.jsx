@@ -29,7 +29,7 @@ export default function LossControl() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState("segundo");
   const [itens, setItens] = useState(DEFAULT_ITEMS);
-  const [itensGanho, setItensGanho] = useState([]);
+  const [itensGanhoLocal, setItensGanhoLocal] = useState([]);
   const [novoItem, setNovoItem] = useState("");
   const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
@@ -43,19 +43,24 @@ export default function LossControl() {
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
-  // Reconstruir itensGanho automaticamente dos registros do banco
-  useEffect(() => {
-    const ganhoItems = allRecords
-      .filter(r => r.motivo_perda === "ganho" && r.item_perda)
-      .map(r => r.item_perda);
-    const uniqueGanhoItems = [...new Set(ganhoItems)];
-    if (uniqueGanhoItems.length > 0) {
-      setItensGanho(prev => [...new Set([...prev, ...uniqueGanhoItems])]);
-    }
-  }, [allRecords]);
+
 
   const records = allRecords.filter(r => r.motivo_perda !== "ganho");
   const recordsGanho = allRecords.filter(r => r.motivo_perda === "ganho");
+
+  // Itens de ganho = itens que têm registros no banco + itens adicionados localmente ainda sem registros
+  const itensGanhoFromDB = useMemo(() => {
+    const items = allRecords
+      .filter(r => r.motivo_perda === "ganho" && r.item_perda)
+      .map(r => r.item_perda);
+    return [...new Set(items)];
+  }, [allRecords]);
+
+  const itensGanho = useMemo(() => {
+    const combined = [...itensGanhoFromDB];
+    itensGanhoLocal.forEach(i => { if (!combined.includes(i)) combined.push(i); });
+    return combined;
+  }, [itensGanhoFromDB, itensGanhoLocal]);
 
   const sheetKeyRef = useRef(sheetKey);
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
@@ -237,7 +242,7 @@ export default function LossControl() {
   };
   const addGanhoItem = () => {
     if (ganhoSelecionado && !itensGanho.includes(ganhoSelecionado)) {
-      setItensGanho(prev => [...prev, ganhoSelecionado]);
+      setItensGanhoLocal(prev => [...prev, ganhoSelecionado]);
       setGanhoSelecionado("");
     }
   };
@@ -538,7 +543,7 @@ export default function LossControl() {
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
                       <span>{item}</span>
-                      <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                      <button onClick={() => setItensGanhoLocal(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
                   {turnoAtual.horas.map(hora => {
