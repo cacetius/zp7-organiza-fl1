@@ -62,13 +62,7 @@
   ],
   "rls": {
     "create": {
-      "created_by": "{{user.email}}"
-    },
-    "read": {
       "$or": [
-        {
-          "created_by": "{{user.email}}"
-        },
         {
           "user_condition": {
             "role": "admin"
@@ -76,7 +70,31 @@
         },
         {
           "user_condition": {
-            "role": "lider"
+            "data.funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "data.funcao": "monitor"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "data.funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "data.funcao": "monitor"
           }
         },
         {
@@ -87,42 +105,29 @@
     "update": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
-        },
-        {
           "user_condition": {
             "role": "admin"
           }
         },
         {
           "user_condition": {
-            "role": "lider"
+            "data.funcao": "lider"
           }
         },
         {
-          "data.responsavel": "{{user.full_name}}"
+          "user_condition": {
+            "data.funcao": "monitor"
+          }
         },
         {
-          "data.turno": "{{user.data.turno}}"
+          "created_by": "{{user.email}}"
         }
       ]
     },
     "delete": {
-      "$or": [
-        {
-          "created_by": "{{user.email}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "role": "lider"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
