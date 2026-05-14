@@ -65,20 +65,10 @@
           }
         },
         {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
+          "data.responsavel": "{{user.full_name}}"
         },
         {
           "created_by": "{{user.email}}"
-        },
-        {
-          "data.responsavel": "{{user.full_name}}"
         }
       ]
     },
@@ -90,20 +80,10 @@
           }
         },
         {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
+          "data.responsavel": "{{user.full_name}}"
         },
         {
           "created_by": "{{user.email}}"
-        },
-        {
-          "data.responsavel": "{{user.full_name}}"
         }
       ]
     },
