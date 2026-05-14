@@ -53,6 +53,7 @@ const RESUMO_TURNOS = [
 export default function Reports() {
   const [turno, setTurno] = useState("todos");
   const [tab, setTab] = useState("resumo");
+  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
   const [resumoDate, setResumoDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [resumoTurno, setResumoTurno] = useState("segundo");
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
@@ -267,13 +268,26 @@ export default function Reports() {
 
   const dateRangeLabel = `${format(fromDate, "dd/MM/yyyy")} – ${format(toDate, "dd/MM/yyyy")}`;
 
-  // PDF Consolidado por Turno (novo botão)
+  // PDF Consolidado por Turno com gráficos capturados
   const handleExportResumoPDFConsolidado = async () => {
     setExportingTurno(true);
     try {
       const hora = new Date().toLocaleString("pt-BR");
       const dateLabel = format(parseISO(resumoDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
       const turnoLabel = resumoTurnoObj.label;
+
+      // Captura gráficos do resumo
+      const container = reportRef.current;
+      const chartImages = [];
+      if (container) {
+        const chartEls = container.querySelectorAll("[data-chart]");
+        for (const el of chartEls) {
+          try {
+            const canvas = await html2canvas(el, { backgroundColor: "#16202e", scale: 2, logging: false, useCORS: true });
+            chartImages.push({ title: el.getAttribute("data-title") || "", src: canvas.toDataURL("image/png") });
+          } catch (_) {}
+        }
+      }
 
       const efic = resumoTotalProd > 0
         ? Math.round(((resumoTotalProd - perdaReal) / resumoTotalProd) * 100)
@@ -414,6 +428,16 @@ export default function Reports() {
           font-size: 9px; color: #166534; display: flex; gap: 8px; align-items: center;
         }
         .section-divider { border: none; border-top: 1px solid #f1f5f9; margin: 12px 0; }
+        .charts-section { margin-top: 20px; }
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+        .chart-block { background: #0f172a; border-radius: 10px; padding: 10px; border: 1px solid #1e3a8a; }
+        .chart-block img { width: 100%; border-radius: 6px; }
+        .chart-block .chart-lbl { font-size: 9px; font-weight: 700; color: #93c5fd; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .hora-table td.prod { color: #1d4ed8; font-weight: 700; }
+        .hora-table td.perda { color: #dc2626; font-weight: 700; }
+        .hora-table td.ganho { color: #16a34a; font-weight: 700; }
+        .hora-table td.liq { color: #059669; font-weight: 700; }
+        .hora-table tr.total-row td { background: #eff6ff; font-weight: 900; border-top: 2px solid #bfdbfe; }
       </style></head><body>
 
       <!-- HEADER -->
@@ -534,6 +558,55 @@ export default function Reports() {
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;text-align:center;color:#166534;font-size:9px;font-weight:700">
         ✅ Nenhuma ocorrência registrada neste turno!
       </div>`}
+
+      <!-- TABELA CONSOLIDADA POR HORA -->
+      <h2><span class="dot" style="background:#7c3aed"></span> Consolidado por Hora</h2>
+      <div class="section-box">
+        <table class="hora-table">
+          <thead><tr>
+            <th>Hora</th>
+            <th style="text-align:center;color:#93c5fd">Produção</th>
+            <th style="text-align:center;color:#fca5a5">Perdas</th>
+            <th style="text-align:center;color:#86efac">Ganhos</th>
+            <th style="text-align:center;color:#fdba74">Perda Real</th>
+            <th style="text-align:center;color:#6ee7b7">Líquida</th>
+          </tr></thead>
+          <tbody>
+            ${resumoByHora.map(r => {
+              const pr = Math.max(0, r.Perdas - r.Ganhos);
+              return `<tr>
+                <td><strong>${r.hora}</strong></td>
+                <td class="prod" style="text-align:center">${r.Produção || "—"}</td>
+                <td class="perda" style="text-align:center">${r.Perdas > 0 ? r.Perdas : "—"}</td>
+                <td class="ganho" style="text-align:center">${r.Ganhos > 0 ? r.Ganhos : "—"}</td>
+                <td style="text-align:center;color:#ea580c;font-weight:700">${pr > 0 ? pr : "—"}</td>
+                <td class="liq" style="text-align:center">${r.Líquida > 0 ? r.Líquida : "—"}</td>
+              </tr>`;
+            }).join("")}
+            <tr class="total-row">
+              <td>TOTAL</td>
+              <td class="prod" style="text-align:center">${resumoTotalProd}</td>
+              <td class="perda" style="text-align:center">${lossDayBruto}</td>
+              <td class="ganho" style="text-align:center">${lossDayGanho}</td>
+              <td style="text-align:center;color:#ea580c;font-weight:900">${perdaReal}</td>
+              <td class="liq" style="text-align:center">${producaoLiquida}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- GRÁFICOS CAPTURADOS -->
+      ${chartImages.length > 0 ? `
+      <div class="charts-section">
+        <h2><span class="dot" style="background:#2563eb"></span> Gráficos do Turno</h2>
+        <div class="charts-grid">
+          ${chartImages.map(img => `
+            <div class="chart-block">
+              ${img.title ? `<div class="chart-lbl">${img.title}</div>` : ""}
+              <img src="${img.src}" />
+            </div>`).join("")}
+        </div>
+      </div>` : ""}
 
       <!-- FOOTER -->
       <div class="footer">
@@ -771,6 +844,16 @@ export default function Reports() {
           {/* Date & Turno selector */}
           <div className="flex flex-wrap gap-2 items-center">
             <Input type="date" value={resumoDate} onChange={e => setResumoDate(e.target.value)} className="h-9 w-36 text-sm" />
+            <button
+              onClick={() => setResumoDate(yesterday)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${resumoDate === yesterday ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"}`}>
+              Ontem
+            </button>
+            <button
+              onClick={() => setResumoDate(format(new Date(), "yyyy-MM-dd"))}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${resumoDate === format(new Date(), "yyyy-MM-dd") ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"}`}>
+              Hoje
+            </button>
             <div className="flex gap-0.5 bg-muted/40 border border-border rounded-lg p-0.5 overflow-x-auto">
               {RESUMO_TURNOS.map(t => (
                 <button key={t.key} onClick={() => setResumoTurno(t.key)}
