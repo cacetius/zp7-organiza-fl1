@@ -51,10 +51,7 @@ export default function Reports() {
   const [periodoPerda, setPeriodoPerda] = useState("semana");
   const [resumoDate, setResumoDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [resumoTurno, setResumoTurno] = useState("segundo");
-  const [userEmail, setUserEmail] = useState(null);
   const qc = useQueryClient();
-
-  useEffect(() => { base44.auth.me().then(u => setUserEmail(u.email)); }, []);
 
   const today = new Date();
 
@@ -68,8 +65,8 @@ export default function Reports() {
   });
 
   // Dados do resumo diário
-  const resumoSheetKey = `prod-ctrl-resumo-${resumoDate}-${resumoTurno}-${userEmail}`;
-  const resumoLossKey = `loss-resumo-${resumoDate}-${resumoTurno}-${userEmail}`;
+  const resumoSheetKey = `prod-ctrl-resumo-${resumoDate}-${resumoTurno}`;
+  const resumoLossKey = `loss-resumo-${resumoDate}-${resumoTurno}`;
 
   const RESUMO_TURNOS = [
     { label: "2º Turno (15h–23h45)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
@@ -81,13 +78,11 @@ export default function Reports() {
   const { data: prodRecords = [] } = useQuery({
     queryKey: [resumoSheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: resumoDate, turno: resumoTurno }),
-    enabled: tab === "resumo",
   });
 
   const { data: lossDay = [] } = useQuery({
     queryKey: [resumoLossKey],
     queryFn: () => base44.entities.LossControl.filter({ data: resumoDate, turno: resumoTurno }),
-    enabled: tab === "resumo",
   });
 
   const { data: occDay = [] } = useQuery({
@@ -265,7 +260,7 @@ export default function Reports() {
     const days = eachDayOfInterval({ start: subDays(today, 6), end: today });
     return days.map(day => {
       const ds = format(day, "yyyy-MM-dd");
-      const dayLoss = lossRecords.filter(r => r.data === ds);
+      const dayLoss = lossRecords.filter(r => r.data === ds && r.motivo_perda !== "ganho");
       const total = dayLoss.reduce((s, r) => s + (r.carros_perdidos || 0), 0);
       return { label: format(day, "dd/MM", { locale: ptBR }), Perdas: total };
     });
@@ -282,7 +277,7 @@ export default function Reports() {
       const weekEnd = new Date(Math.min(cur.getTime() + 6 * 86400000, today.getTime()));
       const label = `${format(weekStart, "dd/MM")}–${format(weekEnd, "dd/MM")}`;
       const total = lossRecords.filter(r => {
-        if (!r.data) return false;
+        if (!r.data || r.motivo_perda === "ganho") return false;
         const d = parseISO(r.data);
         return d >= weekStart && d <= weekEnd;
       }).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
@@ -296,7 +291,7 @@ export default function Reports() {
   const lossItemRanking = useMemo(() => {
     const cutoff = periodoPerda === "semana" ? subDays(today, 6) : subDays(today, 29);
     const filtered = lossRecords.filter(r => {
-      if (!r.data) return false;
+      if (!r.data || r.motivo_perda === "ganho") return false;
       return parseISO(r.data) >= cutoff;
     });
     const map = {};
@@ -315,7 +310,7 @@ export default function Reports() {
     const cutoff = periodoPerda === "semana" ? subDays(today, 6) : subDays(today, 29);
     const map = { primeiro: 0, segundo: 0, terceiro: 0 };
     lossRecords.forEach(r => {
-      if (!r.data || !r.turno) return;
+      if (!r.data || !r.turno || r.motivo_perda === "ganho") return;
       if (parseISO(r.data) >= cutoff) map[r.turno] = (map[r.turno] || 0) + (r.carros_perdidos || 0);
     });
     return [
@@ -330,7 +325,7 @@ export default function Reports() {
     const cutoff = periodoPerda === "semana" ? subDays(today, 6) : subDays(today, 29);
     const map = {};
     lossRecords.forEach(r => {
-      if (!r.data || !r.hora) return;
+      if (!r.data || !r.hora || r.motivo_perda === "ganho") return;
       if (parseISO(r.data) >= cutoff) map[r.hora] = (map[r.hora] || 0) + (r.carros_perdidos || 0);
     });
     return Object.entries(map)

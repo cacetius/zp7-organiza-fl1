@@ -55,7 +55,9 @@ export default function Dashboard() {
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
-  const totalPerdidoHoje = lossesToday.reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const perdasBrutasHoje = lossesToday.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const ganhosHoje = lossesToday.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const totalPerdidoHoje = Math.max(0, perdasBrutasHoje - ganhosHoje);
   const totalProduzidoHoje = prodToday.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
   const producaoLiquida = Math.max(0, totalProduzidoHoje - totalPerdidoHoje);
 
