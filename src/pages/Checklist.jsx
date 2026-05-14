@@ -1,14 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, CheckSquare, Circle, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import { Plus, CheckSquare, Circle, CheckCircle2, XCircle, MinusCircle, Printer, FileSpreadsheet } from "lucide-react";
+import { exportCsv } from "@/lib/exportCsv";
+import { exportChecklistPdf } from "@/lib/exportPdf";
 
 const categorias = [
   { value: "inicio_turno", label: "Início de Turno" },
@@ -29,6 +30,8 @@ const statusIcons = {
   nao_aplicavel: <MinusCircle className="w-5 h-5 text-gray-400" />,
 };
 
+const categoriaLabelMap = Object.fromEntries(categorias.map(c => [c.value, c.label]));
+
 export default function Checklist() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ categoria: "", descricao: "" });
@@ -36,6 +39,19 @@ export default function Checklist() {
   const qc = useQueryClient();
 
   const today = new Date().toISOString().split("T")[0];
+
+  // Subscription em tempo real
+  useEffect(() => {
+    const unsub = base44.entities.ChecklistItem.subscribe((event) => {
+      qc.setQueryData(["checklist"], (prev = []) => {
+        if (event.type === "create") return [event.data, ...prev];
+        if (event.type === "update") return prev.map(i => i.id === event.id ? event.data : i);
+        if (event.type === "delete") return prev.filter(i => i.id !== event.id);
+        return prev;
+      });
+    });
+    return unsub;
+  }, [qc]);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["checklist"],
@@ -56,14 +72,26 @@ export default function Checklist() {
   const total = filtered.length;
   const done = filtered.filter((i) => i.status === "conforme").length;
 
+  const handleExportCsv = () => {
+    exportCsv("checklist_zp7",
+      ["Categoria", "Item", "Status", "Responsável", "Horário", "Observação"],
+      items.map(i => [categoriaLabelMap[i.categoria] || i.categoria, i.descricao, i.status?.replace(/_/g," ") || "", i.responsavel || "", i.horario || "", i.observacao || ""])
+    );
+  };
+
+  const handlePrint = () => exportChecklistPdf(items, categoriaLabelMap);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 pb-24 lg:pb-6">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Checklist</h1>
-          <p className="text-sm text-muted-foreground">Checklists do líder e monitor</p>
+          <h1 className="text-xl font-bold flex items-center gap-2"><CheckSquare className="w-5 h-5 text-emerald-400" /> Checklist</h1>
+          <p className="text-xs text-muted-foreground">Checklists do líder e monitor · {done}/{total} conformes na aba atual</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <div className="flex gap-1.5 flex-wrap justify-end">
+          <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1 text-muted-foreground"><FileSpreadsheet className="w-3.5 h-3.5" /><span className="hidden sm:inline">CSV</span></Button>
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1 text-muted-foreground"><Printer className="w-3.5 h-3.5" /><span className="hidden sm:inline">PDF</span></Button>
+          <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-2" />Novo Item</Button>
           </DialogTrigger>
@@ -87,20 +115,21 @@ export default function Checklist() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {categorias.map((c) => (
-          <Button
+          <button
             key={c.value}
-            variant={activeTab === c.value ? "default" : "outline"}
-            size="sm"
             onClick={() => setActiveTab(c.value)}
-            className="whitespace-nowrap"
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+              activeTab === c.value ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"
+            }`}
           >
             {c.label}
-          </Button>
+          </button>
         ))}
       </div>
 

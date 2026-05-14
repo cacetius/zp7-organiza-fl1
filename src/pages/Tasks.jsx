@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, ClipboardList, Trash2, Printer, FileSpreadsheet } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
+import { exportTasksPdf } from "@/lib/exportPdf";
 
 const prioConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -89,21 +90,7 @@ export default function Tasks() {
     );
   };
 
-  const handlePrint = () => {
-    const rows = tasks.map(t => `<tr>
-      <td>${t.titulo}</td><td>${t.responsavel || "—"}</td><td>${t.prioridade}</td>
-      <td>${t.status?.replace(/_/g, " ")}</td><td>${t.prazo || "—"}</td>
-    </tr>`).join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>@page{size:A4;margin:12mm}body{font-family:Arial;font-size:9px}h1{font-size:14px;margin:0 0 8px}
-    table{border-collapse:collapse;width:100%}th{background:#e0e0e0;padding:4px 6px;border:1px solid #999;font-size:8px;text-align:left}
-    td{padding:3px 6px;border:1px solid #ccc;font-size:8px}tr:nth-child(even){background:#f9f9f9}</style></head>
-    <body><h1>Tarefas ZP7 — ${new Date().toLocaleString("pt-BR")}</h1>
-    <table><thead><tr><th>Tarefa</th><th>Responsável</th><th>Prioridade</th><th>Status</th><th>Prazo</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-    <script>window.onload=function(){window.print()}<\/script></body></html>`;
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" })); a.target = "_blank"; a.click();
-  };
+  const handlePrint = () => exportTasksPdf(tasks);
 
   const counts = { aberta: tasks.filter(t => t.status === "aberta").length, em_andamento: tasks.filter(t => t.status === "em_andamento").length, concluida: tasks.filter(t => t.status === "concluida").length };
 

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Wrench, Clock, AlertTriangle, CheckCircle2, Printer, Trash2, FileSpreadsheet } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
+import { exportMaintenancePdf } from "@/lib/exportPdf";
 
 const prioConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -89,28 +90,7 @@ export default function Maintenance() {
     );
   };
 
-  const handlePrint = () => {
-    const rows = requests.map(r => `<tr>
-      <td>${r.testor_nome || "—"}</td>
-      <td>${tipoFalhaLabel[r.tipo_falha] || r.tipo_falha || "—"}</td>
-      <td>${r.prioridade}</td>
-      <td>${r.status?.replace(/_/g, " ")}</td>
-      <td>${r.tempo_estimado_reparo ? r.tempo_estimado_reparo + " min" : "—"}</td>
-      <td>${r.impacto_carros || 0}</td>
-      <td>${r.responsavel || "—"}</td>
-      <td>${r.descricao || "—"}</td>
-    </tr>`).join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>@page{size:A4 landscape;margin:10mm}body{font-family:Arial;font-size:9px;color:#111}
-    h1{font-size:14px;margin:0 0 6px}table{border-collapse:collapse;width:100%}
-    th{background:#e0e0e0;padding:4px 6px;border:1px solid #999;text-align:left;font-size:8px}
-    td{padding:3px 6px;border:1px solid #ccc;font-size:8px}tr:nth-child(even){background:#f9f9f9}</style></head>
-    <body><h1>Chamados de Manutenção ZP7 — ${new Date().toLocaleString("pt-BR")}</h1>
-    <table><thead><tr><th>Testor</th><th>Tipo</th><th>Prioridade</th><th>Status</th><th>T.Reparo</th><th>Carros</th><th>Responsável</th><th>Descrição</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-    <script>window.onload=function(){window.print()}<\/script></body></html>`;
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" })); a.target = "_blank"; a.click();
-  };
+  const handlePrint = () => exportMaintenancePdf(requests);
 
   return (
     <div className="space-y-4 pb-24 lg:pb-6">

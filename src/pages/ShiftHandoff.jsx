@@ -33,6 +33,18 @@ export default function ShiftHandoff() {
   const qc = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
 
+  useEffect(() => {
+    const unsub = base44.entities.ShiftHandoff.subscribe((event) => {
+      qc.setQueryData(["handoffs"], (prev = []) => {
+        if (event.type === "create") return [event.data, ...prev];
+        if (event.type === "update") return prev.map(h => h.id === event.id ? event.data : h);
+        if (event.type === "delete") return prev.filter(h => h.id !== event.id);
+        return prev;
+      });
+    });
+    return unsub;
+  }, [qc]);
+
   const { data: handoffs = [], isLoading } = useQuery({
     queryKey: ["handoffs"],
     queryFn: () => base44.entities.ShiftHandoff.list("-created_date", 20),

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, AlertTriangle, CheckCircle2, Clock, Trash2, Printer, FileSpreadsheet } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
+import { exportOccurrencesPdf } from "@/lib/exportPdf";
 
 const gravConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -80,32 +81,7 @@ export default function Occurrences() {
     );
   };
 
-  const handlePrint = () => {
-    const hora = new Date().toLocaleString("pt-BR");
-    const rows = occurrences.map(o => `<tr>
-      <td>${o.data || "—"} ${o.hora || ""}</td>
-      <td>${tipoLabel[o.tipo] || o.tipo || "—"}</td>
-      <td>${o.testor || "—"}</td>
-      <td>${o.gravidade || "—"}</td>
-      <td>${o.status?.replace(/_/g, " ") || "—"}</td>
-      <td>${o.tempo_parada ? o.tempo_parada + " min" : "—"}</td>
-      <td>${o.impacto_producao || 0}</td>
-      <td>${o.descricao || "—"}</td>
-    </tr>`).join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>
-      @page{size:A4 landscape;margin:10mm} body{font-family:Arial;font-size:9px;color:#111}
-      h1{font-size:14px;margin:0 0 4px} p{font-size:9px;color:#666;margin:0 0 8px}
-      table{border-collapse:collapse;width:100%} th{background:#e0e0e0;padding:4px 6px;border:1px solid #999;text-align:left;font-size:8px}
-      td{padding:3px 6px;border:1px solid #ccc;font-size:8px} tr:nth-child(even){background:#f9f9f9}
-    </style></head><body>
-    <h1>Ocorrências ZP7</h1><p>Gerado em: ${hora}</p>
-    <table><thead><tr><th>Data/Hora</th><th>Tipo</th><th>Testor</th><th>Gravidade</th><th>Status</th><th>T.Parada</th><th>Carros</th><th>Descrição</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-    <script>window.onload=function(){window.print()}<\/script></body></html>`;
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.target = "_blank"; a.click();
-  };
+  const handlePrint = () => exportOccurrencesPdf(occurrences);
 
   return (
     <div className="space-y-4 pb-24 lg:pb-6">
