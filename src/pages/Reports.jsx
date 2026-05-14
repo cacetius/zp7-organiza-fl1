@@ -13,7 +13,7 @@ import {
 import {
   BarChart3, Car, Clock, AlertTriangle, Gauge, CheckCircle2,
   TrendingUp, Activity, TrendingDown, Calendar, FileText,
-  Filter, Printer, Send
+  Filter, Printer, Send, GitCompare
 } from "lucide-react";
 import { format, subDays, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -59,6 +59,8 @@ export default function Reports() {
   const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [showDateFilter, setShowDateFilter] = useState(false);
+  const [compareDate1, setCompareDate1] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd"));
+  const [compareDate2, setCompareDate2] = useState(format(new Date(), "yyyy-MM-dd"));
   const [exporting, setExporting] = useState(false);
   const [exportingTurno, setExportingTurno] = useState(false);
   const reportRef = useRef(null);
@@ -255,6 +257,26 @@ export default function Reports() {
   const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
   const totalGanhosPeriodo = ganhoItemRanking.reduce((s, r) => s + r.Ganhos, 0);
   const perdaRealPeriodo = Math.max(0, totalPerdasPeriodo - totalGanhosPeriodo);
+
+  // Timeline comparação entre duas datas
+  const compareTimeline = useMemo(() => {
+    const hours = ["01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"];
+    const d1Records = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho");
+    const d2Records = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho");
+    return hours.map(h => ({
+      hora: h,
+      [compareDate1]: d1Records.filter(r => r.hora === h).reduce((s, r) => s + (r.carros_perdidos || 0), 0),
+      [compareDate2]: d2Records.filter(r => r.hora === h).reduce((s, r) => s + (r.carros_perdidos || 0), 0),
+    })).filter(r => r[compareDate1] > 0 || r[compareDate2] > 0);
+  }, [lossRecords, compareDate1, compareDate2]);
+
+  const compareTotals = useMemo(() => {
+    const d1 = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const d2 = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const g1 = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const g2 = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    return { d1Perdas: d1, d2Perdas: d2, d1Ganhos: g1, d2Ganhos: g2, d1Real: Math.max(0, d1 - g1), d2Real: Math.max(0, d2 - g2) };
+  }, [lossRecords, compareDate1, compareDate2]);
 
   // Resumo por hora do turno (tab resumo)
   const resumoByHora = useMemo(() => {
@@ -745,27 +767,27 @@ export default function Reports() {
         <div className="flex gap-2 flex-wrap">
           {tab !== "resumo" && (
             <Button size="sm" variant="outline" onClick={() => setShowDateFilter(v => !v)}
-              className={`gap-1.5 ${showDateFilter ? "text-primary border-primary/50" : "text-muted-foreground"}`}>
-              <Filter className="w-3.5 h-3.5" /> Datas
+              className={`gap-1.5 h-9 ${showDateFilter ? "text-primary border-primary/50" : "text-muted-foreground"}`}>
+              <Filter className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Datas</span>
             </Button>
           )}
           {tab === "resumo" && (
             <Button size="sm" variant="outline"
               onClick={handleExportResumoPDFConsolidado}
               disabled={exportingTurno}
-              className="gap-1.5 text-green-400 border-green-500/30 hover:text-green-300 hover:bg-green-500/10">
+              className="gap-1.5 h-9 text-green-400 border-green-500/30 hover:text-green-300 hover:bg-green-500/10">
               {exportingTurno
-                ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Gerando...</>
-                : <><Send className="w-3.5 h-3.5" /> Resumo Turno</>
+                ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> <span className="hidden sm:inline">Gerando...</span></>
+                : <><Send className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Resumo Turno</span></>
               }
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={handleExportPDF}
             disabled={exporting}
-            className="gap-1.5 text-muted-foreground hover:text-foreground">
+            className="gap-1.5 h-9 text-muted-foreground hover:text-foreground">
             {exporting
-              ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Gerando...</>
-              : <><Printer className="w-3.5 h-3.5" /> PDF</>
+              ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> <span className="hidden sm:inline">Gerando...</span></>
+              : <><Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">PDF</span></>
             }
           </Button>
         </div>
@@ -776,7 +798,7 @@ export default function Reports() {
         {Object.entries(TURNO_LABELS).map(([k, label]) => (
           <button key={k}
             onClick={() => setTurno(k)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+            className={`px-3 py-2 sm:py-1.5 rounded-full text-xs font-semibold transition-all border min-h-[34px] ${
               turno === k
                 ? "bg-primary text-primary-foreground border-primary shadow-sm"
                 : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"
@@ -824,17 +846,17 @@ export default function Reports() {
       <div className="flex gap-0.5 bg-muted/30 border border-border rounded-xl p-1 overflow-x-auto">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex-1 justify-center ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex-1 justify-center min-h-[40px] ${
               tab === t.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}>
             <t.icon className="w-3.5 h-3.5 shrink-0" />
-            <span>{t.label}</span>
+            <span className="hidden xs:inline sm:inline">{t.label}</span>
           </button>
         ))}
       </div>
 
       {/* Global KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {[
           { label: "Carros Testados", value: totalCarros, icon: Car, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
           { label: "Falhas", value: totalFalhas, icon: AlertTriangle, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
@@ -1251,38 +1273,40 @@ export default function Reports() {
       {/* ═══ TAB: CONTROLE DE PERDAS ═══ */}
       {tab === "perdas" && (
         <div className="space-y-4">
-          {/* KPIs de perdas/ganhos/perda real */}
-          <div className="grid grid-cols-3 gap-3">
+
+          {/* KPIs período */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <Card className="border-red-500/20">
               <CardContent className="p-3 text-center">
-                <p className="text-2xl sm:text-3xl font-black text-red-400">{totalPerdasPeriodo}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Perdas Brutas</p>
+                <p className="text-xl sm:text-3xl font-black text-red-400">{totalPerdasPeriodo}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-tight">Perdas Brutas</p>
               </CardContent>
             </Card>
             <Card className="border-green-500/20">
               <CardContent className="p-3 text-center">
-                <p className="text-2xl sm:text-3xl font-black text-green-400">{totalGanhosPeriodo}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Carros Ganhos</p>
+                <p className="text-xl sm:text-3xl font-black text-green-400">{totalGanhosPeriodo}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-tight">Carros Ganhos</p>
               </CardContent>
             </Card>
             <Card className="border-orange-500/20">
               <CardContent className="p-3 text-center">
-                <p className="text-2xl sm:text-3xl font-black text-orange-400">{perdaRealPeriodo}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Perda Real</p>
+                <p className="text-xl sm:text-3xl font-black text-orange-400">{perdaRealPeriodo}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-tight">Perda Real</p>
               </CardContent>
             </Card>
           </div>
 
+          {/* Evolução diária */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <TrendingDown className="w-4 h-4 text-red-400" /> Evolução de Perdas — {dateRangeLabel}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-2 sm:px-6">
               {lossByDay.some(d => d.Perdas > 0) ? (
                 <div data-chart data-title="Evolução Diária de Perdas">
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={220}>
                     <AreaChart data={lossByDay}>
                       <defs>
                         <linearGradient id="gradLoss" x1="0" y1="0" x2="0" y2="1">
@@ -1291,8 +1315,8 @@ export default function Reports() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid {...gridStyle} />
-                      <XAxis dataKey="label" tick={axisStyle} />
-                      <YAxis tick={axisStyle} />
+                      <XAxis dataKey="label" tick={{ ...axisStyle, fontSize: 9 }} interval="preserveStartEnd" />
+                      <YAxis tick={axisStyle} width={28} />
                       <Tooltip contentStyle={tooltipStyle} />
                       <Area type="monotone" dataKey="Perdas" stroke="hsl(0,72%,51%)" fill="url(#gradLoss)" strokeWidth={2.5} dot={{ r: 3, fill: "hsl(0,72%,51%)" }} />
                     </AreaChart>
@@ -1302,17 +1326,126 @@ export default function Reports() {
             </CardContent>
           </Card>
 
+          {/* ── TIMELINE DE COMPARAÇÃO ── */}
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <GitCompare className="w-4 h-4 text-primary" /> Comparar Datas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Seletores */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Data A</p>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <Input type="date" value={compareDate1} onChange={e => setCompareDate1(e.target.value)} className="h-9 flex-1 min-w-[130px] text-xs border-red-500/30 focus:border-red-500" />
+                    <button onClick={() => setCompareDate1(yesterday)} className="px-2.5 py-1 text-[10px] rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 font-semibold hover:bg-red-500/20">Ontem</button>
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-end pb-1"><span className="text-muted-foreground text-sm font-bold">vs</span></div>
+                <div className="flex-1 space-y-1">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Data B</p>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <Input type="date" value={compareDate2} onChange={e => setCompareDate2(e.target.value)} className="h-9 flex-1 min-w-[130px] text-xs border-blue-500/30 focus:border-blue-500" />
+                    <button onClick={() => setCompareDate2(format(new Date(), "yyyy-MM-dd"))} className="px-2.5 py-1 text-[10px] rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 font-semibold hover:bg-blue-500/20">Hoje</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cards de totais de cada data */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-red-500/5 border border-red-500/20 space-y-2">
+                  <p className="text-[10px] font-bold text-red-400 uppercase tracking-wide">
+                    {format(parseISO(compareDate1), "dd/MM/yyyy")}
+                  </p>
+                  <div className="grid grid-cols-3 gap-1 text-center">
+                    <div><p className="text-lg font-black text-red-400">{compareTotals.d1Perdas}</p><p className="text-[9px] text-muted-foreground">Perdas</p></div>
+                    <div><p className="text-lg font-black text-green-400">{compareTotals.d1Ganhos}</p><p className="text-[9px] text-muted-foreground">Ganhos</p></div>
+                    <div><p className="text-lg font-black text-orange-400">{compareTotals.d1Real}</p><p className="text-[9px] text-muted-foreground">Real</p></div>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 space-y-2">
+                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide">
+                    {format(parseISO(compareDate2), "dd/MM/yyyy")}
+                  </p>
+                  <div className="grid grid-cols-3 gap-1 text-center">
+                    <div><p className="text-lg font-black text-red-400">{compareTotals.d2Perdas}</p><p className="text-[9px] text-muted-foreground">Perdas</p></div>
+                    <div><p className="text-lg font-black text-green-400">{compareTotals.d2Ganhos}</p><p className="text-[9px] text-muted-foreground">Ganhos</p></div>
+                    <div><p className="text-lg font-black text-orange-400">{compareTotals.d2Real}</p><p className="text-[9px] text-muted-foreground">Real</p></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gráfico de linha do tempo comparativo */}
+              {compareTimeline.length > 0 ? (
+                <div data-chart data-title="Comparação de Perdas por Hora">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={compareTimeline} barGap={2}>
+                      <CartesianGrid {...gridStyle} />
+                      <XAxis dataKey="hora" tick={{ ...axisStyle, fontSize: 9 }} interval={0} angle={-45} textAnchor="end" height={40} />
+                      <YAxis tick={axisStyle} width={28} />
+                      <Tooltip contentStyle={tooltipStyle}
+                        formatter={(val, name) => [val, name === compareDate1 ? `Data A (${format(parseISO(compareDate1),"dd/MM")})` : `Data B (${format(parseISO(compareDate2),"dd/MM")})`]}
+                      />
+                      <Legend
+                        formatter={(val) => val === compareDate1 ? `Data A — ${format(parseISO(compareDate1),"dd/MM/yyyy")}` : `Data B — ${format(parseISO(compareDate2),"dd/MM/yyyy")}`}
+                        wrapperStyle={{ fontSize: 10 }}
+                      />
+                      <Bar dataKey={compareDate1} fill="hsl(0,72%,51%)" radius={[3,3,0,0]} />
+                      <Bar dataKey={compareDate2} fill="hsl(217,91%,60%)" radius={[3,3,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-8">Sem perdas registradas nas datas selecionadas.</p>
+              )}
+
+              {/* Diferença por hora (tabela) */}
+              {compareTimeline.length > 0 && (
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-muted/40 border-b border-border">
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Hora</th>
+                        <th className="text-center px-2 py-2 font-semibold text-red-400">Data A</th>
+                        <th className="text-center px-2 py-2 font-semibold text-blue-400">Data B</th>
+                        <th className="text-center px-2 py-2 font-semibold text-muted-foreground">Δ Dif.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {compareTimeline.map((r, i) => {
+                        const diff = (r[compareDate2] || 0) - (r[compareDate1] || 0);
+                        return (
+                          <tr key={r.hora} className={i % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                            <td className="px-3 py-2 font-semibold">{r.hora}</td>
+                            <td className="px-2 py-2 text-center text-red-400 font-bold">{r[compareDate1] || "—"}</td>
+                            <td className="px-2 py-2 text-center text-blue-400 font-bold">{r[compareDate2] || "—"}</td>
+                            <td className={`px-2 py-2 text-center font-bold ${diff < 0 ? "text-green-400" : diff > 0 ? "text-red-400" : "text-muted-foreground"}`}>
+                              {diff > 0 ? `+${diff}` : diff === 0 ? "=" : diff}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Top 10 + Distribuições */}
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-orange-400" /> Top 10 Perdas</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="px-2 sm:px-6">
                 {lossItemRanking.length > 0 ? (
                   <div data-chart data-title="Top 10 Itens de Perda">
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <BarChart data={lossItemRanking} layout="vertical">
                         <CartesianGrid {...gridStyle} horizontal={false} />
                         <XAxis type="number" tick={axisStyle} />
-                        <YAxis type="category" dataKey="name" tick={{ ...axisStyle, fontSize: 9 }} width={100} />
+                        <YAxis type="category" dataKey="name" tick={{ ...axisStyle, fontSize: 9 }} width={90} />
                         <Tooltip contentStyle={tooltipStyle} />
                         <Bar dataKey="Perdas" radius={[0,4,4,0]}>
                           {lossItemRanking.map((_, i) => (
@@ -1356,7 +1489,7 @@ export default function Reports() {
                         <BarChart data={lossByHour}>
                           <CartesianGrid {...gridStyle} />
                           <XAxis dataKey="hora" tick={{ ...axisStyle, fontSize: 9 }} />
-                          <YAxis tick={axisStyle} />
+                          <YAxis tick={axisStyle} width={28} />
                           <Tooltip contentStyle={tooltipStyle} />
                           <Bar dataKey="Perdas" fill="hsl(280,65%,60%)" radius={[3,3,0,0]} />
                         </BarChart>
