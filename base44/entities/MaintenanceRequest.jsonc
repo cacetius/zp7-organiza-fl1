@@ -80,21 +80,24 @@
         },
         {
           "user_condition": {
-            "data.funcao": "manutencao"
+            "funcao": "manutencao"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
+            "funcao": "monitor"
           }
         },
         {
           "created_by": "{{user.email}}"
+        },
+        {
+          "data.responsavel": "{{user.full_name}}"
         }
       ]
     },
@@ -107,7 +110,17 @@
         },
         {
           "user_condition": {
-            "data.funcao": "manutencao"
+            "funcao": "manutencao"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
           }
         },
         {
@@ -116,9 +129,16 @@
       ]
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
     }
   }
 }
