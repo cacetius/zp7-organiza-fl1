@@ -167,12 +167,16 @@ export default function ProductionControl() {
   // Perdas por hora (somando todos os itens de perda daquela hora)
   const perdasPorHora = {};
   turnoAtual.horas.forEach(h => {
-    perdasPorHora[h] = losses.filter(l => l.hora === h).reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
+    const brutas = losses.filter(l => l.hora === h && l.motivo_perda !== "ganho").reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
+    const ganhos = losses.filter(l => l.hora === h && l.motivo_perda === "ganho").reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
+    perdasPorHora[h] = Math.max(0, brutas - ganhos);
   });
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[t.id]?.[h]?.value || 0), 0);
   const totalGeral = testores.reduce((acc, t) => acc + totalPorTestor(t), 0);
-  const totalPerdas = losses.reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
+  const totalPerdasBrutas = losses.filter(l => l.motivo_perda !== "ganho").reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
+  const totalGanhos = losses.filter(l => l.motivo_perda === "ganho").reduce((acc, l) => acc + (l.carros_perdidos || 0), 0);
+  const totalPerdas = Math.max(0, totalPerdasBrutas - totalGanhos);
   const producaoLiquida = Math.max(0, totalGeral - totalPerdas);
 
   const handleExportCsv = () => {
