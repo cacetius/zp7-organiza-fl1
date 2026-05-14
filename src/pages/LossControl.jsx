@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
 import { format, addDays, subDays, parseISO } from "date-fns";
 
+const isMobileDevice = () => window.innerWidth < 768;
+
 
 const DEFAULT_ITEMS = [
   "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
@@ -29,6 +31,13 @@ export default function LossControl() {
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState("segundo");
+  const [isMobile, setIsMobile] = useState(isMobileDevice());
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(isMobileDevice());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [itens, setItens] = useState(DEFAULT_ITEMS);
   const [itensGanho, setItensGanho] = useState([]);
   const [novoItem, setNovoItem] = useState("");
@@ -423,139 +432,225 @@ export default function LossControl() {
         </div>
       )}
 
-      {/* Planilha de Perdas */}
-      <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
-        <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
-          <thead>
-            <tr>
-              <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-red-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-red-400">
-                CONTROLE DE PERDAS — {dateLabel} — {turnoAtual.label}
-              </th>
-            </tr>
-            <tr className="bg-muted/50">
-              <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>ITEM DE PERDA</th>
-              {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
-              <th className="border border-border px-2 py-2 text-center font-bold bg-red-500/10 text-red-400" style={{ minWidth: 60 }}>TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itens.map((item, idx) => {
+      {/* ── MOBILE VIEW ─────────────────────────────────── */}
+      {isMobile ? (
+        <div className="space-y-3">
+          {/* Perdas mobile */}
+          <div className="rounded-xl border border-red-500/30 overflow-hidden">
+            <div className="bg-red-500/10 px-4 py-2.5 text-center font-black text-xs uppercase tracking-widest text-red-400">
+              Controle de Perdas — {dateLabel}
+            </div>
+            {itens.map(item => {
               const total = totalPorItem(item);
               return (
-                <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-red-500/5 transition-colors`}>
-                  <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
-                    <div className="flex items-center justify-between gap-1">
-                      <span>{item}</span>
-                      <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                <Card key={item} className="rounded-none border-0 border-b border-border last:border-b-0">
+                  <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
+                    <span className="font-bold text-xs text-red-400 flex-1 mr-2">{item}</span>
+                    <div className="flex items-center gap-2">
+                      {total > 0 && <span className="text-xs bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full font-bold">{total}</span>}
+                      <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="text-muted-foreground/30 hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
                     </div>
-                  </td>
-                  {turnoAtual.horas.map(hora => {
-                    const cell = cellMap[item]?.[hora];
-                    const val = cell?.count || 0;
-                    return (
-                      <td key={hora} className="border border-border p-1">
-                        <CellButton
-                          val={val}
-                          onPointerDown={() => startLongPress(item, hora)}
-                          onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
-                          onPointerLeave={() => cancelLongPress(item, hora)}
-                          onDecrement={() => handleDecrement(item, hora)}
-                          colorClass="text-muted-foreground/40 hover:text-red-400"
-                          activeColor="bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className="border border-border text-center font-black text-red-400 bg-red-500/5 py-1.5">
-                    {total > 0 ? total : ""}
-                  </td>
-                </tr>
+                  </div>
+                  <CardContent className="px-3 pb-2.5">
+                    <div className="grid grid-cols-4 gap-1">
+                      {turnoAtual.horas.map(hora => {
+                        const val = cellMap[item]?.[hora]?.count || 0;
+                        return (
+                          <div key={hora} className="flex flex-col items-center gap-0.5">
+                            <span className="text-[8px] text-muted-foreground">{hora}</span>
+                            <button
+                              onPointerDown={() => startLongPress(item, hora)}
+                              onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
+                              onPointerLeave={() => cancelLongPress(item, hora)}
+                              className={`w-full h-10 rounded-md font-black text-sm select-none transition-all
+                                ${val > 0 ? "bg-red-500/20 text-red-300 active:scale-95" : "bg-muted/20 text-muted-foreground/30 active:scale-95"}`}
+                            >{val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-30" />}</button>
+                            {val > 0 && <button onClick={() => handleDecrement(item, hora)} className="text-muted-foreground/30 hover:text-red-400 p-0.5"><Minus className="w-3 h-3" /></button>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
-            <tr className="bg-red-500/10 font-bold">
-              <td className="border border-border px-3 py-2 font-black text-red-400 uppercase">TOTAL/HORA</td>
-              {turnoAtual.horas.map(h => (
-                <td key={h} className="border border-border text-center font-bold text-red-400 py-2">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>
-              ))}
-              <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            <div className="bg-red-500/10 px-4 py-2 flex items-center justify-between">
+              <span className="font-black text-xs text-red-400 uppercase">Total Perdas</span>
+              <span className="font-black text-lg text-red-400">{totalGeral > 0 ? totalGeral : "—"}</span>
+            </div>
+          </div>
 
-      {/* Planilha de Carros Ganhos */}
-      <div className="overflow-x-auto rounded-xl border border-green-500/30 shadow-sm">
-        <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
-          <thead>
-            <tr>
-              <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-green-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-green-400">
-                CARROS GANHOS — {dateLabel} — {turnoAtual.label}
-              </th>
-            </tr>
-            <tr className="bg-muted/50">
-              <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>MOTIVO DO GANHO</th>
-              {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
-              <th className="border border-border px-2 py-2 text-center font-bold bg-green-500/10 text-green-400" style={{ minWidth: 60 }}>TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
+          {/* Ganhos mobile */}
+          <div className="rounded-xl border border-green-500/30 overflow-hidden">
+            <div className="bg-green-500/10 px-4 py-2.5 text-center font-black text-xs uppercase tracking-widest text-green-400">
+              Carros Ganhos — {dateLabel}
+            </div>
             {itensGanho.length === 0 && (
-              <tr>
-                <td colSpan={turnoAtual.horas.length + 2} className="text-center py-6 text-muted-foreground text-xs">
-                  Selecione um item da lista de perdas para registrar ganhos
-                </td>
-              </tr>
+              <div className="py-6 text-center text-xs text-muted-foreground">Selecione um item da lista de perdas para registrar ganhos</div>
             )}
-            {itensGanho.map((item, idx) => {
+            {itensGanho.map(item => {
               const total = totalPorItemGanho(item);
               return (
-                <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-green-500/5 transition-colors`}>
-                  <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
-                    <div className="flex items-center justify-between gap-1">
-                      <span>{item}</span>
-                      <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                <Card key={item} className="rounded-none border-0 border-b border-border last:border-b-0">
+                  <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
+                    <span className="font-bold text-xs text-green-400 flex-1 mr-2">{item}</span>
+                    <div className="flex items-center gap-2">
+                      {total > 0 && <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full font-bold">{total}</span>}
+                      <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="text-muted-foreground/30 hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
                     </div>
-                  </td>
-                  {turnoAtual.horas.map(hora => {
-                    const cell = cellMapGanho[item]?.[hora];
-                    const val = cell?.count || 0;
-                    return (
-                      <td key={hora} className="border border-border p-1">
-                        <CellButton
-                          val={val}
-                          onPointerDown={() => startLongPressGanho(item, hora)}
-                          onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
-                          onPointerLeave={() => cancelLongPressGanho(item, hora)}
-                          onDecrement={() => handleDecrementGanho(item, hora)}
-                          colorClass="text-muted-foreground/40 hover:text-green-400"
-                          activeColor="bg-green-500/20 text-green-300 hover:bg-green-500/35 active:scale-95"
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className="border border-border text-center font-black text-green-400 bg-green-500/5 py-1.5">
-                    {total > 0 ? total : ""}
-                  </td>
-                </tr>
+                  </div>
+                  <CardContent className="px-3 pb-2.5">
+                    <div className="grid grid-cols-4 gap-1">
+                      {turnoAtual.horas.map(hora => {
+                        const val = cellMapGanho[item]?.[hora]?.count || 0;
+                        return (
+                          <div key={hora} className="flex flex-col items-center gap-0.5">
+                            <span className="text-[8px] text-muted-foreground">{hora}</span>
+                            <button
+                              onPointerDown={() => startLongPressGanho(item, hora)}
+                              onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
+                              onPointerLeave={() => cancelLongPressGanho(item, hora)}
+                              className={`w-full h-10 rounded-md font-black text-sm select-none transition-all
+                                ${val > 0 ? "bg-green-500/20 text-green-300 active:scale-95" : "bg-muted/20 text-muted-foreground/30 active:scale-95"}`}
+                            >{val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-30" />}</button>
+                            {val > 0 && <button onClick={() => handleDecrementGanho(item, hora)} className="text-muted-foreground/30 hover:text-green-400 p-0.5"><Minus className="w-3 h-3" /></button>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
-            <tr className="bg-green-500/10 font-bold">
-              <td className="border border-border px-3 py-2 font-black text-green-400 uppercase">TOTAL GANHOS/HORA</td>
-              {turnoAtual.horas.map(h => (
-                <td key={h} className="border border-border text-center font-bold text-green-400 py-2">{totalGanhoPorHora[h] > 0 ? totalGanhoPorHora[h] : "—"}</td>
-              ))}
-              <td className="border border-border text-center font-black text-white bg-green-600 py-2 text-sm">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</td>
-            </tr>
-            <tr className="bg-orange-500/10 font-bold">
-              <td className="border border-border px-3 py-2 font-black text-orange-400 uppercase">PERDA REAL/HORA</td>
-              {turnoAtual.horas.map(h => (
-                <td key={h} className="border border-border text-center font-bold text-orange-400 py-2">{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>
-              ))}
-              <td className="border border-border text-center font-black text-white bg-orange-600 py-2 text-sm">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            <div className="bg-green-500/10 px-4 py-2 flex items-center justify-between">
+              <span className="font-black text-xs text-green-400 uppercase">Total Ganhos</span>
+              <span className="font-black text-lg text-green-400">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</span>
+            </div>
+            <div className="bg-orange-500/10 px-4 py-2 flex items-center justify-between">
+              <span className="font-black text-xs text-orange-400 uppercase">Perda Real</span>
+              <span className="font-black text-lg text-orange-400">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── DESKTOP: tabela de Perdas ─────────────────── */}
+          <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
+            <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
+              <thead>
+                <tr>
+                  <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-red-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-red-400">
+                    CONTROLE DE PERDAS — {dateLabel} — {turnoAtual.label}
+                  </th>
+                </tr>
+                <tr className="bg-muted/50">
+                  <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>ITEM DE PERDA</th>
+                  {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
+                  <th className="border border-border px-2 py-2 text-center font-bold bg-red-500/10 text-red-400" style={{ minWidth: 60 }}>TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((item, idx) => {
+                  const total = totalPorItem(item);
+                  return (
+                    <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-red-500/5 transition-colors`}>
+                      <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
+                        <div className="flex items-center justify-between gap-1">
+                          <span>{item}</span>
+                          <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                        </div>
+                      </td>
+                      {turnoAtual.horas.map(hora => {
+                        const val = cellMap[item]?.[hora]?.count || 0;
+                        return (
+                          <td key={hora} className="border border-border p-1">
+                            <CellButton val={val}
+                              onPointerDown={() => startLongPress(item, hora)}
+                              onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
+                              onPointerLeave={() => cancelLongPress(item, hora)}
+                              onDecrement={() => handleDecrement(item, hora)}
+                              colorClass="text-muted-foreground/40 hover:text-red-400"
+                              activeColor="bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
+                            />
+                          </td>
+                        );
+                      })}
+                      <td className="border border-border text-center font-black text-red-400 bg-red-500/5 py-1.5">{total > 0 ? total : ""}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-red-500/10 font-bold">
+                  <td className="border border-border px-3 py-2 font-black text-red-400 uppercase">TOTAL/HORA</td>
+                  {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-red-400 py-2">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>)}
+                  <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── DESKTOP: tabela de Ganhos ─────────────────── */}
+          <div className="overflow-x-auto rounded-xl border border-green-500/30 shadow-sm">
+            <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
+              <thead>
+                <tr>
+                  <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-green-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-green-400">
+                    CARROS GANHOS — {dateLabel} — {turnoAtual.label}
+                  </th>
+                </tr>
+                <tr className="bg-muted/50">
+                  <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>MOTIVO DO GANHO</th>
+                  {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
+                  <th className="border border-border px-2 py-2 text-center font-bold bg-green-500/10 text-green-400" style={{ minWidth: 60 }}>TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensGanho.length === 0 && (
+                  <tr><td colSpan={turnoAtual.horas.length + 2} className="text-center py-6 text-muted-foreground text-xs">Selecione um item da lista de perdas para registrar ganhos</td></tr>
+                )}
+                {itensGanho.map((item, idx) => {
+                  const total = totalPorItemGanho(item);
+                  return (
+                    <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-green-500/5 transition-colors`}>
+                      <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
+                        <div className="flex items-center justify-between gap-1">
+                          <span>{item}</span>
+                          <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                        </div>
+                      </td>
+                      {turnoAtual.horas.map(hora => {
+                        const val = cellMapGanho[item]?.[hora]?.count || 0;
+                        return (
+                          <td key={hora} className="border border-border p-1">
+                            <CellButton val={val}
+                              onPointerDown={() => startLongPressGanho(item, hora)}
+                              onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
+                              onPointerLeave={() => cancelLongPressGanho(item, hora)}
+                              onDecrement={() => handleDecrementGanho(item, hora)}
+                              colorClass="text-muted-foreground/40 hover:text-green-400"
+                              activeColor="bg-green-500/20 text-green-300 hover:bg-green-500/35 active:scale-95"
+                            />
+                          </td>
+                        );
+                      })}
+                      <td className="border border-border text-center font-black text-green-400 bg-green-500/5 py-1.5">{total > 0 ? total : ""}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-green-500/10 font-bold">
+                  <td className="border border-border px-3 py-2 font-black text-green-400 uppercase">TOTAL GANHOS/HORA</td>
+                  {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-green-400 py-2">{totalGanhoPorHora[h] > 0 ? totalGanhoPorHora[h] : "—"}</td>)}
+                  <td className="border border-border text-center font-black text-white bg-green-600 py-2 text-sm">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</td>
+                </tr>
+                <tr className="bg-orange-500/10 font-bold">
+                  <td className="border border-border px-3 py-2 font-black text-orange-400 uppercase">PERDA REAL/HORA</td>
+                  {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-orange-400 py-2">{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>)}
+                  <td className="border border-border text-center font-black text-white bg-orange-600 py-2 text-sm">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <p className="text-xs text-muted-foreground">Toque para +1 · Segure (~1s) para zerar · Use − para diminuir · ✕ na linha para remover item</p>
     </div>
