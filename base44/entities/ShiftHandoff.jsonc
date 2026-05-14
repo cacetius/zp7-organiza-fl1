@@ -57,5 +57,69 @@
   "required": [
     "turno_saindo",
     "turno_entrando"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "monitor"
+          }
+        },
+        {
+          "data.turno_saindo": "{{user.data.turno}}"
+        },
+        {
+          "data.turno_entrando": "{{user.data.turno}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "lider"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "lider"
+          }
+        }
+      ]
+    }
+  }
 }
