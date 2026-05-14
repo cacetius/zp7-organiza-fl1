@@ -36,11 +36,6 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "read": {
       "$or": [
         {
           "user_condition": {
@@ -49,23 +44,35 @@
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
+            "funcao": "monitor"
           }
-        },
-        {
-          "data.turno": "{{user.data.turno}}"
         }
       ]
     },
+    "read": true,
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
+        }
+      ]
     },
     "delete": {
       "user_condition": {
