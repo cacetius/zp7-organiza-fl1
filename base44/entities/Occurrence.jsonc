@@ -81,8 +81,7 @@
     "gravidade"
   ],
   "rls": {
-    "create": true,
-    "read": {
+    "create": {
       "$or": [
         {
           "user_condition": {
@@ -100,7 +99,18 @@
           }
         },
         {
-          "created_by": "{{user.email}}"
+          "user_condition": {
+            "funcao": "funcionario"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
         },
         {
           "data.turno": "{{user.data.turno}}"
@@ -135,9 +145,6 @@
           "user_condition": {
             "role": "admin"
           }
-        },
-        {
-          "created_by": "{{user.email}}"
         }
       ]
     }
