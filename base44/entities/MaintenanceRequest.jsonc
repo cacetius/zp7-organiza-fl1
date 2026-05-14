@@ -68,5 +68,80 @@
     "testor_nome",
     "tipo_falha",
     "descricao"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manutencao"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "lider"
+          }
+        },
+        {
+          "data.turno": "{{user.data.turno}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "manutencao"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "lider"
+          }
+        },
+        {
+          "data.responsavel": "{{user.full_name}}"
+        },
+        {
+          "data.turno": "{{user.data.turno}}"
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "lider"
+          }
+        }
+      ]
+    }
+  }
 }
