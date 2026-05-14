@@ -70,13 +70,21 @@ export default function LossControl() {
   const records = allRecords.filter(r => r.motivo_perda !== "ganho");
   const recordsGanho = allRecords.filter(r => r.motivo_perda === "ganho");
 
+  // Ref para sheetKey sempre atualizado (evita closure stale em callbacks)
+  const sheetKeyRef = useRef(sheetKey);
+  useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
+
+  // Ref para dados mais recentes do banco (evita race condition em cliques rápidos)
+  const allRecordsRef = useRef(allRecords);
+  useEffect(() => { allRecordsRef.current = allRecords; }, [allRecords]);
+
   const optimisticUpdate = (updater) => {
-    qc.setQueryData([sheetKey], (old = []) => updater(old));
+    qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
   };
 
   useEffect(() => {
     const unsub = base44.entities.LossControl.subscribe(() => {
-      qc.invalidateQueries({ queryKey: [sheetKey] });
+      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
     });
     return unsub;
   }, [sheetKey]);
@@ -84,20 +92,20 @@ export default function LossControl() {
   const createCell = useMutation({
     mutationFn: (data) => base44.entities.LossControl.create(data),
     onMutate: (data) => { optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]); },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
   const updateCell = useMutation({
     mutationFn: ({ id, carros_perdidos }) => base44.entities.LossControl.update(id, { carros_perdidos }),
     onMutate: ({ id, carros_perdidos }) => { optimisticUpdate(old => old.map(r => r.id === id ? { ...r, carros_perdidos } : r)); },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
   const deleteCell = useMutation({
     mutationFn: (id) => base44.entities.LossControl.delete(id),
     onMutate: (id) => { optimisticUpdate(old => old.filter(r => r.id !== id)); },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
 
   // cellMap para perdas
@@ -106,7 +114,11 @@ export default function LossControl() {
     records.forEach(r => {
       if (!r.item_perda || !r.hora) return;
       if (!map[r.item_perda]) map[r.item_perda] = {};
-      map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+      // Se já existe um registro para esse item+hora, manter o com id real (não temp)
+      const existing = map[r.item_perda][r.hora];
+      if (!existing || (existing.id?.startsWith?.("temp-") && !r.id?.startsWith?.("temp-"))) {
+        map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+      }
     });
     return map;
   }, [records]);
@@ -116,33 +128,83 @@ export default function LossControl() {
     const map = {};
     recordsGanho.forEach(r => {
       if (!r.item_perda || !r.hora) return;
+      const existing = map[r.item_perda]?.[r.hora];
       if (!map[r.item_perda]) map[r.item_perda] = {};
-      map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+      if (!existing || (existing.id?.startsWith?.("temp-") && !r.id?.startsWith?.("temp-"))) {
+        map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+      }
     });
     return map;
   }, [recordsGanho]);
 
+  // Ref para cellMap/cellMapGanho mais recente (para uso em handlers de clique rápido)
+  const cellMapRef = useRef(cellMap);
+  const cellMapGanhoRef = useRef(cellMapGanho);
+  useEffect(() => { cellMapRef.current = cellMap; }, [cellMap]);
+  useEffect(() => { cellMapGanhoRef.current = cellMapGanho; }, [cellMapGanho]);
+
+  // pendingOps: rastreia operações em andamento para evitar duplicatas
+  const pendingOps = useRef({});
+
   const saveCell = (item, hora, newVal) => {
-    const cell = cellMap[item]?.[hora];
-    if (newVal <= 0) { if (cell) deleteCell.mutate(cell.id); return; }
-    if (cell) updateCell.mutate({ id: cell.id, carros_perdidos: newVal });
-    else createCell.mutate({ item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro" });
+    const opKey = `perda-${item}-${hora}`;
+    if (pendingOps.current[opKey]) return; // debounce: ignora se já tem op em andamento
+    const cell = cellMapRef.current[item]?.[hora];
+    if (newVal <= 0) {
+      if (cell && !cell.id?.startsWith?.("temp-")) {
+        pendingOps.current[opKey] = true;
+        deleteCell.mutate(cell.id, { onSettled: () => { delete pendingOps.current[opKey]; } });
+      }
+      return;
+    }
+    if (cell && !cell.id?.startsWith?.("temp-")) {
+      pendingOps.current[opKey] = true;
+      updateCell.mutate({ id: cell.id, carros_perdidos: newVal }, { onSettled: () => { delete pendingOps.current[opKey]; } });
+    } else if (!cell) {
+      pendingOps.current[opKey] = true;
+      createCell.mutate(
+        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro" },
+        { onSettled: () => { delete pendingOps.current[opKey]; } }
+      );
+    }
   };
 
   const saveCellGanho = (item, hora, newVal) => {
-    const cell = cellMapGanho[item]?.[hora];
-    if (newVal <= 0) { if (cell) deleteCell.mutate(cell.id); return; }
-    if (cell) updateCell.mutate({ id: cell.id, carros_perdidos: newVal });
-    else createCell.mutate({ item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "ganho" });
+    const opKey = `ganho-${item}-${hora}`;
+    if (pendingOps.current[opKey]) return;
+    const cell = cellMapGanhoRef.current[item]?.[hora];
+    if (newVal <= 0) {
+      if (cell && !cell.id?.startsWith?.("temp-")) {
+        pendingOps.current[opKey] = true;
+        deleteCell.mutate(cell.id, { onSettled: () => { delete pendingOps.current[opKey]; } });
+      }
+      return;
+    }
+    if (cell && !cell.id?.startsWith?.("temp-")) {
+      pendingOps.current[opKey] = true;
+      updateCell.mutate({ id: cell.id, carros_perdidos: newVal }, { onSettled: () => { delete pendingOps.current[opKey]; } });
+    } else if (!cell) {
+      pendingOps.current[opKey] = true;
+      createCell.mutate(
+        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "ganho" },
+        { onSettled: () => { delete pendingOps.current[opKey]; } }
+      );
+    }
   };
 
-  const handleIncrement = (item, hora) => saveCell(item, hora, (cellMap[item]?.[hora]?.count || 0) + 1);
-  const handleDecrement = (item, hora) => saveCell(item, hora, (cellMap[item]?.[hora]?.count || 0) - 1);
-  const handleReset = (item, hora) => { const cell = cellMap[item]?.[hora]; if (cell) deleteCell.mutate(cell.id); };
+  const handleIncrement = (item, hora) => saveCell(item, hora, (cellMapRef.current[item]?.[hora]?.count || 0) + 1);
+  const handleDecrement = (item, hora) => saveCell(item, hora, (cellMapRef.current[item]?.[hora]?.count || 0) - 1);
+  const handleReset = (item, hora) => {
+    const cell = cellMapRef.current[item]?.[hora];
+    if (cell && !cell.id?.startsWith?.("temp-")) deleteCell.mutate(cell.id);
+  };
 
-  const handleIncrementGanho = (item, hora) => saveCellGanho(item, hora, (cellMapGanho[item]?.[hora]?.count || 0) + 1);
-  const handleDecrementGanho = (item, hora) => saveCellGanho(item, hora, (cellMapGanho[item]?.[hora]?.count || 0) - 1);
-  const handleResetGanho = (item, hora) => { const cell = cellMapGanho[item]?.[hora]; if (cell) deleteCell.mutate(cell.id); };
+  const handleIncrementGanho = (item, hora) => saveCellGanho(item, hora, (cellMapGanhoRef.current[item]?.[hora]?.count || 0) + 1);
+  const handleDecrementGanho = (item, hora) => saveCellGanho(item, hora, (cellMapGanhoRef.current[item]?.[hora]?.count || 0) - 1);
+  const handleResetGanho = (item, hora) => {
+    const cell = cellMapGanhoRef.current[item]?.[hora];
+    if (cell && !cell.id?.startsWith?.("temp-")) deleteCell.mutate(cell.id);
+  };
 
   const startLongPress = (item, hora) => {
     const key = `${item}-${hora}`;
