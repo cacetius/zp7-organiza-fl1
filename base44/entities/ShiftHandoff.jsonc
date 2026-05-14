@@ -68,17 +68,18 @@
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
+            "funcao": "monitor"
           }
         }
       ]
     },
-    "read": {
+    "read": true,
+    "update": {
       "$or": [
         {
           "user_condition": {
@@ -86,27 +87,9 @@
           }
         },
         {
-          "user_condition": {
-            "data.funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "data.funcao": "monitor"
-          }
-        },
-        {
-          "data.turno_saindo": "{{user.data.turno}}"
-        },
-        {
-          "data.turno_entrando": "{{user.data.turno}}"
+          "created_by": "{{user.email}}"
         }
       ]
-    },
-    "update": {
-      "user_condition": {
-        "role": "admin"
-      }
     },
     "delete": {
       "user_condition": {
