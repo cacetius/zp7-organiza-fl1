@@ -36,54 +36,48 @@ export default function LossControl() {
   const [novoItem, setNovoItem] = useState("");
   const [novoGanho, setNovoGanho] = useState("");
   const longPressTimers = useRef({});
-  const [userEmail, setUserEmail] = useState(null);
-
-  useEffect(() => {
-    base44.auth.me().then(u => setUserEmail(u.email));
-  }, []);
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
-  const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}-${userEmail}`;
-  const ganhoKey = `ganho-sheet-${selectedDate}-${selectedTurno}-${userEmail}`;
+  const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
-  const { data: records = [] } = useQuery({
+  const { data: allRecords = [] } = useQuery({
     queryKey: [sheetKey],
-    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno, created_by: userEmail }),
-    enabled: !!userEmail,
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
-  // Ganhos: reutilizamos LossControl mas com motivo_perda = "ganho"
-  const { data: recordsGanho = [] } = useQuery({
-    queryKey: [ganhoKey],
-    queryFn: async () => {
-      const all = await base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno, created_by: userEmail });
-      return all.filter(r => r.motivo_perda === "ganho");
-    },
-    enabled: !!userEmail,
-  });
+  const records = allRecords.filter(r => r.motivo_perda !== "ganho");
+  const recordsGanho = allRecords.filter(r => r.motivo_perda === "ganho");
 
   const optimisticUpdate = (updater) => {
     qc.setQueryData([sheetKey], (old = []) => updater(old));
   };
-  const optimisticUpdateGanho = (updater) => {
-    qc.setQueryData([ganhoKey], (old = []) => updater(old));
-  };
+
+  // Subscrição em tempo real para ver dados de outros usuários
+  useEffect(() => {
+    const unsub = base44.entities.LossControl.subscribe(() => {
+      qc.invalidateQueries({ queryKey: [sheetKey] });
+    });
+    return unsub;
+  }, [sheetKey]);
 
   const createCell = useMutation({
     mutationFn: (data) => base44.entities.LossControl.create(data),
     onMutate: (data) => { optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]); },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [sheetKey] }); qc.invalidateQueries({ queryKey: [ganhoKey] }); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const updateCell = useMutation({
     mutationFn: ({ id, carros_perdidos }) => base44.entities.LossControl.update(id, { carros_perdidos }),
     onMutate: ({ id, carros_perdidos }) => { optimisticUpdate(old => old.map(r => r.id === id ? { ...r, carros_perdidos } : r)); },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [sheetKey] }); qc.invalidateQueries({ queryKey: [ganhoKey] }); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const deleteCell = useMutation({
     mutationFn: (id) => base44.entities.LossControl.delete(id),
     onMutate: (id) => { optimisticUpdate(old => old.filter(r => r.id !== id)); },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [sheetKey] }); qc.invalidateQueries({ queryKey: [ganhoKey] }); },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
 
   // cellMap para perdas (exclui motivo_perda === "ganho")

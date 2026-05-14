@@ -31,7 +31,7 @@ export default function ProductionControl() {
   }, []);
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
-  const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}-${userEmail}`;
+  const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}`;
 
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
@@ -40,19 +40,25 @@ export default function ProductionControl() {
 
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
-    queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno, created_by: userEmail }),
-    enabled: !!userEmail,
+    queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
   const { data: losses = [] } = useQuery({
-    queryKey: [`loss-${selectedDate}-${selectedTurno}-${userEmail}`],
-    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno, created_by: userEmail }),
-    enabled: !!userEmail,
+    queryKey: [`loss-${selectedDate}-${selectedTurno}`],
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
   const optimisticUpdate = (updater) => {
     qc.setQueryData([sheetKey], (old = []) => updater(old));
   };
+
+  // Invalidar em tempo real quando outro usuário mudar dados
+  useEffect(() => {
+    const unsub = base44.entities.ProductionControl.subscribe(() => {
+      qc.invalidateQueries({ queryKey: [sheetKey] });
+    });
+    return unsub;
+  }, [sheetKey]);
 
   const createRec = useMutation({
     mutationFn: (data) => base44.entities.ProductionControl.create(data),
@@ -60,6 +66,7 @@ export default function ProductionControl() {
       optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
   const updateRec = useMutation({
     mutationFn: ({ id, carros_produzidos }) => base44.entities.ProductionControl.update(id, { carros_produzidos }),
