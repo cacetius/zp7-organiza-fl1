@@ -91,19 +91,19 @@
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
+            "funcao": "monitor"
           }
         },
         {
-          "data.turno": "{{user.data.turno}}"
+          "created_by": "{{user.email}}"
         },
         {
-          "created_by": "{{user.email}}"
+          "data.turno": "{{user.data.turno}}"
         }
       ]
     },
@@ -116,12 +116,12 @@
         },
         {
           "user_condition": {
-            "data.funcao": "lider"
+            "funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "data.funcao": "monitor"
+            "funcao": "monitor"
           }
         },
         {
@@ -130,9 +130,16 @@
       ]
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
     }
   }
 }
