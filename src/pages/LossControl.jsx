@@ -8,9 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
 import { format, addDays, subDays, parseISO } from "date-fns";
 
-const isMobileDevice = () => window.innerWidth < 768;
-
-
 const DEFAULT_ITEMS = [
   "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
   "AGREGADO (Reprov. Testor)", "BOX ZP6", "SISTEMA FIS",
@@ -31,13 +28,6 @@ export default function LossControl() {
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState("segundo");
-  const [isMobile, setIsMobile] = useState(isMobileDevice());
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(isMobileDevice());
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
   const [itens, setItens] = useState(DEFAULT_ITEMS);
   const [itensGanho, setItensGanho] = useState([]);
   const [novoItem, setNovoItem] = useState("");
@@ -60,23 +50,15 @@ export default function LossControl() {
       .map(r => r.item_perda);
     const uniqueGanhoItems = [...new Set(ganhoItems)];
     if (uniqueGanhoItems.length > 0) {
-      setItensGanho(prev => {
-        const merged = [...new Set([...prev, ...uniqueGanhoItems])];
-        return merged;
-      });
+      setItensGanho(prev => [...new Set([...prev, ...uniqueGanhoItems])]);
     }
   }, [allRecords]);
 
   const records = allRecords.filter(r => r.motivo_perda !== "ganho");
   const recordsGanho = allRecords.filter(r => r.motivo_perda === "ganho");
 
-  // Ref para sheetKey sempre atualizado (evita closure stale em callbacks)
   const sheetKeyRef = useRef(sheetKey);
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
-
-  // Ref para dados mais recentes do banco (evita race condition em cliques rápidos)
-  const allRecordsRef = useRef(allRecords);
-  useEffect(() => { allRecordsRef.current = allRecords; }, [allRecords]);
 
   const optimisticUpdate = (updater) => {
     qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
@@ -108,13 +90,11 @@ export default function LossControl() {
     onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
 
-  // cellMap para perdas
   const cellMap = useMemo(() => {
     const map = {};
     records.forEach(r => {
       if (!r.item_perda || !r.hora) return;
       if (!map[r.item_perda]) map[r.item_perda] = {};
-      // Se já existe um registro para esse item+hora, manter o com id real (não temp)
       const existing = map[r.item_perda][r.hora];
       if (!existing || (existing.id?.startsWith?.("temp-") && !r.id?.startsWith?.("temp-"))) {
         map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
@@ -123,13 +103,12 @@ export default function LossControl() {
     return map;
   }, [records]);
 
-  // cellMapGanho para ganhos
   const cellMapGanho = useMemo(() => {
     const map = {};
     recordsGanho.forEach(r => {
       if (!r.item_perda || !r.hora) return;
-      const existing = map[r.item_perda]?.[r.hora];
       if (!map[r.item_perda]) map[r.item_perda] = {};
+      const existing = map[r.item_perda][r.hora];
       if (!existing || (existing.id?.startsWith?.("temp-") && !r.id?.startsWith?.("temp-"))) {
         map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
       }
@@ -137,18 +116,16 @@ export default function LossControl() {
     return map;
   }, [recordsGanho]);
 
-  // Ref para cellMap/cellMapGanho mais recente (para uso em handlers de clique rápido)
   const cellMapRef = useRef(cellMap);
   const cellMapGanhoRef = useRef(cellMapGanho);
   useEffect(() => { cellMapRef.current = cellMap; }, [cellMap]);
   useEffect(() => { cellMapGanhoRef.current = cellMapGanho; }, [cellMapGanho]);
 
-  // pendingOps: rastreia operações em andamento para evitar duplicatas
   const pendingOps = useRef({});
 
   const saveCell = (item, hora, newVal) => {
     const opKey = `perda-${item}-${hora}`;
-    if (pendingOps.current[opKey]) return; // debounce: ignora se já tem op em andamento
+    if (pendingOps.current[opKey]) return;
     const cell = cellMapRef.current[item]?.[hora];
     if (newVal <= 0) {
       if (cell && !cell.id?.startsWith?.("temp-")) {
@@ -218,7 +195,6 @@ export default function LossControl() {
   };
   const cancelLongPressGanho = (item, hora) => clearTimeout(longPressTimers.current[`g-${item}-${hora}`]);
 
-  // Cálculos perdas
   const totalPorHora = useMemo(() => {
     const t = {};
     turnoAtual.horas.forEach(h => {
@@ -230,7 +206,6 @@ export default function LossControl() {
   const totalPorItem = (item) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[item]?.[h]?.count || 0), 0);
   const totalGeral = itens.reduce((acc, item) => acc + totalPorItem(item), 0);
 
-  // Cálculos ganhos
   const totalGanhoPorHora = useMemo(() => {
     const t = {};
     turnoAtual.horas.forEach(h => {
@@ -262,8 +237,6 @@ export default function LossControl() {
   };
   const itensDisponiveisGanho = itens.filter(i => !itensGanho.includes(i));
 
-  // ── EXPORTS ──────────────────────────────────────────────────────────────
-
   const buildPerdasRows = () => {
     const header = ["Item de Perda", ...turnoAtual.horas, "Total"];
     const rows = itens.map(item => [item, ...turnoAtual.horas.map(h => cellMap[item]?.[h]?.count || 0), totalPorItem(item)]);
@@ -282,12 +255,8 @@ export default function LossControl() {
   const handleExportExcel = () => {
     const { header: ph, rows: pr } = buildPerdasRows();
     const { header: gh, rows: gr } = buildGanhosRows();
-
     const toCsv = (header, rows) => [header, ...rows].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
-    const perdasCsv = toCsv(ph, pr);
-    const ganhosCsv = toCsv(gh, gr);
-    const combined = `PERDAS\n${perdasCsv}\n\nGANHOS\n${ganhosCsv}`;
-
+    const combined = `PERDAS\n${toCsv(ph, pr)}\n\nGANHOS\n${toCsv(gh, gr)}`;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\uFEFF" + combined], { type: "text/csv;charset=utf-8" }));
     a.download = `controle_perdas_${selectedDate}_${selectedTurno}.csv`;
@@ -333,27 +302,16 @@ export default function LossControl() {
       @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; color: #1e293b; background: #fff; }
-
-      .header {
-        display: flex; justify-content: space-between; align-items: center;
-        background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 70%, #1e1b4b 100%);
-        color: white; padding: 14px 20px; border-radius: 10px; margin-bottom: 12px;
-      }
+      .header { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 70%, #1e1b4b 100%); color: white; padding: 14px 20px; border-radius: 10px; margin-bottom: 12px; }
       .header-title { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
       .header-sub { font-size: 8px; opacity: 0.7; margin-top: 3px; }
       .header-badge { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 5px 12px; font-size: 10px; font-weight: 700; text-align: center; }
       .header-date { font-size: 8px; opacity: 0.65; margin-top: 3px; text-align: right; }
-
       .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
       .kpi { border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; text-align: center; }
       .kpi-val { font-size: 26px; font-weight: 900; line-height: 1; margin-bottom: 3px; }
       .kpi-lbl { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-
-      .section-header {
-        display: flex; justify-content: space-between; align-items: center;
-        color: white; padding: 7px 12px; font-size: 10px; font-weight: 800;
-        text-transform: uppercase; letter-spacing: 1px; border-radius: 6px 6px 0 0; margin-top: 12px;
-      }
+      .section-header { display: flex; justify-content: space-between; align-items: center; color: white; padding: 7px 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border-radius: 6px 6px 0 0; margin-top: 12px; }
       table { border-collapse: collapse; width: 100%; margin-bottom: 0; }
       thead tr { color: white; }
       thead th { padding: 5px 6px; font-size: 8px; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.15); }
@@ -361,11 +319,9 @@ export default function LossControl() {
       td.item-col { text-align: left; min-width: 140px; font-weight: 600; }
       tr:nth-child(even) td { background: #f8fafc; }
       tr.total-row td { background: #eff6ff; border-top: 2px solid #bfdbfe; }
-
       .footer { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
       .footer-brand { font-weight: 700; color: #64748b; }
     </style></head><body>
-
     <div class="header">
       <div>
         <div class="header-title">📋 Controle de Perdas — ZP7</div>
@@ -376,22 +332,18 @@ export default function LossControl() {
         <div class="header-date">📅 ${dateLabel}</div>
       </div>
     </div>
-
     <div class="kpi-row">
       ${kpiBox("Perdas Brutas", totalGeral, "#dc2626")}
       ${kpiBox("Carros Ganhos", totalGeralGanho, "#16a34a")}
       ${kpiBox("Perda Real", totalPerdaReal, "#ea580c")}
     </div>
-
     ${buildTable("🔴 Controle de Perdas", "#dc2626", "#991b1b", ph, pr, 1)}
     ${buildTable("🟢 Carros Ganhos", "#16a34a", "#166534", gh, gr, 2)}
-
     <div class="footer">
       <span class="footer-brand">ZP7 — Volkswagen Taubaté</span>
       <span>Sistema de Controle de Produção</span>
       <span>${now}</span>
     </div>
-
     <script>window.onload=function(){window.print()}<\/script></body></html>`;
 
     const a = document.createElement("a");
@@ -494,225 +446,131 @@ export default function LossControl() {
         </div>
       )}
 
-      {/* ── MOBILE VIEW ─────────────────────────────────── */}
-      {isMobile ? (
-        <div className="space-y-3">
-          {/* Perdas mobile */}
-          <div className="rounded-xl border border-red-500/30 overflow-hidden">
-            <div className="bg-red-500/10 px-4 py-2.5 text-center font-black text-xs uppercase tracking-widest text-red-400">
-              Controle de Perdas — {dateLabel}
-            </div>
-            {itens.map(item => {
+      {/* Planilha de Perdas */}
+      <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
+        <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
+          <thead>
+            <tr>
+              <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-red-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-red-400">
+                CONTROLE DE PERDAS — {dateLabel} — {turnoAtual.label}
+              </th>
+            </tr>
+            <tr className="bg-muted/50">
+              <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>ITEM DE PERDA</th>
+              {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
+              <th className="border border-border px-2 py-2 text-center font-bold bg-red-500/10 text-red-400" style={{ minWidth: 60 }}>TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((item, idx) => {
               const total = totalPorItem(item);
               return (
-                <Card key={item} className="rounded-none border-0 border-b border-border last:border-b-0">
-                  <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
-                    <span className="font-bold text-xs text-red-400 flex-1 mr-2">{item}</span>
-                    <div className="flex items-center gap-2">
-                      {total > 0 && <span className="text-xs bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full font-bold">{total}</span>}
-                      <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="text-muted-foreground/30 hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
+                <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-red-500/5 transition-colors`}>
+                  <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>{item}</span>
+                      <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
-                  </div>
-                  <CardContent className="px-3 pb-2.5">
-                    <div className="grid grid-cols-4 gap-1">
-                      {turnoAtual.horas.map(hora => {
-                        const val = cellMap[item]?.[hora]?.count || 0;
-                        return (
-                          <div key={hora} className="flex flex-col items-center gap-0.5">
-                            <span className="text-[8px] text-muted-foreground">{hora}</span>
-                            <button
-                              onPointerDown={() => startLongPress(item, hora)}
-                              onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
-                              onPointerLeave={() => cancelLongPress(item, hora)}
-                              className={`w-full h-10 rounded-md font-black text-sm select-none transition-all
-                                ${val > 0 ? "bg-red-500/20 text-red-300 active:scale-95" : "bg-muted/20 text-muted-foreground/30 active:scale-95"}`}
-                            >{val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-30" />}</button>
-                            {val > 0 && <button onClick={() => handleDecrement(item, hora)} className="text-muted-foreground/30 hover:text-red-400 p-0.5"><Minus className="w-3 h-3" /></button>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </td>
+                  {turnoAtual.horas.map(hora => {
+                    const val = cellMap[item]?.[hora]?.count || 0;
+                    return (
+                      <td key={hora} className="border border-border p-1">
+                        <CellButton val={val}
+                          onPointerDown={() => startLongPress(item, hora)}
+                          onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
+                          onPointerLeave={() => cancelLongPress(item, hora)}
+                          onDecrement={() => handleDecrement(item, hora)}
+                          colorClass="text-muted-foreground/40 hover:text-red-400"
+                          activeColor="bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
+                        />
+                      </td>
+                    );
+                  })}
+                  <td className="border border-border text-center font-black text-red-400 bg-red-500/5 py-1.5">{total > 0 ? total : ""}</td>
+                </tr>
               );
             })}
-            <div className="bg-red-500/10 px-4 py-2 flex items-center justify-between">
-              <span className="font-black text-xs text-red-400 uppercase">Total Perdas</span>
-              <span className="font-black text-lg text-red-400">{totalGeral > 0 ? totalGeral : "—"}</span>
-            </div>
-          </div>
+            <tr className="bg-red-500/10 font-bold">
+              <td className="border border-border px-3 py-2 font-black text-red-400 uppercase">TOTAL/HORA</td>
+              {turnoAtual.horas.map(h => (
+                <td key={h} className="border border-border text-center font-bold text-red-400 py-2">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>
+              ))}
+              <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-          {/* Ganhos mobile */}
-          <div className="rounded-xl border border-green-500/30 overflow-hidden">
-            <div className="bg-green-500/10 px-4 py-2.5 text-center font-black text-xs uppercase tracking-widest text-green-400">
-              Carros Ganhos — {dateLabel}
-            </div>
+      {/* Planilha de Carros Ganhos */}
+      <div className="overflow-x-auto rounded-xl border border-green-500/30 shadow-sm">
+        <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
+          <thead>
+            <tr>
+              <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-green-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-green-400">
+                CARROS GANHOS — {dateLabel} — {turnoAtual.label}
+              </th>
+            </tr>
+            <tr className="bg-muted/50">
+              <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>MOTIVO DO GANHO</th>
+              {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
+              <th className="border border-border px-2 py-2 text-center font-bold bg-green-500/10 text-green-400" style={{ minWidth: 60 }}>TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
             {itensGanho.length === 0 && (
-              <div className="py-6 text-center text-xs text-muted-foreground">Selecione um item da lista de perdas para registrar ganhos</div>
+              <tr>
+                <td colSpan={turnoAtual.horas.length + 2} className="text-center py-6 text-muted-foreground text-xs">
+                  Selecione um item da lista de perdas para registrar ganhos
+                </td>
+              </tr>
             )}
-            {itensGanho.map(item => {
+            {itensGanho.map((item, idx) => {
               const total = totalPorItemGanho(item);
               return (
-                <Card key={item} className="rounded-none border-0 border-b border-border last:border-b-0">
-                  <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
-                    <span className="font-bold text-xs text-green-400 flex-1 mr-2">{item}</span>
-                    <div className="flex items-center gap-2">
-                      {total > 0 && <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full font-bold">{total}</span>}
-                      <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="text-muted-foreground/30 hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
+                <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-green-500/5 transition-colors`}>
+                  <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
+                    <div className="flex items-center justify-between gap-1">
+                      <span>{item}</span>
+                      <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
-                  </div>
-                  <CardContent className="px-3 pb-2.5">
-                    <div className="grid grid-cols-4 gap-1">
-                      {turnoAtual.horas.map(hora => {
-                        const val = cellMapGanho[item]?.[hora]?.count || 0;
-                        return (
-                          <div key={hora} className="flex flex-col items-center gap-0.5">
-                            <span className="text-[8px] text-muted-foreground">{hora}</span>
-                            <button
-                              onPointerDown={() => startLongPressGanho(item, hora)}
-                              onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
-                              onPointerLeave={() => cancelLongPressGanho(item, hora)}
-                              className={`w-full h-10 rounded-md font-black text-sm select-none transition-all
-                                ${val > 0 ? "bg-green-500/20 text-green-300 active:scale-95" : "bg-muted/20 text-muted-foreground/30 active:scale-95"}`}
-                            >{val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-30" />}</button>
-                            {val > 0 && <button onClick={() => handleDecrementGanho(item, hora)} className="text-muted-foreground/30 hover:text-green-400 p-0.5"><Minus className="w-3 h-3" /></button>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </td>
+                  {turnoAtual.horas.map(hora => {
+                    const val = cellMapGanho[item]?.[hora]?.count || 0;
+                    return (
+                      <td key={hora} className="border border-border p-1">
+                        <CellButton val={val}
+                          onPointerDown={() => startLongPressGanho(item, hora)}
+                          onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
+                          onPointerLeave={() => cancelLongPressGanho(item, hora)}
+                          onDecrement={() => handleDecrementGanho(item, hora)}
+                          colorClass="text-muted-foreground/40 hover:text-green-400"
+                          activeColor="bg-green-500/20 text-green-300 hover:bg-green-500/35 active:scale-95"
+                        />
+                      </td>
+                    );
+                  })}
+                  <td className="border border-border text-center font-black text-green-400 bg-green-500/5 py-1.5">{total > 0 ? total : ""}</td>
+                </tr>
               );
             })}
-            <div className="bg-green-500/10 px-4 py-2 flex items-center justify-between">
-              <span className="font-black text-xs text-green-400 uppercase">Total Ganhos</span>
-              <span className="font-black text-lg text-green-400">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</span>
-            </div>
-            <div className="bg-orange-500/10 px-4 py-2 flex items-center justify-between">
-              <span className="font-black text-xs text-orange-400 uppercase">Perda Real</span>
-              <span className="font-black text-lg text-orange-400">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* ── DESKTOP: tabela de Perdas ─────────────────── */}
-          <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
-            <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
-              <thead>
-                <tr>
-                  <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-red-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-red-400">
-                    CONTROLE DE PERDAS — {dateLabel} — {turnoAtual.label}
-                  </th>
-                </tr>
-                <tr className="bg-muted/50">
-                  <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>ITEM DE PERDA</th>
-                  {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
-                  <th className="border border-border px-2 py-2 text-center font-bold bg-red-500/10 text-red-400" style={{ minWidth: 60 }}>TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itens.map((item, idx) => {
-                  const total = totalPorItem(item);
-                  return (
-                    <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-red-500/5 transition-colors`}>
-                      <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
-                        <div className="flex items-center justify-between gap-1">
-                          <span>{item}</span>
-                          <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
-                        </div>
-                      </td>
-                      {turnoAtual.horas.map(hora => {
-                        const val = cellMap[item]?.[hora]?.count || 0;
-                        return (
-                          <td key={hora} className="border border-border p-1">
-                            <CellButton val={val}
-                              onPointerDown={() => startLongPress(item, hora)}
-                              onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
-                              onPointerLeave={() => cancelLongPress(item, hora)}
-                              onDecrement={() => handleDecrement(item, hora)}
-                              colorClass="text-muted-foreground/40 hover:text-red-400"
-                              activeColor="bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
-                            />
-                          </td>
-                        );
-                      })}
-                      <td className="border border-border text-center font-black text-red-400 bg-red-500/5 py-1.5">{total > 0 ? total : ""}</td>
-                    </tr>
-                  );
-                })}
-                <tr className="bg-red-500/10 font-bold">
-                  <td className="border border-border px-3 py-2 font-black text-red-400 uppercase">TOTAL/HORA</td>
-                  {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-red-400 py-2">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>)}
-                  <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── DESKTOP: tabela de Ganhos ─────────────────── */}
-          <div className="overflow-x-auto rounded-xl border border-green-500/30 shadow-sm">
-            <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
-              <thead>
-                <tr>
-                  <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-green-500/10 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-green-400">
-                    CARROS GANHOS — {dateLabel} — {turnoAtual.label}
-                  </th>
-                </tr>
-                <tr className="bg-muted/50">
-                  <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>MOTIVO DO GANHO</th>
-                  {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
-                  <th className="border border-border px-2 py-2 text-center font-bold bg-green-500/10 text-green-400" style={{ minWidth: 60 }}>TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itensGanho.length === 0 && (
-                  <tr><td colSpan={turnoAtual.horas.length + 2} className="text-center py-6 text-muted-foreground text-xs">Selecione um item da lista de perdas para registrar ganhos</td></tr>
-                )}
-                {itensGanho.map((item, idx) => {
-                  const total = totalPorItemGanho(item);
-                  return (
-                    <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-green-500/5 transition-colors`}>
-                      <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
-                        <div className="flex items-center justify-between gap-1">
-                          <span>{item}</span>
-                          <button onClick={() => setItensGanho(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
-                        </div>
-                      </td>
-                      {turnoAtual.horas.map(hora => {
-                        const val = cellMapGanho[item]?.[hora]?.count || 0;
-                        return (
-                          <td key={hora} className="border border-border p-1">
-                            <CellButton val={val}
-                              onPointerDown={() => startLongPressGanho(item, hora)}
-                              onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
-                              onPointerLeave={() => cancelLongPressGanho(item, hora)}
-                              onDecrement={() => handleDecrementGanho(item, hora)}
-                              colorClass="text-muted-foreground/40 hover:text-green-400"
-                              activeColor="bg-green-500/20 text-green-300 hover:bg-green-500/35 active:scale-95"
-                            />
-                          </td>
-                        );
-                      })}
-                      <td className="border border-border text-center font-black text-green-400 bg-green-500/5 py-1.5">{total > 0 ? total : ""}</td>
-                    </tr>
-                  );
-                })}
-                <tr className="bg-green-500/10 font-bold">
-                  <td className="border border-border px-3 py-2 font-black text-green-400 uppercase">TOTAL GANHOS/HORA</td>
-                  {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-green-400 py-2">{totalGanhoPorHora[h] > 0 ? totalGanhoPorHora[h] : "—"}</td>)}
-                  <td className="border border-border text-center font-black text-white bg-green-600 py-2 text-sm">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</td>
-                </tr>
-                <tr className="bg-orange-500/10 font-bold">
-                  <td className="border border-border px-3 py-2 font-black text-orange-400 uppercase">PERDA REAL/HORA</td>
-                  {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-orange-400 py-2">{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>)}
-                  <td className="border border-border text-center font-black text-white bg-orange-600 py-2 text-sm">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+            <tr className="bg-green-500/10 font-bold">
+              <td className="border border-border px-3 py-2 font-black text-green-400 uppercase">TOTAL GANHOS/HORA</td>
+              {turnoAtual.horas.map(h => (
+                <td key={h} className="border border-border text-center font-bold text-green-400 py-2">{totalGanhoPorHora[h] > 0 ? totalGanhoPorHora[h] : "—"}</td>
+              ))}
+              <td className="border border-border text-center font-black text-white bg-green-600 py-2 text-sm">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</td>
+            </tr>
+            <tr className="bg-orange-500/10 font-bold">
+              <td className="border border-border px-3 py-2 font-black text-orange-400 uppercase">PERDA REAL/HORA</td>
+              {turnoAtual.horas.map(h => (
+                <td key={h} className="border border-border text-center font-bold text-orange-400 py-2">{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>
+              ))}
+              <td className="border border-border text-center font-black text-white bg-orange-600 py-2 text-sm">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <p className="text-xs text-muted-foreground">Toque para +1 · Segure (~1s) para zerar · Use − para diminuir · ✕ na linha para remover item</p>
     </div>
