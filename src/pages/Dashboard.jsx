@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import ShiftOverview from "@/components/dashboard/ShiftOverview";
+import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
 
 const gravBadge = {
   critica: "bg-red-500/15 text-red-400 border-red-500/40",
@@ -51,7 +53,13 @@ export default function Dashboard() {
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });
   const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }) });
   const { data: lossesToday = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }) });
-  const { data: prodToday = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }) });
+   const { data: prodToday = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }) });
+   const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.list() });
+
+   const currentShift = detectCurrentShift();
+   const shiftProdData = getTodayShiftData(prodToday, currentShift.key);
+   const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
+   const shiftLossData = getTodayShiftData(lossesToday, currentShift.key);
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
@@ -74,8 +82,11 @@ export default function Dashboard() {
         </span>
       </div>
 
-      {/* KPIs principais */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Visão do turno atual */}
+       <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} lossData={shiftLossData} />
+
+       {/* KPIs principais */}
+       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Produzido Hoje", value: totalProduzidoHoje, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
           { label: "Prod. Líquida", value: producaoLiquida, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
