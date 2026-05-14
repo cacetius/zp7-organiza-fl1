@@ -60,7 +60,23 @@
   ],
   "rls": {
     "create": {
-      "created_by": "{{user.email}}"
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "data.funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "data.funcao": "monitor"
+          }
+        }
+      ]
     },
     "read": {
       "$or": [
@@ -71,12 +87,12 @@
         },
         {
           "user_condition": {
-            "role": "lider"
+            "data.funcao": "lider"
           }
         },
         {
           "user_condition": {
-            "role": "monitor"
+            "data.funcao": "monitor"
           }
         },
         {
@@ -88,38 +104,14 @@
       ]
     },
     "update": {
-      "$or": [
-        {
-          "created_by": "{{user.email}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "role": "lider"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "$or": [
-        {
-          "created_by": "{{user.email}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "role": "lider"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
