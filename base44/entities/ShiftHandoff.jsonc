@@ -78,7 +78,25 @@
         }
       ]
     },
-    "read": true,
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
+        }
+      ]
+    },
     "update": {
       "$or": [
         {
@@ -87,14 +105,25 @@
           }
         },
         {
-          "created_by": "{{user.email}}"
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
         }
       ]
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }
