@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Car, Clock, Activity, Pencil, Trash2, AlertTriangle,
   CheckCircle2, Wrench, ZapOff, ShieldAlert, Brain,
-  TrendingUp, TrendingDown, Zap, Timer
+  TrendingUp, TrendingDown, Zap, Timer, BarChart3
 } from "lucide-react";
 
 const statusConfig = {
@@ -39,7 +39,7 @@ function calcPrevisao(t, horasRestantes = null) {
   return cph;
 }
 
-export default function TestorCard({ t, onEdit, onDelete, onStatusChange, onHourlyClose }) {
+export default function TestorCard({ t, onEdit, onDelete, onStatusChange, onHourlyClose, onHistory }) {
   const cfg = statusConfig[t.status] || statusConfig.rodando;
   const StatusIcon = cfg.icon;
   const risk = t.risco_score || 0;
@@ -86,6 +86,10 @@ export default function TestorCard({ t, onEdit, onDelete, onStatusChange, onHour
             </div>
           </div>
           <div className="flex gap-1 shrink-0">
+            <button onClick={() => onHistory?.(t)} title="Histórico semanal"
+              className="p-1.5 rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-400 transition-colors">
+              <BarChart3 className="w-3.5 h-3.5" />
+            </button>
             <button onClick={() => onHourlyClose(t)} title="Fechar hora"
               className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
               <Timer className="w-3.5 h-3.5" />

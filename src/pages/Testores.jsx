@@ -12,6 +12,7 @@ import { Plus, Gauge, CheckCircle2, AlertTriangle, Wrench, ZapOff, ShieldAlert }
 import TestorCard from "@/components/testores/TestorCard";
 import HourlyCloseModal from "@/components/testores/HourlyCloseModal";
 import TestorProductionPanel from "@/components/testores/TestorProductionPanel";
+import TestorWeeklyHistory from "@/components/testores/TestorWeeklyHistory";
 
 const statusConfig = {
   rodando:    { label: "Rodando",    color: "bg-green-500/15 text-green-400 border-green-500/40",   dot: "bg-green-400",  icon: CheckCircle2 },
@@ -153,11 +154,12 @@ function TestorForm({ initial, onSave, isPending, onCancel }) {
 }
 
 export default function Testores() {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [hourlyTarget, setHourlyTarget] = useState(null);
-  const qc = useQueryClient();
+   const [createOpen, setCreateOpen] = useState(false);
+   const [editTarget, setEditTarget] = useState(null);
+   const [deleteTarget, setDeleteTarget] = useState(null);
+   const [hourlyTarget, setHourlyTarget] = useState(null);
+   const [historyTarget, setHistoryTarget] = useState(null);
+   const qc = useQueryClient();
 
   useEffect(() => {
     const unsub = base44.entities.Testor.subscribe((event) => {
@@ -360,6 +362,7 @@ export default function Testores() {
               onDelete={setDeleteTarget}
               onStatusChange={(id, status) => updateStatus.mutate({ id, status })}
               onHourlyClose={setHourlyTarget}
+              onHistory={setHistoryTarget}
             />
           ))}
         </div>
@@ -398,6 +401,11 @@ export default function Testores() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
+
+      {/* Histórico semanal */}
+      {historyTarget && (
+        <TestorWeeklyHistory testor={historyTarget} onClose={() => setHistoryTarget(null)} />
+      )}
+      </div>
+      );
+      }
