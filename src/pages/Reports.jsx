@@ -251,6 +251,7 @@ export default function Reports() {
       .map(([name, Ganhos]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, Ganhos }));
   }, [filteredLoss]);
 
+  const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
   const totalGanhosPeriodo = ganhoItemRanking.reduce((s, r) => s + r.Ganhos, 0);
   const perdaRealPeriodo = Math.max(0, totalPerdasPeriodo - totalGanhosPeriodo);
 
@@ -264,7 +265,6 @@ export default function Reports() {
     })).map(r => ({ ...r, Líquida: Math.max(0, r.Produção - Math.max(0, r.Perdas - r.Ganhos)) }));
   }, [prodPorHora, lossDay, resumoTurnoObj]);
 
-  const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
   const dateRangeLabel = `${format(fromDate, "dd/MM/yyyy")} – ${format(toDate, "dd/MM/yyyy")}`;
 
   // PDF Consolidado por Turno (novo botão)
