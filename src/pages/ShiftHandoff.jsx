@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,8 @@ export default function ShiftHandoff() {
     queryFn: () => base44.entities.ShiftHandoff.list("-created_date", 20),
   });
 
+  const pendingPrintRef = useRef(null);
+
   const createMut = useMutation({
     mutationFn: (d) => base44.entities.ShiftHandoff.create({
       ...d,
@@ -61,9 +63,17 @@ export default function ShiftHandoff() {
       qc.invalidateQueries({ queryKey: ["handoffs"] });
       setOpen(false);
       setForm(emptyForm);
-      // Abre o PDF automaticamente ao encerrar o turno
-      handlePrint({ ...vars, producao_realizada: Number(vars.producao_realizada) || 0, producao_planejada: Number(vars.producao_planejada) || 0, data: today });
+      // Guarda para imprimir após o estado ser atualizado
+      pendingPrintRef.current = { ...vars, producao_realizada: Number(vars.producao_realizada) || 0, producao_planejada: Number(vars.producao_planejada) || 0, data: today };
     },
+  });
+
+  // Dispara impressão após salvar (evita closure stale)
+  useEffect(() => {
+    if (pendingPrintRef.current) {
+      handlePrint(pendingPrintRef.current);
+      pendingPrintRef.current = null;
+    }
   });
 
   const u = (k, v) => setForm(prev => ({ ...prev, [k]: v }));

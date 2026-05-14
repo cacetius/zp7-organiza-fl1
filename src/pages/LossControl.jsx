@@ -65,11 +65,17 @@ export default function LossControl() {
   };
 
   useEffect(() => {
-    const unsub = base44.entities.LossControl.subscribe(() => {
-      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
-    });
-    return unsub;
-  }, [sheetKey]);
+    let unsub;
+    const timeout = setTimeout(() => {
+      unsub = base44.entities.LossControl.subscribe(() => {
+        qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+      });
+    }, 0);
+    return () => {
+      clearTimeout(timeout);
+      if (unsub) unsub();
+    };
+  }, []);
 
   const createCell = useMutation({
     mutationFn: (data) => base44.entities.LossControl.create(data),

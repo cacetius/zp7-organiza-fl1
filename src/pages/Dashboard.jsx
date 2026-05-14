@@ -45,7 +45,7 @@ export default function Dashboard() {
       base44.entities.ProductionControl.subscribe(() => qc.invalidateQueries({ queryKey: ["prod-today"] })),
     ];
     return () => subs.forEach(u => u());
-  }, [qc]);
+  }, []);
 
   const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });

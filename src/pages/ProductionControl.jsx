@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -43,42 +43,57 @@ export default function ProductionControl() {
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
-  useEffect(() => {
-    const unsub = base44.entities.ProductionControl.subscribe(() => qc.invalidateQueries({ queryKey: [sheetKey] }));
-    return unsub;
-  }, [sheetKey]);
+  const sheetKeyRef = useRef(sheetKey);
+  useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
 
-  const optimisticUpdate = (updater) => qc.setQueryData([sheetKey], (old = []) => updater(old));
+  useEffect(() => {
+    const unsub = base44.entities.ProductionControl.subscribe(() => {
+      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+    });
+    return unsub;
+  }, []);
+
+  const optimisticUpdate = (updater) => qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
 
   const createRec = useMutation({
     mutationFn: (data) => base44.entities.ProductionControl.create(data),
     onMutate: (data) => optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
   const updateRec = useMutation({
     mutationFn: ({ id, carros_produzidos }) => base44.entities.ProductionControl.update(id, { carros_produzidos }),
     onMutate: ({ id, carros_produzidos }) => optimisticUpdate(old => old.map(r => r.id === id ? { ...r, carros_produzidos } : r)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
   const deleteRec = useMutation({
     mutationFn: (id) => base44.entities.ProductionControl.delete(id),
     onMutate: (id) => optimisticUpdate(old => old.filter(r => r.id !== id)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
 
-  const cellMap = {};
-  records.forEach(r => {
-    if (!r.testor_id || !r.hora) return;
-    if (!cellMap[r.testor_id]) cellMap[r.testor_id] = {};
-    cellMap[r.testor_id][r.hora] = { id: r.id, value: r.carros_produzidos ?? 0 };
-  });
+  const cellMapRef = useRef({});
+  const cellMap = useMemo(() => {
+    const map = {};
+    records.forEach(r => {
+      if (!r.testor_id || !r.hora) return;
+      if (!map[r.testor_id]) map[r.testor_id] = {};
+      const existing = map[r.testor_id][r.hora];
+      if (!existing || (existing.id?.startsWith?.("temp-") && !r.id?.startsWith?.("temp-"))) {
+        map[r.testor_id][r.hora] = { id: r.id, value: r.carros_produzidos ?? 0 };
+      }
+    });
+    return map;
+  }, [records]);
+  useEffect(() => { cellMapRef.current = cellMap; }, [cellMap]);
 
   const saveCell = (testor, hora, newVal) => {
-    const cell = cellMap[testor.id]?.[hora];
-    if (newVal <= 0) { if (cell) deleteRec.mutate(cell.id); return; }
-    if (cell) updateRec.mutate({ id: cell.id, carros_produzidos: newVal });
-    else createRec.mutate({ testor_id: testor.id, testor_nome: testor.nome, data: selectedDate, turno: selectedTurno, hora, carros_produzidos: newVal });
+    const cell = cellMapRef.current[testor.id]?.[hora];
+    if (newVal <= 0) { if (cell && !cell.id?.startsWith?.("temp-")) deleteRec.mutate(cell.id); return; }
+    if (cell && !cell.id?.startsWith?.("temp-")) updateRec.mutate({ id: cell.id, carros_produzidos: newVal });
+    else if (!cell) createRec.mutate({ testor_id: testor.id, testor_nome: testor.nome, data: selectedDate, turno: selectedTurno, hora, carros_produzidos: newVal });
   };
 
   const startLongPress = (testor, hora) => {
@@ -86,7 +101,7 @@ export default function ProductionControl() {
     longPressTriggered.current[key] = false;
     longPressTimers.current[key] = setTimeout(() => {
       longPressTriggered.current[key] = true;
-      const cell = cellMap[testor.id]?.[hora];
+      const cell = cellMapRef.current[testor.id]?.[hora];
       setEditingCell({ testorId: testor.id, testor, hora, value: String(cell?.value || "") });
     }, 600);
   };
@@ -99,12 +114,12 @@ export default function ProductionControl() {
     clearTimeout(clickTimers.current[key]);
     if (clickCounters.current[key] >= 4) {
       clickCounters.current[key] = 0;
-      const cell = cellMap[testor.id]?.[hora];
-      if (cell) deleteRec.mutate(cell.id);
+      const cell = cellMapRef.current[testor.id]?.[hora];
+      if (cell && !cell.id?.startsWith?.("temp-")) deleteRec.mutate(cell.id);
       return;
     }
     clickTimers.current[key] = setTimeout(() => { clickCounters.current[key] = 0; }, 600);
-    const cell = cellMap[testor.id]?.[hora];
+    const cell = cellMapRef.current[testor.id]?.[hora];
     saveCell(testor, hora, (cell?.value || 0) + 1);
   };
 
