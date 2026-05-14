@@ -17,9 +17,7 @@ import Occurrences from "./pages/Occurrences";
 import Checklist from "./pages/Checklist";
 import ShiftHandoff from "./pages/ShiftHandoff";
 import Maintenance from "./pages/Maintenance";
-import PredictiveAI from "./pages/PredictiveAI";
 import Reports from "./pages/Reports";
-import DailyPassword from "./pages/DailyPassword";
 import LossControl from "./pages/LossControl";
 import ProductionControl from "./pages/ProductionControl";
 
@@ -65,9 +63,7 @@ function AppShell() {
         <Route path="/checklist" element={<Checklist />} />
         <Route path="/passagem-turno" element={<ShiftHandoff />} />
         <Route path="/manutencao" element={<Maintenance />} />
-        <Route path="/ia-preditiva" element={<PredictiveAI />} />
         <Route path="/relatorios" element={<Reports />} />
-        <Route path="/senha-diaria" element={<DailyPassword />} />
         <Route path="/controle-perdas" element={<LossControl />} />
         <Route path="/controle-producao" element={<ProductionControl />} />
       </Route>

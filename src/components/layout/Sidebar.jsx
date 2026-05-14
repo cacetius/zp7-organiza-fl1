@@ -9,8 +9,6 @@ import {
   ArrowRightLeft,
   Wrench,
   BarChart3,
-  KeyRound,
-  Brain,
   TrendingDown,
   Factory,
   X,
@@ -30,8 +28,6 @@ const navItems = [
   { path: "/checklist", icon: CheckSquare, label: "Checklist" },
   { path: "/passagem-turno", icon: ArrowRightLeft, label: "Passagem de Turno" },
   { path: "/relatorios", icon: BarChart3, label: "Relatórios" },
-  { path: "/ia-preditiva", icon: Brain, label: "IA Preditiva" },
-  { path: "/senha-diaria", icon: KeyRound, label: "Senha Diária" },
 ];
 
 export default function Sidebar({ open, onClose, collapsed, onToggleCollapse }) {
