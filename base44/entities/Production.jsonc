@@ -46,16 +46,10 @@
           "user_condition": {
             "funcao": "lider"
           }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
         }
       ]
     },
-    "read": true,
-    "update": {
+    "read": {
       "$or": [
         {
           "user_condition": {
@@ -74,10 +68,28 @@
         }
       ]
     },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        }
+      ]
+    },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }
