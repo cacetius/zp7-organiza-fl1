@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
-import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
+
 
 const DEFAULT_ITEMS = [
   "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
@@ -23,8 +23,6 @@ const TURNOS = [
   { label: "3º Turno (01h–05h)", key: "terceiro", horas: ["01:00","02:00","03:00","04:00","05:00"] },
   { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
 ];
-
-// Ganhos agora são selecionados da lista de itens de perda
 
 export default function LossControl() {
   const qc = useQueryClient();
@@ -46,6 +44,20 @@ export default function LossControl() {
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
+  // Reconstruir itensGanho automaticamente dos registros do banco
+  useEffect(() => {
+    const ganhoItems = allRecords
+      .filter(r => r.motivo_perda === "ganho" && r.item_perda)
+      .map(r => r.item_perda);
+    const uniqueGanhoItems = [...new Set(ganhoItems)];
+    if (uniqueGanhoItems.length > 0) {
+      setItensGanho(prev => {
+        const merged = [...new Set([...prev, ...uniqueGanhoItems])];
+        return merged;
+      });
+    }
+  }, [allRecords]);
+
   const records = allRecords.filter(r => r.motivo_perda !== "ganho");
   const recordsGanho = allRecords.filter(r => r.motivo_perda === "ganho");
 
@@ -53,7 +65,6 @@ export default function LossControl() {
     qc.setQueryData([sheetKey], (old = []) => updater(old));
   };
 
-  // Subscrição em tempo real para ver dados de outros usuários
   useEffect(() => {
     const unsub = base44.entities.LossControl.subscribe(() => {
       qc.invalidateQueries({ queryKey: [sheetKey] });
@@ -80,21 +91,27 @@ export default function LossControl() {
     onError: () => qc.invalidateQueries({ queryKey: [sheetKey] }),
   });
 
-  // cellMap para perdas (exclui motivo_perda === "ganho")
-  const cellMap = {};
-  records.filter(r => r.motivo_perda !== "ganho").forEach(r => {
-    if (!r.item_perda || !r.hora) return;
-    if (!cellMap[r.item_perda]) cellMap[r.item_perda] = {};
-    cellMap[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
-  });
+  // cellMap para perdas
+  const cellMap = useMemo(() => {
+    const map = {};
+    records.forEach(r => {
+      if (!r.item_perda || !r.hora) return;
+      if (!map[r.item_perda]) map[r.item_perda] = {};
+      map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+    });
+    return map;
+  }, [records]);
 
   // cellMapGanho para ganhos
-  const cellMapGanho = {};
-  recordsGanho.forEach(r => {
-    if (!r.item_perda || !r.hora) return;
-    if (!cellMapGanho[r.item_perda]) cellMapGanho[r.item_perda] = {};
-    cellMapGanho[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
-  });
+  const cellMapGanho = useMemo(() => {
+    const map = {};
+    recordsGanho.forEach(r => {
+      if (!r.item_perda || !r.hora) return;
+      if (!map[r.item_perda]) map[r.item_perda] = {};
+      map[r.item_perda][r.hora] = { id: r.id, count: r.carros_perdidos ?? 1 };
+    });
+    return map;
+  }, [recordsGanho]);
 
   const saveCell = (item, hora, newVal) => {
     const cell = cellMap[item]?.[hora];
@@ -105,10 +122,7 @@ export default function LossControl() {
 
   const saveCellGanho = (item, hora, newVal) => {
     const cell = cellMapGanho[item]?.[hora];
-    if (newVal <= 0) {
-      if (cell) deleteCell.mutate(cell.id);
-      return;
-    }
+    if (newVal <= 0) { if (cell) deleteCell.mutate(cell.id); return; }
     if (cell) updateCell.mutate({ id: cell.id, carros_perdidos: newVal });
     else createCell.mutate({ item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "ganho" });
   };
@@ -125,36 +139,44 @@ export default function LossControl() {
     const key = `${item}-${hora}`;
     longPressTimers.current[key] = setTimeout(() => handleReset(item, hora), 800);
   };
-  const cancelLongPress = (item, hora) => {
-    clearTimeout(longPressTimers.current[`${item}-${hora}`]);
-  };
+  const cancelLongPress = (item, hora) => clearTimeout(longPressTimers.current[`${item}-${hora}`]);
+
   const startLongPressGanho = (item, hora) => {
     const key = `g-${item}-${hora}`;
     longPressTimers.current[key] = setTimeout(() => handleResetGanho(item, hora), 800);
   };
-  const cancelLongPressGanho = (item, hora) => {
-    clearTimeout(longPressTimers.current[`g-${item}-${hora}`]);
-  };
+  const cancelLongPressGanho = (item, hora) => clearTimeout(longPressTimers.current[`g-${item}-${hora}`]);
 
   // Cálculos perdas
-  const totalPorHora = {};
-  turnoAtual.horas.forEach(h => {
-    totalPorHora[h] = itens.reduce((acc, item) => acc + (cellMap[item]?.[h]?.count || 0), 0);
-  });
+  const totalPorHora = useMemo(() => {
+    const t = {};
+    turnoAtual.horas.forEach(h => {
+      t[h] = itens.reduce((acc, item) => acc + (cellMap[item]?.[h]?.count || 0), 0);
+    });
+    return t;
+  }, [cellMap, itens, turnoAtual]);
+
   const totalPorItem = (item) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[item]?.[h]?.count || 0), 0);
   const totalGeral = itens.reduce((acc, item) => acc + totalPorItem(item), 0);
 
   // Cálculos ganhos
-  const totalGanhoPorHora = {};
-  turnoAtual.horas.forEach(h => {
-    totalGanhoPorHora[h] = itensGanho.reduce((acc, item) => acc + (cellMapGanho[item]?.[h]?.count || 0), 0);
-  });
+  const totalGanhoPorHora = useMemo(() => {
+    const t = {};
+    turnoAtual.horas.forEach(h => {
+      t[h] = itensGanho.reduce((acc, item) => acc + (cellMapGanho[item]?.[h]?.count || 0), 0);
+    });
+    return t;
+  }, [cellMapGanho, itensGanho, turnoAtual]);
+
   const totalPorItemGanho = (item) => turnoAtual.horas.reduce((acc, h) => acc + (cellMapGanho[item]?.[h]?.count || 0), 0);
   const totalGeralGanho = itensGanho.reduce((acc, item) => acc + totalPorItemGanho(item), 0);
 
-  // Perda real = perdas - ganhos por hora
-  const perdaRealPorHora = {};
-  turnoAtual.horas.forEach(h => { perdaRealPorHora[h] = Math.max(0, (totalPorHora[h] || 0) - (totalGanhoPorHora[h] || 0)); });
+  const perdaRealPorHora = useMemo(() => {
+    const t = {};
+    turnoAtual.horas.forEach(h => { t[h] = Math.max(0, (totalPorHora[h] || 0) - (totalGanhoPorHora[h] || 0)); });
+    return t;
+  }, [totalPorHora, totalGanhoPorHora, turnoAtual]);
+
   const totalPerdaReal = Math.max(0, totalGeral - totalGeralGanho);
 
   const addItem = () => {
@@ -167,46 +189,95 @@ export default function LossControl() {
       setGanhoSelecionado("");
     }
   };
-  // Items disponíveis para ganho = items de perda que ainda não foram adicionados como ganho
   const itensDisponiveisGanho = itens.filter(i => !itensGanho.includes(i));
 
-  const handleExportCsv = () => {
-    const headers = ["Item de Perda", ...turnoAtual.horas, "Total"];
+  // ── EXPORTS ──────────────────────────────────────────────────────────────
+
+  const buildPerdasRows = () => {
+    const header = ["Item de Perda", ...turnoAtual.horas, "Total"];
     const rows = itens.map(item => [item, ...turnoAtual.horas.map(h => cellMap[item]?.[h]?.count || 0), totalPorItem(item)]);
     rows.push(["TOTAL/HORA", ...turnoAtual.horas.map(h => totalPorHora[h] || 0), totalGeral]);
-    exportCsv(`perdas_${selectedDate}_${selectedTurno}`, headers, rows);
+    return { header, rows };
+  };
+
+  const buildGanhosRows = () => {
+    const header = ["Motivo do Ganho", ...turnoAtual.horas, "Total"];
+    const rows = itensGanho.map(item => [item, ...turnoAtual.horas.map(h => cellMapGanho[item]?.[h]?.count || 0), totalPorItemGanho(item)]);
+    rows.push(["TOTAL GANHOS/HORA", ...turnoAtual.horas.map(h => totalGanhoPorHora[h] || 0), totalGeralGanho]);
+    rows.push(["PERDA REAL/HORA", ...turnoAtual.horas.map(h => perdaRealPorHora[h] || 0), totalPerdaReal]);
+    return { header, rows };
+  };
+
+  const handleExportExcel = () => {
+    const { header: ph, rows: pr } = buildPerdasRows();
+    const { header: gh, rows: gr } = buildGanhosRows();
+
+    const toCsv = (header, rows) => [header, ...rows].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+    const perdasCsv = toCsv(ph, pr);
+    const ganhosCsv = toCsv(gh, gr);
+    const combined = `PERDAS\n${perdasCsv}\n\nGANHOS\n${ganhosCsv}`;
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\uFEFF" + combined], { type: "text/csv;charset=utf-8" }));
+    a.download = `controle_perdas_${selectedDate}_${selectedTurno}.csv`;
+    a.click();
   };
 
   const handlePrint = () => {
-    const headerCols = turnoAtual.horas.map(h => `<th>${h}</th>`).join("");
-    const rows = itens.map(item => {
-      const total = totalPorItem(item);
-      const cells = turnoAtual.horas.map(hora => {
-        const cell = cellMap[item]?.[hora];
-        return `<td class="${cell ? "marked" : ""}">${cell ? (cell.count > 1 ? cell.count : "✓") : ""}</td>`;
+    const { header: ph, rows: pr } = buildPerdasRows();
+    const { header: gh, rows: gr } = buildGanhosRows();
+
+    const buildTable = (title, color, header, rows) => {
+      const ths = header.map(h => `<th>${h}</th>`).join("");
+      const trs = rows.map((row, ri) => {
+        const tds = row.map((cell, ci) => `<td class="${ci === 0 ? "item-col" : ""} ${ri === rows.length - 1 || (ri >= rows.length - 2 && title.includes("Ganhos")) ? "total-cell" : ""}">${cell ?? ""}</td>`).join("");
+        return `<tr class="${ri >= rows.length - (title.includes("Ganhos") ? 2 : 1) ? "total-row" : ""}">${tds}</tr>`;
       }).join("");
-      return `<tr><td class="item-col">${item}</td>${cells}<td class="total-col">${total || ""}</td></tr>`;
-    }).join("");
-    const totalRowCells = turnoAtual.horas.map(h => `<td>${totalPorHora[h] || ""}</td>`).join("");
+      return `<h2 style="color:${color};font-size:12px;margin:16px 0 4px;letter-spacing:2px">${title}</h2>
+      <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+    };
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
     <style>
       @page{size:A4 landscape;margin:10mm}body{font-family:Arial;font-size:8.5px;color:#111}
-      h1{font-size:13px;margin:0 0 2px;letter-spacing:2px}p{font-size:9px;color:#666;margin:0 0 8px}
-      table{border-collapse:collapse;width:100%}th{background:#e0e0e0;padding:4px 5px;border:1px solid #999;text-align:center;font-size:8px}
+      h1{font-size:14px;margin:0 0 2px;letter-spacing:2px}p{font-size:9px;color:#666;margin:0 0 8px}
+      table{border-collapse:collapse;width:100%;margin-bottom:8px}
+      th{background:#e0e0e0;padding:4px 5px;border:1px solid #999;text-align:center;font-size:8px}
       td{padding:3px 4px;border:1px solid #ccc;text-align:center}
-      .item-col{text-align:left;min-width:140px} .marked{background:#ffe5e5;color:#cc0000;font-weight:bold}
-      .total-col{background:#fde8d8;font-weight:bold;color:#c05800} .total-row td{background:#fde8d8;font-weight:bold}
-      .grand{background:#dc2626;color:white;font-weight:bold}
+      .item-col{text-align:left;min-width:140px}
+      .total-row td{font-weight:bold}
+      .total-cell{font-weight:bold}
     </style></head><body>
-    <h1>CONTROLE DE PERDAS DO TESTOR — ZP7</h1>
-    <p>${dateLabel} &nbsp;|&nbsp; ${turnoAtual.label} &nbsp;|&nbsp; Total de perdas: ${totalGeral} carros</p>
-    <table><thead><tr><th class="item-col">ITEM DE PERDA</th>${headerCols}<th>TOTAL</th></tr></thead>
-    <tbody>${rows}
-    <tr class="total-row"><td class="item-col"><strong>TOTAL/HORA</strong></td>${totalRowCells}<td class="grand">${totalGeral}</td></tr>
-    </tbody></table>
+    <h1>CONTROLE DE PERDAS — ZP7</h1>
+    <p>${dateLabel} | ${turnoAtual.label}</p>
+    ${buildTable("CONTROLE DE PERDAS", "#dc2626", ph, pr)}
+    ${buildTable("CARROS GANHOS", "#16a34a", gh, gr)}
     <script>window.onload=function(){window.print()}<\/script></body></html>`;
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" })); a.target = "_blank"; a.click();
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    a.target = "_blank";
+    a.click();
   };
+
+  const CellButton = ({ val, onPointerDown, onPointerUp, onPointerLeave, onDecrement, colorClass, activeColor }) => (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerLeave}
+        className={`w-full h-10 rounded-md font-black text-base transition-all select-none
+          ${val > 0 ? activeColor : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"}`}
+      >
+        {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
+      </button>
+      {val > 0 && (
+        <button onClick={onDecrement} className={`${colorClass} transition-colors p-0.5`}>
+          <Minus className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4 pb-20 lg:pb-0">
@@ -214,16 +285,20 @@ export default function LossControl() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><TrendingDown className="w-5 h-5 text-red-400" /> Controle de Perdas</h1>
-          <p className="text-xs text-muted-foreground hidden sm:block">Toque na célula para registrar · de novo para incrementar · 10× para limpar</p>
+          <p className="text-xs text-muted-foreground hidden sm:block">Toque na célula para +1 · Segure para zerar · − para diminuir</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}><Printer className="w-4 h-4" /> PDF</Button>
+          <Button variant="outline" size="sm" className="gap-2 text-green-400 border-green-500/30" onClick={handleExportExcel}>
+            <FileSpreadsheet className="w-4 h-4" /> CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
+            <Printer className="w-4 h-4" /> PDF
+          </Button>
         </div>
       </div>
 
       {/* Controles */}
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
         <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
           <button onClick={() => setSelectedDate(format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronLeft className="w-4 h-4" /></button>
           <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
@@ -233,9 +308,17 @@ export default function LossControl() {
           <SelectTrigger className="h-9 w-full sm:w-52"><SelectValue /></SelectTrigger>
           <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
-        <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
-          <Input placeholder="+ Item de perda..." value={novoItem} onChange={e => setNovoItem(e.target.value)} onKeyDown={e => e.key === "Enter" && addItem()} className="h-9 text-sm w-40" />
-          <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400"><Plus className="w-3.5 h-3.5" /></Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            placeholder="+ Item de perda..."
+            value={novoItem}
+            onChange={e => setNovoItem(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addItem()}
+            className="h-9 text-sm w-40"
+          />
+          <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400">
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
           <Select value={ganhoSelecionado} onValueChange={setGanhoSelecionado}>
             <SelectTrigger className="h-9 w-48 text-sm border-green-500/40 text-green-400">
               <SelectValue placeholder="Selecionar ganho..." />
@@ -247,13 +330,15 @@ export default function LossControl() {
               }
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" onClick={addGanhoItem} disabled={!ganhoSelecionado} className="border-green-500/40 text-green-400"><Plus className="w-3.5 h-3.5" /></Button>
+          <Button size="sm" variant="outline" onClick={addGanhoItem} disabled={!ganhoSelecionado || ganhoSelecionado === "_none"} className="border-green-500/40 text-green-400">
+            <Plus className="w-3.5 h-3.5" />
+          </Button>
         </div>
       </div>
 
       {/* KPIs */}
       {(totalGeral > 0 || totalGeralGanho > 0) && (
-        <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Card className="border-red-500/20"><CardContent className="p-3 text-center">
             <p className="text-3xl font-black text-red-400">{totalGeral}</p>
             <p className="text-xs text-muted-foreground">Perdas Brutas</p>
@@ -269,7 +354,7 @@ export default function LossControl() {
         </div>
       )}
 
-      {/* Planilha */}
+      {/* Planilha de Perdas */}
       <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
         <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
           <thead>
@@ -300,28 +385,15 @@ export default function LossControl() {
                     const val = cell?.count || 0;
                     return (
                       <td key={hora} className="border border-border p-1">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button
-                            onPointerDown={() => startLongPress(item, hora)}
-                            onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
-                            onPointerLeave={() => cancelLongPress(item, hora)}
-                            className={`w-full h-10 rounded-md font-black text-base transition-all select-none
-                              ${val > 0
-                                ? "bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
-                                : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"
-                              }`}
-                          >
-                            {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
-                          </button>
-                          {val > 0 && (
-                            <button
-                              onClick={() => handleDecrement(item, hora)}
-                              className="text-muted-foreground/40 hover:text-red-400 transition-colors p-0.5"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
+                        <CellButton
+                          val={val}
+                          onPointerDown={() => startLongPress(item, hora)}
+                          onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
+                          onPointerLeave={() => cancelLongPress(item, hora)}
+                          onDecrement={() => handleDecrement(item, hora)}
+                          colorClass="text-muted-foreground/40 hover:text-red-400"
+                          activeColor="bg-red-500/20 text-red-300 hover:bg-red-500/35 active:scale-95"
+                        />
                       </td>
                     );
                   })}
@@ -342,7 +414,7 @@ export default function LossControl() {
         </table>
       </div>
 
-      {/* Tabela de Carros Ganhos */}
+      {/* Planilha de Carros Ganhos */}
       <div className="overflow-x-auto rounded-xl border border-green-500/30 shadow-sm">
         <table className="w-full text-xs border-collapse" style={{ minWidth: `${200 + turnoAtual.horas.length * 58}px` }}>
           <thead>
@@ -358,6 +430,13 @@ export default function LossControl() {
             </tr>
           </thead>
           <tbody>
+            {itensGanho.length === 0 && (
+              <tr>
+                <td colSpan={turnoAtual.horas.length + 2} className="text-center py-6 text-muted-foreground text-xs">
+                  Selecione um item da lista de perdas para registrar ganhos
+                </td>
+              </tr>
+            )}
             {itensGanho.map((item, idx) => {
               const total = totalPorItemGanho(item);
               return (
@@ -373,25 +452,15 @@ export default function LossControl() {
                     const val = cell?.count || 0;
                     return (
                       <td key={hora} className="border border-border p-1">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <button
-                            onPointerDown={() => startLongPressGanho(item, hora)}
-                            onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
-                            onPointerLeave={() => cancelLongPressGanho(item, hora)}
-                            className={`w-full h-10 rounded-md font-black text-base transition-all select-none
-                              ${val > 0
-                                ? "bg-green-500/20 text-green-300 hover:bg-green-500/35 active:scale-95"
-                                : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"
-                              }`}
-                          >
-                            {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
-                          </button>
-                          {val > 0 && (
-                            <button onClick={() => handleDecrementGanho(item, hora)} className="text-muted-foreground/40 hover:text-green-400 transition-colors p-0.5">
-                              <Minus className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
+                        <CellButton
+                          val={val}
+                          onPointerDown={() => startLongPressGanho(item, hora)}
+                          onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
+                          onPointerLeave={() => cancelLongPressGanho(item, hora)}
+                          onDecrement={() => handleDecrementGanho(item, hora)}
+                          colorClass="text-muted-foreground/40 hover:text-green-400"
+                          activeColor="bg-green-500/20 text-green-300 hover:bg-green-500/35 active:scale-95"
+                        />
                       </td>
                     );
                   })}
