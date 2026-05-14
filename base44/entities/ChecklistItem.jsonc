@@ -88,19 +88,6 @@
           }
         },
         {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
-        },
-        {
-          "created_by": "{{user.email}}"
-        },
-        {
           "data.turno": "{{user.data.turno}}"
         }
       ]
@@ -135,7 +122,14 @@
           }
         },
         {
-          "created_by": "{{user.email}}"
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
         }
       ]
     }
