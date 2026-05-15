@@ -73,16 +73,22 @@ export default function Dashboard() {
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
 
-  // Produção bruta: soma de ProductionControl do dia ativo
-  const totalProduzidoHoje = prodToday.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
+  // Dados do turno atual (filtrados por turno)
+  const prodTurno = prodToday.filter(p => p.turno === currentShift.key);
+  const lossesTurno = lossesToday.filter(l => l.turno === currentShift.key);
 
-  // Perdas: calculadas APENAS do LossControl
-  const perdasBrutasHoje = lossesToday.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const ganhosHoje = lossesToday.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const totalPerdidoHoje = Math.max(0, perdasBrutasHoje - ganhosHoje);
+  // Produção bruta do turno
+  const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
-  // Produção líquida = Produção Bruta - Perda Real
-  const producaoLiquida = Math.max(0, totalProduzidoHoje - totalPerdidoHoje);
+  // Perdas do turno
+  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const totalPerdidoTurno = Math.max(0, perdasBrutasTurno - ganhosTurno);
+
+  // Produção líquida do turno
+  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno - totalPerdidoTurno);
+
+  const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 
   return (
     <div className="space-y-4 pb-24 lg:pb-6">
@@ -109,9 +115,9 @@ export default function Dashboard() {
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Produzido Hoje", value: totalProduzidoHoje, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-          { label: "Prod. Líquida", value: producaoLiquida, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: "Perdas Hoje", value: totalPerdidoHoje, icon: TrendingDown, color: totalPerdidoHoje > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoHoje > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoHoje > 0 ? "border-red-500/20" : "border-border" },
+          { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+          { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
+          { label: `Perdas ${shiftLabel}`, value: totalPerdidoTurno, icon: TrendingDown, color: totalPerdidoTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoTurno > 0 ? "border-red-500/20" : "border-border" },
           { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>
