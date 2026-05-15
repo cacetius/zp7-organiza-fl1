@@ -91,9 +91,17 @@ export default function ProductionControl() {
 
   const saveCell = (testor, hora, newVal) => {
     const cell = cellMapRef.current[testor.id]?.[hora];
-    if (newVal <= 0) { if (cell && !cell.id?.startsWith?.("temp-")) deleteRec.mutate(cell.id); return; }
-    if (cell && !cell.id?.startsWith?.("temp-")) updateRec.mutate({ id: cell.id, carros_produzidos: newVal });
-    else if (!cell) createRec.mutate({ testor_id: testor.id, testor_nome: testor.nome, data: selectedDate, turno: selectedTurno, hora, carros_produzidos: newVal });
+    if (newVal <= 0) {
+      if (cell && !cell.id?.startsWith?.("temp-")) deleteRec.mutate(cell.id);
+      return;
+    }
+    if (cell) {
+      // Sempre atualiza se existe (mesmo temp — atualiza otimisticamente)
+      if (!cell.id?.startsWith?.("temp-")) updateRec.mutate({ id: cell.id, carros_produzidos: newVal });
+      // Se é temp (criação em andamento), não cria duplicado — aguarda confirmação
+    } else {
+      createRec.mutate({ testor_id: testor.id, testor_nome: testor.nome, data: selectedDate, turno: selectedTurno, hora, carros_produzidos: newVal });
+    }
   };
 
   const startLongPress = (testor, hora) => {
