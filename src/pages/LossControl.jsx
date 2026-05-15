@@ -33,6 +33,8 @@ export default function LossControl() {
   const [novoItem, setNovoItem] = useState("");
   const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
+  const longPressTriggered = useRef({});
+  const [editingCell, setEditingCell] = useState(null); // { item, hora, isGanho, value }
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
   const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
@@ -192,14 +194,20 @@ export default function LossControl() {
     }
   };
 
-  const handleIncrement = (item, hora) => saveCell(item, hora, (cellMapRef.current[item]?.[hora]?.count || 0) + 1);
+  const handleIncrement = (item, hora) => {
+    if (longPressTriggered.current[`${item}-${hora}`]) return;
+    saveCell(item, hora, (cellMapRef.current[item]?.[hora]?.count || 0) + 1);
+  };
   const handleDecrement = (item, hora) => saveCell(item, hora, (cellMapRef.current[item]?.[hora]?.count || 0) - 1);
   const handleReset = (item, hora) => {
     const cell = cellMapRef.current[item]?.[hora];
     if (cell && !cell.id?.startsWith?.("temp-")) deleteCell.mutate(cell.id);
   };
 
-  const handleIncrementGanho = (item, hora) => saveCellGanho(item, hora, (cellMapGanhoRef.current[item]?.[hora]?.count || 0) + 1);
+  const handleIncrementGanho = (item, hora) => {
+    if (longPressTriggered.current[`g-${item}-${hora}`]) return;
+    saveCellGanho(item, hora, (cellMapGanhoRef.current[item]?.[hora]?.count || 0) + 1);
+  };
   const handleDecrementGanho = (item, hora) => saveCellGanho(item, hora, (cellMapGanhoRef.current[item]?.[hora]?.count || 0) - 1);
   const handleResetGanho = (item, hora) => {
     const cell = cellMapGanhoRef.current[item]?.[hora];
@@ -208,15 +216,35 @@ export default function LossControl() {
 
   const startLongPress = (item, hora) => {
     const key = `${item}-${hora}`;
-    longPressTimers.current[key] = setTimeout(() => handleReset(item, hora), 800);
+    longPressTriggered.current[key] = false;
+    longPressTimers.current[key] = setTimeout(() => {
+      longPressTriggered.current[key] = true;
+      const currentVal = cellMapRef.current[item]?.[hora]?.count || 0;
+      setEditingCell({ item, hora, isGanho: false, value: String(currentVal) });
+    }, 600);
   };
   const cancelLongPress = (item, hora) => clearTimeout(longPressTimers.current[`${item}-${hora}`]);
 
   const startLongPressGanho = (item, hora) => {
     const key = `g-${item}-${hora}`;
-    longPressTimers.current[key] = setTimeout(() => handleResetGanho(item, hora), 800);
+    longPressTriggered.current[key] = false;
+    longPressTimers.current[key] = setTimeout(() => {
+      longPressTriggered.current[key] = true;
+      const currentVal = cellMapGanhoRef.current[item]?.[hora]?.count || 0;
+      setEditingCell({ item, hora, isGanho: true, value: String(currentVal) });
+    }, 600);
   };
   const cancelLongPressGanho = (item, hora) => clearTimeout(longPressTimers.current[`g-${item}-${hora}`]);
+
+  const confirmEditCell = () => {
+    if (!editingCell) return;
+    const num = parseInt(editingCell.value, 10);
+    if (!isNaN(num) && num >= 0) {
+      if (editingCell.isGanho) saveCellGanho(editingCell.item, editingCell.hora, num);
+      else saveCell(editingCell.item, editingCell.hora, num);
+    }
+    setEditingCell(null);
+  };
 
   const totalPorHora = useMemo(() => {
     const t = {};
@@ -406,48 +434,73 @@ export default function LossControl() {
   );
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><TrendingDown className="w-5 h-5 text-red-400" /> Controle de Perdas</h1>
-          <p className="text-xs text-muted-foreground hidden sm:block">Toque na célula para +1 · Segure para zerar · − para diminuir</p>
+    <div className="space-y-3 pb-24 lg:pb-4">
+      {/* Modal edição */}
+      {editingCell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingCell(null)}>
+          <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-72 mx-4" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold mb-1 text-foreground">
+              {editingCell.isGanho ? "🟢 Ganho" : "🔴 Perda"} · {editingCell.item}
+            </p>
+            <p className="text-xs text-muted-foreground mb-3">Hora {editingCell.hora} — Digite a quantidade</p>
+            <input
+              autoFocus type="number" min="0"
+              value={editingCell.value}
+              onChange={e => setEditingCell(prev => ({ ...prev, value: e.target.value }))}
+              onKeyDown={e => { if (e.key === "Enter") confirmEditCell(); if (e.key === "Escape") setEditingCell(null); }}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-3xl font-black text-center focus:outline-none focus:ring-2 focus:ring-primary mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setEditingCell(null)} className="flex-1 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
+              <button onClick={confirmEditCell} className="flex-1 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90">Salvar</button>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2 text-green-400 border-green-500/30" onClick={handleExportExcel}>
-            <FileSpreadsheet className="w-4 h-4" /> CSV
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-bold flex items-center gap-2"><TrendingDown className="w-5 h-5 text-red-400" /> Controle de Perdas</h1>
+          <p className="text-[11px] text-muted-foreground">Toque +1 · Segure para digitar · − diminui</p>
+        </div>
+        <div className="flex gap-1.5">
+          <Button variant="outline" size="sm" className="gap-1.5 text-green-400 border-green-500/30 px-2.5" onClick={handleExportExcel}>
+            <FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline">CSV</span>
           </Button>
-          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
-            <Printer className="w-4 h-4" /> PDF
+          <Button variant="outline" size="sm" className="gap-1.5 px-2.5" onClick={handlePrint}>
+            <Printer className="w-4 h-4" /><span className="hidden sm:inline">PDF</span>
           </Button>
         </div>
       </div>
 
       {/* Controles */}
-      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
-          <button onClick={() => setSelectedDate(format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronLeft className="w-4 h-4" /></button>
-          <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
-          <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-muted/40 border border-border rounded-lg px-2 py-1">
+            <button onClick={() => setSelectedDate(format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronLeft className="w-4 h-4" /></button>
+            <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
+            <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
+          </div>
+          <Select value={selectedTurno} onValueChange={setSelectedTurno}>
+            <SelectTrigger className="h-9 flex-1 min-w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-        <Select value={selectedTurno} onValueChange={setSelectedTurno}>
-          <SelectTrigger className="h-9 w-full sm:w-52"><SelectValue /></SelectTrigger>
-          <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
-        </Select>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex gap-2">
           <Input
             placeholder="+ Item de perda..."
             value={novoItem}
             onChange={e => setNovoItem(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addItem()}
-            className="h-9 text-sm w-40"
+            className="h-9 text-sm flex-1"
           />
-          <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400">
+          <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400 px-3">
             <Plus className="w-3.5 h-3.5" />
           </Button>
           <Select value={ganhoSelecionado} onValueChange={setGanhoSelecionado}>
-            <SelectTrigger className="h-9 w-48 text-sm border-green-500/40 text-green-400">
-              <SelectValue placeholder="Selecionar ganho..." />
+            <SelectTrigger className="h-9 flex-1 min-w-[130px] text-sm border-green-500/40 text-green-400">
+              <SelectValue placeholder="+ Ganho..." />
             </SelectTrigger>
             <SelectContent>
               {itensDisponiveisGanho.length === 0
@@ -456,7 +509,7 @@ export default function LossControl() {
               }
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" onClick={addGanhoItem} disabled={!ganhoSelecionado || ganhoSelecionado === "_none"} className="border-green-500/40 text-green-400">
+          <Button size="sm" variant="outline" onClick={addGanhoItem} disabled={!ganhoSelecionado || ganhoSelecionado === "_none"} className="border-green-500/40 text-green-400 px-3">
             <Plus className="w-3.5 h-3.5" />
           </Button>
         </div>
@@ -620,7 +673,7 @@ export default function LossControl() {
         </table>
       </div>
 
-      <p className="text-xs text-muted-foreground">Toque para +1 · Segure (~1s) para zerar · Use − para diminuir · ✕ na linha para remover item</p>
+      <p className="text-xs text-muted-foreground text-center">Toque: +1 · Segure: digitar número · −: diminuir · ✕: remover item</p>
     </div>
   );
 }

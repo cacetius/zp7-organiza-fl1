@@ -63,10 +63,16 @@ export default function Dashboard() {
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
+
+  // Produção bruta: soma de ProductionControl do dia (todos os turnos)
+  const totalProduzidoHoje = prodToday.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
+
+  // Perdas: calculadas APENAS do LossControl (separado da produção)
   const perdasBrutasHoje = lossesToday.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
   const ganhosHoje = lossesToday.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const totalPerdidoHoje = Math.max(0, perdasBrutasHoje - ganhosHoje);
-  const totalProduzidoHoje = prodToday.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
+  const totalPerdidoHoje = Math.max(0, perdasBrutasHoje - ganhosHoje); // Perda Real
+
+  // Produção líquida = Produção Bruta - Perda Real
   const producaoLiquida = Math.max(0, totalProduzidoHoje - totalPerdidoHoje);
 
   return (
