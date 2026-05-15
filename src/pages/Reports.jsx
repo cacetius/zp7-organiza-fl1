@@ -56,8 +56,9 @@ export default function Reports() {
   const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
   const [resumoDate, setResumoDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [resumoTurno, setResumoTurno] = useState("segundo");
-  const [dateFrom, setDateFrom] = useState(format(subDays(new Date(), 29), "yyyy-MM-dd"));
-  const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const [dateFrom, setDateFrom] = useState(todayStr);
+  const [dateTo, setDateTo] = useState(todayStr);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [compareDate1, setCompareDate1] = useState(format(subDays(new Date(), 1), "yyyy-MM-dd"));
   const [compareDate2, setCompareDate2] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -71,7 +72,6 @@ export default function Reports() {
   const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
   const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-all"], queryFn: () => base44.entities.Occurrence.list() });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-all"], queryFn: () => base44.entities.Task.list() });
-  const { data: production = [] } = useQuery({ queryKey: ["production-all"], queryFn: () => base44.entities.Production.list("-created_date", 60) });
   const { data: lossRecords = [] } = useQuery({
     queryKey: ["loss-all"],
     queryFn: () => base44.entities.LossControl.list("-created_date", 2000),
@@ -100,8 +100,14 @@ export default function Reports() {
       base44.entities.Testor.subscribe(() => qc.invalidateQueries({ queryKey: ["testores"] })),
       base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-all"] })),
       base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-all"] })),
-      base44.entities.Production.subscribe(() => qc.invalidateQueries({ queryKey: ["production-all"] })),
-      base44.entities.LossControl.subscribe(() => qc.invalidateQueries({ queryKey: ["loss-all"] })),
+      base44.entities.LossControl.subscribe(() => {
+        qc.invalidateQueries({ queryKey: ["loss-all"] });
+        qc.invalidateQueries({ predicate: q => q.queryKey[0]?.toString().startsWith("loss-") });
+      }),
+      base44.entities.ProductionControl.subscribe(() => {
+        qc.invalidateQueries({ queryKey: ["prod-ctrl-all"] });
+        qc.invalidateQueries({ predicate: q => q.queryKey[0]?.toString().startsWith("prod-ctrl-") });
+      }),
     ];
     return () => subs.forEach(u => u());
   }, [qc]);
@@ -120,10 +126,7 @@ export default function Reports() {
     return list.filter(o => inRange(o.created_date?.slice(0,10)));
   }, [occurrences, turno, dateFrom, dateTo]);
   const filteredTasks = useMemo(() => turno === "todos" ? tasks : tasks.filter(t => t.turno === turno), [tasks, turno]);
-  const filteredProduction = useMemo(() => {
-    let list = turno === "todos" ? production : production.filter(p => p.turno === turno);
-    return list.filter(p => inRange(p.data));
-  }, [production, turno, dateFrom, dateTo]);
+
   const filteredLoss = useMemo(() => {
     let list = turno === "todos" ? lossRecords : lossRecords.filter(r => r.turno === turno);
     return list.filter(r => inRange(r.data));
@@ -180,7 +183,7 @@ export default function Reports() {
   const tasksOpen    = filteredTasks.filter(t => t.status === "aberta").length;
   const tasksLate    = filteredTasks.filter(t => t.status === "atrasada").length;
 
-  // Agrupa ProductionControl por data para o gráfico de linha (Planejado vs Realizado)
+  // Agrupa ProductionControl por data para o gráfico de evolução diária
   const prodLineData = useMemo(() => {
     const byDay = {};
     filteredProdCtrl.forEach(r => {
@@ -190,11 +193,9 @@ export default function Reports() {
     });
     return Object.entries(byDay)
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-30)
       .map(([data, total]) => ({
         label: data.slice(5),
-        Realizado: total,
-        Planejado: 0, // ProductionControl não tem planejado, mantém compatibilidade
+        Produção: total,
       }));
   }, [filteredProdCtrl]);
 
@@ -705,9 +706,8 @@ export default function Reports() {
           <td>${t.tempo_total_parado || 0}min</td>
           <td><span class="badge ${(t.risco_score||0)<=30?'badge-green':(t.risco_score||0)<=60?'badge-yellow':'badge-red'}">${t.risco_score||0}%</span></td>
         </tr>`).join("");
-      const prodRows = filteredProduction.slice(0, 20).map(p => {
-        const diff = (p.producao_realizada||0)-(p.producao_planejada||0);
-        return `<tr><td>${p.data||"—"}</td><td>${p.turno||"—"}</td><td>${p.producao_planejada||0}</td><td>${p.producao_realizada||0}</td><td class="${diff>=0?'positive':'negative'}">${diff>=0?"+":""}${diff}</td></tr>`;
+      const prodRows = prodLineData.slice(-20).map(p => {
+        return `<tr><td>${p.label||"—"}</td><td style="text-align:center;font-weight:700;color:#1d4ed8">${p.Produção||0}</td></tr>`;
       }).join("");
       const lossRows2 = lossItemRanking.map(r => `<tr><td>${r.name}</td><td>${r.Perdas}</td></tr>`).join("");
       const chartImagesHtml = chartImages.map(img => `<div class="chart-block">${img.title?`<p class="chart-label">${img.title}</p>`:""}<img src="${img.src}" style="width:100%;border-radius:8px;"/></div>`).join("");
@@ -798,7 +798,7 @@ export default function Reports() {
       </div>
 
       ${testoresRows?`<h2><span class="dot"></span> Testores</h2><table><thead><tr><th>Testor</th><th>Status</th><th style="text-align:center">Carros</th><th style="text-align:center">Falhas</th><th style="text-align:center">T.Parado</th><th style="text-align:center">Risco</th></tr></thead><tbody>${testoresRows}</tbody></table>`:""}
-      ${prodRows?`<h2><span class="dot" style="background:#16a34a"></span> Histórico de Produção</h2><table><thead><tr><th>Data</th><th>Turno</th><th style="text-align:center">Planejado</th><th style="text-align:center">Realizado</th><th style="text-align:center">Diferença</th></tr></thead><tbody>${prodRows}</tbody></table>`:""}
+      ${prodRows?`<h2><span class="dot" style="background:#16a34a"></span> Produção Diária</h2><table><thead><tr><th>Data</th><th style="text-align:center">Carros Produzidos</th></tr></thead><tbody>${prodRows}</tbody></table>`:""}
       ${lossRows2?`<h2><span class="dot" style="background:#dc2626"></span> Top 10 Perdas do Período</h2><table><thead><tr><th>Item de Perda</th><th style="text-align:center">Carros Perdidos</th></tr></thead><tbody>${lossRows2}</tbody></table>`:""}
       ${chartImages.length>0?`<div class="page-break"></div><h2><span class="dot" style="background:#7c3aed"></span> Gráficos Analíticos</h2><div class="charts-grid">${chartImagesHtml}</div>`:""}
 
@@ -1173,19 +1173,15 @@ export default function Reports() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-primary" /> Histórico — Planejado vs Realizado
+                <TrendingUp className="w-4 h-4 text-primary" /> Produção Diária
               </CardTitle>
             </CardHeader>
             <CardContent>
               {prodLineData.length > 0 ? (
-                <div data-chart data-title="Produção: Planejado vs Realizado">
+                <div data-chart data-title="Produção Diária">
                   <ResponsiveContainer width="100%" height={260}>
                     <AreaChart data={prodLineData}>
                       <defs>
-                        <linearGradient id="gradPlan" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(215,16%,55%)" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="hsl(215,16%,55%)" stopOpacity={0} />
-                        </linearGradient>
                         <linearGradient id="gradReal" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="hsl(217,91%,60%)" stopOpacity={0.25} />
                           <stop offset="95%" stopColor="hsl(217,91%,60%)" stopOpacity={0} />
@@ -1195,9 +1191,7 @@ export default function Reports() {
                       <XAxis dataKey="label" tick={axisStyle} />
                       <YAxis tick={axisStyle} />
                       <Tooltip contentStyle={tooltipStyle} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="Planejado" stroke="hsl(215,16%,55%)" strokeDasharray="5 5" fill="url(#gradPlan)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="Realizado" stroke="hsl(217,91%,60%)" fill="url(#gradReal)" strokeWidth={2.5} dot={{ r: 3 }} />
+                      <Area type="monotone" dataKey="Produção" stroke="hsl(217,91%,60%)" fill="url(#gradReal)" strokeWidth={2.5} dot={{ r: 3 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
