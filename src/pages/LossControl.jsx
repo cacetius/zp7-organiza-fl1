@@ -248,6 +248,17 @@ export default function LossControl() {
 
   const totalPerdaReal = Math.max(0, totalGeral - totalGeralGanho);
 
+  // Item com mais perdas
+  const itemMaisPerdas = useMemo(() => {
+    let topItem = null;
+    let topVal = 0;
+    itens.forEach(item => {
+      const val = totalPorItem(item);
+      if (val > topVal) { topVal = val; topItem = item; }
+    });
+    return topVal > 0 ? { nome: topItem, total: topVal } : null;
+  }, [cellMap, itens]);
+
   const addItem = () => {
     const t = novoItem.trim().toUpperCase();
     if (t && !itens.includes(t)) { setItens(prev => [...prev, t]); setNovoItem(""); }
@@ -453,7 +464,7 @@ export default function LossControl() {
 
       {/* KPIs */}
       {(totalGeral > 0 || totalGeralGanho > 0) && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card className="border-red-500/20"><CardContent className="p-3 text-center">
             <p className="text-3xl font-black text-red-400">{totalGeral}</p>
             <p className="text-xs text-muted-foreground">Perdas Brutas</p>
@@ -466,6 +477,15 @@ export default function LossControl() {
             <p className="text-3xl font-black text-orange-400">{totalPerdaReal}</p>
             <p className="text-xs text-muted-foreground">Perda Real</p>
           </CardContent></Card>
+          {itemMaisPerdas && (
+            <Card className="border-red-600/40 bg-red-500/5 col-span-2 sm:col-span-1">
+              <CardContent className="p-3 text-center">
+                <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">⚠ Maior Perda</p>
+                <p className="text-2xl font-black text-red-400">{itemMaisPerdas.total}</p>
+                <p className="text-[11px] font-semibold text-red-300 mt-0.5 truncate" title={itemMaisPerdas.nome}>{itemMaisPerdas.nome}</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -489,11 +509,12 @@ export default function LossControl() {
           <tbody>
             {itens.map((item, idx) => {
               const total = totalPorItem(item);
+              const isTop = itemMaisPerdas && item === itemMaisPerdas.nome;
               return (
-                <tr key={item} className={`group ${idx % 2 === 0 ? "bg-card" : "bg-muted/10"} hover:bg-red-500/5 transition-colors`}>
+                <tr key={item} className={`group transition-colors ${isTop ? "bg-red-500/10 hover:bg-red-500/15" : idx % 2 === 0 ? "bg-card hover:bg-red-500/5" : "bg-muted/10 hover:bg-red-500/5"}`}>
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
-                      <span>{item}</span>
+                      <span className={isTop ? "text-red-300 font-bold" : ""}>{isTop && "⚠ "}{item}</span>
                       <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
