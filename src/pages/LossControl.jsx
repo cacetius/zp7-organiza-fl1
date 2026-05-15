@@ -38,6 +38,18 @@ export default function LossControl() {
   const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
+  // Hora atual destacada
+  const horaAtual = useMemo(() => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = now.getMinutes();
+    // Arredonda para a hora cheia mais próxima da tabela
+    const horaStr = `${hh}:00`;
+    // Exceção: 23:45
+    if (now.getHours() === 23 && mm >= 45) return "23:45";
+    return horaStr;
+  }, []);
+
   const { data: allRecords = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
@@ -468,7 +480,9 @@ export default function LossControl() {
             </tr>
             <tr className="bg-muted/50">
               <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>ITEM DE PERDA</th>
-              {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
+              {turnoAtual.horas.map(h => (
+                <th key={h} className={`border border-border px-1 py-2 text-center font-bold transition-colors ${h === horaAtual ? "bg-yellow-400/20 text-yellow-300 ring-2 ring-inset ring-yellow-400/60" : ""}`} style={{ minWidth: 54 }}>{h}</th>
+              ))}
               <th className="border border-border px-2 py-2 text-center font-bold bg-red-500/10 text-red-400" style={{ minWidth: 60 }}>TOTAL</th>
             </tr>
           </thead>
@@ -486,7 +500,7 @@ export default function LossControl() {
                   {turnoAtual.horas.map(hora => {
                     const val = cellMap[item]?.[hora]?.count || 0;
                     return (
-                      <td key={hora} className="border border-border p-1">
+                      <td key={hora} className={`border border-border p-1 ${hora === horaAtual ? "bg-yellow-400/10 ring-1 ring-inset ring-yellow-400/40" : ""}`}>
                         <CellButton val={val}
                           onPointerDown={() => startLongPress(item, hora)}
                           onPointerUp={() => { cancelLongPress(item, hora); handleIncrement(item, hora); }}
@@ -505,7 +519,7 @@ export default function LossControl() {
             <tr className="bg-red-500/10 font-bold">
               <td className="border border-border px-3 py-2 font-black text-red-400 uppercase">TOTAL/HORA</td>
               {turnoAtual.horas.map(h => (
-                <td key={h} className="border border-border text-center font-bold text-red-400 py-2">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>
+                <td key={h} className={`border border-border text-center font-bold text-red-400 py-2 ${h === horaAtual ? "bg-yellow-400/15 ring-1 ring-inset ring-yellow-400/40" : ""}`}>{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>
               ))}
               <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
             </tr>
@@ -524,7 +538,9 @@ export default function LossControl() {
             </tr>
             <tr className="bg-muted/50">
               <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>MOTIVO DO GANHO</th>
-              {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 54 }}>{h}</th>)}
+              {turnoAtual.horas.map(h => (
+                <th key={h} className={`border border-border px-1 py-2 text-center font-bold transition-colors ${h === horaAtual ? "bg-yellow-400/20 text-yellow-300 ring-2 ring-inset ring-yellow-400/60" : ""}`} style={{ minWidth: 54 }}>{h}</th>
+              ))}
               <th className="border border-border px-2 py-2 text-center font-bold bg-green-500/10 text-green-400" style={{ minWidth: 60 }}>TOTAL</th>
             </tr>
           </thead>
@@ -549,7 +565,7 @@ export default function LossControl() {
                   {turnoAtual.horas.map(hora => {
                     const val = cellMapGanho[item]?.[hora]?.count || 0;
                     return (
-                      <td key={hora} className="border border-border p-1">
+                      <td key={hora} className={`border border-border p-1 ${hora === horaAtual ? "bg-yellow-400/10 ring-1 ring-inset ring-yellow-400/40" : ""}`}>
                         <CellButton val={val}
                           onPointerDown={() => startLongPressGanho(item, hora)}
                           onPointerUp={() => { cancelLongPressGanho(item, hora); handleIncrementGanho(item, hora); }}
@@ -568,14 +584,14 @@ export default function LossControl() {
             <tr className="bg-green-500/10 font-bold">
               <td className="border border-border px-3 py-2 font-black text-green-400 uppercase">TOTAL GANHOS/HORA</td>
               {turnoAtual.horas.map(h => (
-                <td key={h} className="border border-border text-center font-bold text-green-400 py-2">{totalGanhoPorHora[h] > 0 ? totalGanhoPorHora[h] : "—"}</td>
+                <td key={h} className={`border border-border text-center font-bold text-green-400 py-2 ${h === horaAtual ? "bg-yellow-400/15 ring-1 ring-inset ring-yellow-400/40" : ""}`}>{totalGanhoPorHora[h] > 0 ? totalGanhoPorHora[h] : "—"}</td>
               ))}
               <td className="border border-border text-center font-black text-white bg-green-600 py-2 text-sm">{totalGeralGanho > 0 ? totalGeralGanho : "—"}</td>
             </tr>
             <tr className="bg-orange-500/10 font-bold">
               <td className="border border-border px-3 py-2 font-black text-orange-400 uppercase">PERDA REAL/HORA</td>
               {turnoAtual.horas.map(h => (
-                <td key={h} className="border border-border text-center font-bold text-orange-400 py-2">{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>
+                <td key={h} className={`border border-border text-center font-bold text-orange-400 py-2 ${h === horaAtual ? "bg-yellow-400/15 ring-1 ring-inset ring-yellow-400/40" : ""}`}>{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>
               ))}
               <td className="border border-border text-center font-black text-white bg-orange-600 py-2 text-sm">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</td>
             </tr>

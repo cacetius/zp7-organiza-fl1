@@ -156,11 +156,23 @@ export default function Reports() {
     prodByTestor[r.testor_nome] = (prodByTestor[r.testor_nome] || 0) + (r.carros_produzidos || 0);
   });
 
-  // Global KPIs
-  const totalCarros  = filteredTestores.reduce((s, t) => s + (t.carros_testados_turno || 0), 0);
-  const totalFalhas  = filteredTestores.reduce((s, t) => s + (t.falhas_turno || 0), 0);
+  // Global KPIs — baseados em ProductionControl e LossControl (não em testores)
+  const { data: prodCtrlAll = [] } = useQuery({
+    queryKey: ["prod-ctrl-all"],
+    queryFn: () => base44.entities.ProductionControl.list("-created_date", 500),
+  });
+
+  const filteredProdCtrl = useMemo(() => {
+    let list = turno === "todos" ? prodCtrlAll : prodCtrlAll.filter(p => p.turno === turno);
+    return list.filter(p => inRange(p.data));
+  }, [prodCtrlAll, turno, dateFrom, dateTo]);
+
+  const totalCarros  = filteredProdCtrl.reduce((s, r) => s + (r.carros_produzidos || 0), 0);
+  const totalPerdasCtrl = filteredLoss.filter(r => r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalGanhosCtrl = filteredLoss.filter(r => r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalPerdaRealCtrl = Math.max(0, totalPerdasCtrl - totalGanhosCtrl);
   const totalParado  = filteredTestores.reduce((s, t) => s + (t.tempo_total_parado || 0), 0);
-  const eficiencia   = totalCarros > 0 ? Math.round(((totalCarros - totalFalhas) / totalCarros) * 100) : 0;
+  const eficiencia   = totalCarros > 0 ? Math.round(((totalCarros - totalPerdaRealCtrl) / totalCarros) * 100) : 0;
   const tasksDone    = filteredTasks.filter(t => t.status === "concluida").length;
   const tasksOpen    = filteredTasks.filter(t => t.status === "aberta").length;
   const tasksLate    = filteredTasks.filter(t => t.status === "atrasada").length;
@@ -756,12 +768,12 @@ export default function Reports() {
       </div>
 
       <div class="kpi-grid">
-        <div class="kpi kpi-blue"><div class="val">${totalCarros}</div><div class="lbl">Carros Testados</div></div>
-        <div class="kpi kpi-red"><div class="val">${totalFalhas}</div><div class="lbl">Falhas</div></div>
-        <div class="kpi kpi-green"><div class="val">${Math.max(0,totalCarros-totalFalhas)}</div><div class="lbl">Produção Líquida</div></div>
+        <div class="kpi kpi-blue"><div class="val">${totalCarros}</div><div class="lbl">Produção Bruta</div></div>
+        <div class="kpi kpi-red"><div class="val">${totalPerdasCtrl}</div><div class="lbl">Perdas Brutas</div></div>
+        <div class="kpi kpi-green"><div class="val">${totalGanhosCtrl}</div><div class="lbl">Carros Ganhos</div></div>
         <div class="kpi kpi-purple"><div class="val">${eficiencia}%</div><div class="lbl">Eficiência Geral</div></div>
-        <div class="kpi kpi-orange"><div class="val">${totalParado}min</div><div class="lbl">Tempo Parado</div></div>
-        <div class="kpi kpi-red"><div class="val">${totalPerdasPeriodo}</div><div class="lbl">Perdas no Período</div></div>
+        <div class="kpi kpi-orange"><div class="val">${totalPerdaRealCtrl}</div><div class="lbl">Perda Real</div></div>
+        <div class="kpi kpi-yellow"><div class="val">${Math.max(0, totalCarros - totalPerdaRealCtrl)}</div><div class="lbl">Produção Líquida</div></div>
       </div>
 
       <div class="efic-bar">
@@ -904,9 +916,9 @@ export default function Reports() {
       {/* Global KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {[
-          { label: "Carros Testados", value: totalCarros, icon: Car, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
-          { label: "Falhas", value: totalFalhas, icon: AlertTriangle, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-          { label: "T. Parado (min)", value: totalParado, icon: Clock, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" },
+          { label: "Produção Bruta", value: totalCarros, icon: Car, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
+          { label: "Perdas Brutas", value: totalPerdasCtrl, icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+          { label: "Perda Real", value: totalPerdaRealCtrl, icon: TrendingDown, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
           { label: "Eficiência", value: `${eficiencia}%`, icon: TrendingUp,
             color: eficiencia >= 80 ? "text-green-400" : "text-red-400",
             bg: eficiencia >= 80 ? "bg-green-500/10" : "bg-red-500/10",
