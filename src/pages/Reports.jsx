@@ -180,13 +180,23 @@ export default function Reports() {
   const tasksOpen    = filteredTasks.filter(t => t.status === "aberta").length;
   const tasksLate    = filteredTasks.filter(t => t.status === "atrasada").length;
 
+  // Agrupa ProductionControl por data para o gráfico de linha (Planejado vs Realizado)
   const prodLineData = useMemo(() => {
-    return filteredProduction.slice(0, 30).reverse().map((p, i) => ({
-      label: p.data ? p.data.slice(5) : `D${i + 1}`,
-      Planejado: p.producao_planejada || 0,
-      Realizado: p.producao_realizada || 0,
-    }));
-  }, [filteredProduction]);
+    const byDay = {};
+    filteredProdCtrl.forEach(r => {
+      if (!r.data) return;
+      if (!byDay[r.data]) byDay[r.data] = 0;
+      byDay[r.data] += (r.carros_produzidos || 0);
+    });
+    return Object.entries(byDay)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-30)
+      .map(([data, total]) => ({
+        label: data.slice(5),
+        Realizado: total,
+        Planejado: 0, // ProductionControl não tem planejado, mantém compatibilidade
+      }));
+  }, [filteredProdCtrl]);
 
   const testorBarData = filteredTestores.map(t => ({
     name: t.nome?.replace("Testor ", "T"),
@@ -330,14 +340,17 @@ export default function Reports() {
         ? Math.round(((resumoTotalProd - perdaReal) / resumoTotalProd) * 100)
         : 0;
 
-      const prodHoraRows = resumoTurnoObj.horas.map(h => {
-        const val = prodPorHora[h] || 0;
+      const prodHoraValues = resumoTurnoObj.horas.map(h => prodPorHora[h] || 0);
+      const maxHoraVal = Math.max(...prodHoraValues, 1);
+      const prodHoraRows = resumoTurnoObj.horas.map((h, idx) => {
+        const val = prodHoraValues[idx];
+        const pct = Math.round((val / maxHoraVal) * 100);
         return `<tr>
           <td><strong>${h}</strong></td>
-          <td style="text-align:center">${val}</td>
+          <td style="text-align:center">${val || "—"}</td>
           <td>
             <div style="background:#e2e8f0;border-radius:4px;height:8px;width:100%">
-              <div style="background:#2563eb;height:8px;border-radius:4px;width:${resumoTotalProd > 0 ? Math.round((val / (resumoTotalProd / resumoTurnoObj.horas.length)) * 100) : 0}%"></div>
+              <div style="background:#2563eb;height:8px;border-radius:4px;width:${val > 0 ? pct : 0}%"></div>
             </div>
           </td>
         </tr>`;
