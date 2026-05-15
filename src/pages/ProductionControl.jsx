@@ -268,14 +268,16 @@ export default function ProductionControl() {
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><Factory className="w-5 h-5 text-blue-400" /> Controle de Produção</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Toque para +1 · 4× rápido zera · Segure para digitar</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2"><Factory className="w-5 h-5 text-blue-400 shrink-0" /> Controle de Produção</h1>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-snug">
+            <span className="text-blue-400 font-semibold">Produção</span> e <span className="text-red-400 font-semibold">Perdas</span> são variáveis independentes · Toque +1 · 4× zera · Segure para digitar
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline">CSV</span></Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}><Printer className="w-4 h-4" /><span className="hidden sm:inline">PDF</span></Button>
+        <div className="flex gap-1.5 shrink-0">
+          <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline text-xs">CSV</span></Button>
+          <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handlePrint}><Printer className="w-4 h-4" /><span className="hidden sm:inline text-xs">PDF</span></Button>
         </div>
       </div>
 
@@ -292,17 +294,18 @@ export default function ProductionControl() {
         </Select>
       </div>
 
-      {/* KPIs */}
-      {totalGeral > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {/* KPIs — Produção (ProductionControl) e Perdas (LossControl) são independentes */}
+      {(totalGeral > 0 || totalPerdas > 0) && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { label: "Produção Bruta", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
-            { label: "Perdas no Turno", value: totalPerdas, color: "text-red-400", border: "border-red-500/20" },
-            { label: "Produção Líquida", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
+            { label: "Produção Bruta", sub: "(ProductionControl)", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
+            { label: "Perda Real", sub: "(LossControl)", value: totalPerdas, color: "text-red-400", border: "border-red-500/20" },
+            { label: "Prod. Líquida", sub: "Bruta − Perda", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
+            { label: "Eficiência", sub: "Líq / Bruta", value: totalGeral > 0 ? `${Math.round((producaoLiquida / totalGeral) * 100)}%` : "—", color: totalGeral > 0 && Math.round((producaoLiquida / totalGeral) * 100) >= 80 ? "text-green-400" : "text-orange-400", border: "border-orange-500/20" },
           ].map(k => (
             <Card key={k.label} className={`border ${k.border}`}>
-              <CardContent className="p-3 text-center">
-                <p className={`text-2xl sm:text-3xl font-black ${k.color}`}>{k.value}</p>
+              <CardContent className="p-2.5 sm:p-3 text-center">
+                <p className={`text-xl sm:text-2xl font-black ${k.color}`}>{k.value}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{k.label}</p>
               </CardContent>
             </Card>
@@ -318,18 +321,18 @@ export default function ProductionControl() {
           <p className="font-medium">Nenhum testor cadastrado.</p>
         </CardContent></Card>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
-          <table className="w-full text-xs border-collapse" style={{ minWidth: `${180 + turnoAtual.horas.length * 80}px` }}>
+        <div className="overflow-x-auto rounded-xl border border-border shadow-sm -mx-1 sm:mx-0">
+          <table className="w-full text-xs border-collapse" style={{ minWidth: `${140 + turnoAtual.horas.length * 56}px` }}>
             <thead>
               <tr>
-                <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-blue-600/20 px-4 py-2.5 text-center font-black text-sm uppercase tracking-widest text-blue-400">
-                  CONTROLE DE PRODUÇÃO — {dateLabel} — {turnoAtual.label}
+                <th colSpan={turnoAtual.horas.length + 2} className="border border-border bg-blue-600/20 px-3 py-2 text-center font-black text-xs sm:text-sm uppercase tracking-widest text-blue-400">
+                  PRODUÇÃO — {dateLabel} — {turnoAtual.label}
                 </th>
               </tr>
               <tr className="bg-muted/50">
-                <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 140 }}>TESTOR</th>
-                {turnoAtual.horas.map(h => <th key={h} className="border border-border px-1 py-2 text-center font-bold" style={{ minWidth: 76 }}>{h}</th>)}
-                <th className="border border-border px-2 py-2 text-center font-bold bg-blue-500/10 text-blue-400" style={{ minWidth: 70 }}>TOTAL</th>
+                <th className="border border-border px-2 py-2 text-left font-bold text-[10px] sm:text-xs" style={{ minWidth: 90 }}>TESTOR</th>
+                {turnoAtual.horas.map(h => <th key={h} className="border border-border px-0.5 py-2 text-center font-bold text-[10px] sm:text-xs" style={{ minWidth: 48 }}>{h.slice(0,5)}</th>)}
+                <th className="border border-border px-1 py-2 text-center font-bold bg-blue-500/10 text-blue-400 text-[10px] sm:text-xs" style={{ minWidth: 48 }}>TOTAL</th>
               </tr>
             </thead>
             <tbody>
@@ -337,51 +340,66 @@ export default function ProductionControl() {
                 const total = totalPorTestor(testor);
                 return (
                   <tr key={testor.id} className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
-                    <td className="border border-border px-3 py-1.5 font-semibold whitespace-nowrap text-sm">{testor.nome}</td>
+                    <td className="border border-border px-2 py-1 font-semibold whitespace-nowrap text-[11px] sm:text-sm">{testor.nome}</td>
                     {turnoAtual.horas.map(hora => {
                       const cell = cellMap[testor.id]?.[hora];
                       const val = cell?.value || 0;
                       return (
-                        <td key={hora} className="border border-border p-1">
-                          <div className="flex flex-col items-center gap-0.5">
+                        <td key={hora} className="border border-border p-0.5 sm:p-1">
+                          <div className="flex flex-col items-center gap-0">
                             <button
                               onPointerDown={() => startLongPress(testor, hora)}
                               onPointerUp={() => { cancelLongPress(testor, hora); handleIncrementWithReset(testor, hora); }}
                               onPointerLeave={() => cancelLongPress(testor, hora)}
-                              className={`w-full h-10 rounded-md font-black text-base transition-all select-none
+                              className={`w-full min-w-[40px] h-10 sm:h-11 rounded-md font-black text-sm sm:text-base transition-all select-none touch-manipulation
                                 ${val > 0 ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/35 active:scale-95" : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"}`}
                             >
                               {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
                             </button>
                             {val > 0 && (
-                              <button onClick={() => saveCell(testor, hora, val - 1)} className="text-muted-foreground/40 hover:text-red-400 transition-colors p-0.5">
-                                <Minus className="w-3 h-3" />
+                              <button onClick={() => saveCell(testor, hora, val - 1)} className="text-muted-foreground/40 hover:text-red-400 transition-colors p-1 touch-manipulation">
+                                <Minus className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
                         </td>
                       );
                     })}
-                    <td className="border border-border px-2 py-2 text-center font-black text-blue-400 bg-blue-500/5 text-sm">{total > 0 ? total : "—"}</td>
+                    <td className="border border-border px-1 py-2 text-center font-black text-blue-400 bg-blue-500/5 text-sm">{total > 0 ? total : "—"}</td>
                   </tr>
                 );
               })}
+              {/* TOTAL PRODUÇÃO — dados exclusivamente de ProductionControl */}
               <tr className="bg-blue-500/10 font-bold">
-                <td className="border border-border px-3 py-2 font-black text-blue-400 uppercase text-xs">TOTAL/HORA</td>
-                {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-blue-400 py-2 text-sm">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>)}
-                <td className="border border-border text-center font-black text-white bg-blue-600 py-2 text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
+                <td className="border border-border px-2 py-2 font-black text-blue-400 uppercase text-[10px] sm:text-xs">PRODUÇÃO</td>
+                {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-blue-400 py-2 text-xs sm:text-sm">{totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>)}
+                <td className="border border-border text-center font-black text-white bg-blue-600 py-2 text-xs sm:text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
               </tr>
+              {/* PERDAS — dados exclusivamente de LossControl (nunca somado à produção) */}
               <tr className="bg-red-500/10 font-bold">
-                <td className="border border-border px-3 py-2 font-black text-red-400 uppercase text-xs">PERDAS/HORA</td>
-                {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-red-400 py-2 text-sm">{perdasPorHora[h] > 0 ? perdasPorHora[h] : "—"}</td>)}
-                <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-sm">{totalPerdas > 0 ? totalPerdas : "—"}</td>
+                <td className="border border-border px-2 py-2 font-black text-red-400 uppercase text-[10px] sm:text-xs">PERDAS</td>
+                {turnoAtual.horas.map(h => <td key={h} className="border border-border text-center font-bold text-red-400 py-2 text-xs sm:text-sm">{perdasPorHora[h] > 0 ? perdasPorHora[h] : "—"}</td>)}
+                <td className="border border-border text-center font-black text-white bg-red-600 py-2 text-xs sm:text-sm">{totalPerdas > 0 ? totalPerdas : "—"}</td>
+              </tr>
+              {/* LÍQUIDA — Produção - Perdas (independentes, nunca somados) */}
+              <tr className="bg-green-500/10 font-bold">
+                <td className="border border-border px-2 py-2 font-black text-green-400 uppercase text-[10px] sm:text-xs">LÍQUIDA</td>
+                {turnoAtual.horas.map(h => {
+                  const liq = Math.max(0, (totalPorHora[h] || 0) - (perdasPorHora[h] || 0));
+                  return <td key={h} className="border border-border text-center font-bold text-green-400 py-2 text-xs sm:text-sm">{liq > 0 ? liq : "—"}</td>;
+                })}
+                <td className="border border-border text-center font-black text-white bg-green-600 py-2 text-xs sm:text-sm">{producaoLiquida > 0 ? producaoLiquida : "—"}</td>
               </tr>
             </tbody>
           </table>
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">Toque para +1 · 4× rápido para zerar · Segure para digitar número · − para diminuir</p>
+      <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
+        Toque +1 · 4× rápido zera · Segure digitar · − diminui ·
+        <span className="text-blue-400 font-semibold ml-1">Produção</span> e
+        <span className="text-red-400 font-semibold ml-1">Perdas</span> são independentes
+      </p>
     </div>
   );
 }
