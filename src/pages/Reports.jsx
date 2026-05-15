@@ -929,8 +929,12 @@ export default function Reports() {
         ))}
       </div>
 
-      {/* Global KPI Cards */}
+      {/* Global KPI Cards — apenas visíveis nas abas que não são Resumo */}
+      {tab !== "resumo" && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="col-span-2 lg:col-span-4">
+          <p className="text-[10px] text-muted-foreground">📅 Período: {dateRangeLabel} · {TURNO_LABELS[turno]}</p>
+        </div>
         {[
           { label: "Produção Bruta", value: totalCarros, icon: Car, color: "text-primary", bg: "bg-primary/10", border: "border-primary/20" },
           { label: "Perdas Brutas", value: totalPerdasCtrl, icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
@@ -955,6 +959,7 @@ export default function Reports() {
           </Card>
         ))}
       </div>
+      )}
 
       {/* ═══ TAB: RESUMO DIÁRIO ═══ */}
       {tab === "resumo" && (
