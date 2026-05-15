@@ -52,9 +52,18 @@ export default function Dashboard() {
   const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });
   const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }) });
-  const { data: lossesToday = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }) });
-   const { data: prodToday = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }) });
+  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.list("-created_date", 500) });
+   const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.list("-created_date", 500) });
    const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.list() });
+
+   // Usa data mais recente disponível (hoje se houver, senão o último dia com dados)
+   const lastProdDate = allProd.length > 0
+     ? allProd.reduce((latest, p) => p.data > latest ? p.data : latest, allProd[0].data)
+     : today;
+   const activeDate = allProd.some(p => p.data === today) ? today : lastProdDate;
+
+   const prodToday = allProd.filter(p => p.data === activeDate);
+   const lossesToday = allLosses.filter(l => l.data === activeDate);
 
    const currentShift = detectCurrentShift();
    const shiftProdData = getTodayShiftData(prodToday, currentShift.key);
@@ -64,13 +73,13 @@ export default function Dashboard() {
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
 
-  // Produção bruta: soma de ProductionControl do dia (todos os turnos)
+  // Produção bruta: soma de ProductionControl do dia ativo
   const totalProduzidoHoje = prodToday.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
-  // Perdas: calculadas APENAS do LossControl (separado da produção)
+  // Perdas: calculadas APENAS do LossControl
   const perdasBrutasHoje = lossesToday.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
   const ganhosHoje = lossesToday.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const totalPerdidoHoje = Math.max(0, perdasBrutasHoje - ganhosHoje); // Perda Real
+  const totalPerdidoHoje = Math.max(0, perdasBrutasHoje - ganhosHoje);
 
   // Produção líquida = Produção Bruta - Perda Real
   const producaoLiquida = Math.max(0, totalProduzidoHoje - totalPerdidoHoje);
@@ -89,7 +98,13 @@ export default function Dashboard() {
       </div>
 
       {/* Visão do turno atual */}
-       <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} lossData={shiftLossData} />
+       {activeDate !== today && (
+         <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-3 py-2 rounded-lg">
+           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+           Sem dados para hoje — exibindo dados de {format(new Date(activeDate + "T12:00:00"), "dd/MM/yyyy")}
+         </div>
+       )}
+       <ShiftOverview prodData={activeDate === today ? shiftProdData : prodToday} maintenanceData={shiftMaintenanceData} lossData={activeDate === today ? shiftLossData : lossesToday} isHistorical={activeDate !== today} />
 
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

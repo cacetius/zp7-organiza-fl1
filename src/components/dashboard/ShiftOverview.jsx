@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, AlertCircle, Wrench, TrendingDown } from "lucide-react";
 import { detectCurrentShift } from "@/lib/shiftDetector";
 
-export default function ShiftOverview({ prodData, maintenanceData, lossData }) {
+export default function ShiftOverview({ prodData, maintenanceData, lossData, isHistorical }) {
   const currentShift = useMemo(() => detectCurrentShift(), []);
 
   const shiftProduction = useMemo(() => {
@@ -31,9 +31,11 @@ export default function ShiftOverview({ prodData, maintenanceData, lossData }) {
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-sm flex items-center gap-2">
             <Clock className="w-4 h-4 text-primary animate-pulse" />
-            Visão do {currentShift.label}
+            {isHistorical ? "Último registro" : `Visão do ${currentShift.label}`}
           </h3>
-          <Badge variant="outline" className="text-primary border-primary/30">Agora</Badge>
+          <Badge variant="outline" className={isHistorical ? "text-yellow-400 border-yellow-500/30" : "text-primary border-primary/30"}>
+            {isHistorical ? "Histórico" : "Agora"}
+          </Badge>
         </div>
       </div>
       <CardContent className="px-4 pb-4">
@@ -42,7 +44,7 @@ export default function ShiftOverview({ prodData, maintenanceData, lossData }) {
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground uppercase font-semibold">Produção</p>
             <p className="text-2xl font-black text-blue-400">{shiftProduction}</p>
-            <p className="text-[10px] text-muted-foreground">carros neste turno</p>
+            <p className="text-[10px] text-muted-foreground">{isHistorical ? "carros no último dia" : "carros neste turno"}</p>
           </div>
 
           {/* Manutenção pendente */}
@@ -64,7 +66,7 @@ export default function ShiftOverview({ prodData, maintenanceData, lossData }) {
             <p className={`text-2xl font-black ${shiftLosses > 0 ? "text-red-400" : "text-muted-foreground"}`}>
               {shiftLosses}
             </p>
-            <p className="text-[10px] text-muted-foreground">reais neste turno</p>
+            <p className="text-[10px] text-muted-foreground">{isHistorical ? "reais no último dia" : "reais neste turno"}</p>
           </div>
         </div>
 
