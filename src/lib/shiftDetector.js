@@ -8,12 +8,12 @@ export function detectCurrentShift() {
 
   // 1º Turno: 06:00 - 14:59
   if (hours >= 6 && hours < 15) {
-    return { key: "primeiro", label: "1º Turno (06h–14h)", start: 360, end: 900 };
+    return { key: "primeiro", label: "1º Turno (06h–14h)", start: 360, end: 840 };
   }
 
-  // 2º Turno: 15:00 - 23:45
+  // 2º Turno: 15:00 - 23:59
   if (hours >= 15) {
-    return { key: "segundo", label: "2º Turno (15h–23h45)", start: 900, end: 1425 };
+    return { key: "segundo", label: "2º Turno (15h–23h)", start: 900, end: 1380 };
   }
 
   // 3º Turno: 00:00 - 05:59
