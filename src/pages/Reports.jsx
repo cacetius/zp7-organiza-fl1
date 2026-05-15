@@ -74,7 +74,7 @@ export default function Reports() {
   const { data: production = [] } = useQuery({ queryKey: ["production-all"], queryFn: () => base44.entities.Production.list("-created_date", 60) });
   const { data: lossRecords = [] } = useQuery({
     queryKey: ["loss-all"],
-    queryFn: () => base44.entities.LossControl.list("-created_date", 500),
+    queryFn: () => base44.entities.LossControl.list("-created_date", 2000),
   });
 
   const resumoTurnoObj = RESUMO_TURNOS.find(t => t.key === resumoTurno);
@@ -124,7 +124,10 @@ export default function Reports() {
     let list = turno === "todos" ? production : production.filter(p => p.turno === turno);
     return list.filter(p => inRange(p.data));
   }, [production, turno, dateFrom, dateTo]);
-  const filteredLoss = useMemo(() => lossRecords.filter(r => inRange(r.data)), [lossRecords, dateFrom, dateTo]);
+  const filteredLoss = useMemo(() => {
+    let list = turno === "todos" ? lossRecords : lossRecords.filter(r => r.turno === turno);
+    return list.filter(r => inRange(r.data));
+  }, [lossRecords, turno, dateFrom, dateTo]);
 
   // Resumo calculations
   const resumoTotalProd = prodRecords.reduce((acc, r) => acc + (r.carros_produzidos || 0), 0);
@@ -159,7 +162,7 @@ export default function Reports() {
   // Global KPIs — baseados em ProductionControl e LossControl (não em testores)
   const { data: prodCtrlAll = [] } = useQuery({
     queryKey: ["prod-ctrl-all"],
-    queryFn: () => base44.entities.ProductionControl.list("-created_date", 500),
+    queryFn: () => base44.entities.ProductionControl.list("-created_date", 2000),
   });
 
   const filteredProdCtrl = useMemo(() => {
@@ -266,8 +269,8 @@ export default function Reports() {
       .map(([name, Ganhos]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, Ganhos }));
   }, [filteredLoss]);
 
-  const totalPerdasPeriodo = lossItemRanking.reduce((s, r) => s + r.Perdas, 0);
-  const totalGanhosPeriodo = ganhoItemRanking.reduce((s, r) => s + r.Ganhos, 0);
+  const totalPerdasPeriodo = filteredLoss.filter(r => r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalGanhosPeriodo = filteredLoss.filter(r => r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
   const perdaRealPeriodo = Math.max(0, totalPerdasPeriodo - totalGanhosPeriodo);
 
   // Timeline comparação entre duas datas
