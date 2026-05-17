@@ -21,7 +21,7 @@ const TURNOS = [
 
 const TURNOS_SABADO = [
   { label: "1º Turno Sáb (06h–12h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00"], horasExtras: HORAS_EXTRAS_SABADO_1 },
-  { label: "2º Turno Sáb (15h–18h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00"], horasExtras: HORAS_EXTRAS_SABADO_2 },
+  { label: "2º Turno Sáb (12h–18h)", key: "segundo",  horas: ["12:00","13:00","14:00","15:00","16:00","17:00","18:00"], horasExtras: HORAS_EXTRAS_SABADO_2 },
 ];
 
 function isSabado(dateStr) {
