@@ -1,0 +1,43 @@
+{
+  "name": "MtbfEvent",
+  "type": "object",
+  "properties": {
+    "testor_nome": {
+      "type": "string",
+      "description": "Nome do testor que parou"
+    },
+    "data": {
+      "type": "string",
+      "format": "date",
+      "description": "Data da parada"
+    },
+    "tempo_parado": {
+      "type": "number",
+      "description": "Tempo total que o testor ficou parado (minutos)",
+      "default": 0
+    },
+    "tempo_reparo": {
+      "type": "number",
+      "description": "Tempo que demorou para consertar (minutos)",
+      "default": 0
+    },
+    "motivo": {
+      "type": "string",
+      "description": "O que aconteceu (campo livre, simples)"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    }
+  },
+  "required": [
+    "testor_nome",
+    "data",
+    "tempo_parado",
+    "tempo_reparo"
+  ]
+}

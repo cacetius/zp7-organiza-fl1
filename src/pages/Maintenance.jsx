@@ -10,9 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Wrench, Clock, AlertTriangle, CheckCircle2, Printer, Trash2, FileSpreadsheet } from "lucide-react";
+import { Plus, Wrench, Clock, AlertTriangle, CheckCircle2, Printer, Trash2, FileSpreadsheet, TrendingUp } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
 import { exportMaintenancePdf } from "@/lib/exportPdf";
+import MtbfPanel from "@/components/maintenance/MtbfPanel";
 
 const prioConfig = {
   baixa: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -31,6 +32,7 @@ const tipoFalhaLabel = { mecanica: "Mecânica", eletrica: "Elétrica", software:
 const emptyForm = { testor_nome: "", tipo_falha: "mecanica", descricao: "", prioridade: "media", tempo_estimado_reparo: "", impacto_carros: "", responsavel: "", pecas_necessarias: "" };
 
 export default function Maintenance() {
+  const [tab, setTab] = useState("chamados");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [filter, setFilter] = useState("todos");
@@ -167,6 +169,21 @@ export default function Maintenance() {
         </div>
       </div>
 
+      {/* Abas principais */}
+      <div className="flex gap-1.5 border-b border-border pb-2">
+        <button onClick={() => setTab("chamados")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${tab === "chamados" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/40"}`}>
+          <Wrench className="w-3.5 h-3.5" /> Chamados
+        </button>
+        <button onClick={() => setTab("mtbf")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${tab === "mtbf" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/40"}`}>
+          <TrendingUp className="w-3.5 h-3.5" /> MTBF / MTTR
+        </button>
+      </div>
+
+      {tab === "mtbf" && <MtbfPanel />}
+
+      {tab === "chamados" && <>
       <div className="flex gap-1.5 flex-wrap">
         {[["todos", "Todos"], ["aberto", "Abertos"], ["em_andamento", "Em Andamento"], ["concluido", "Concluídos"]].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)}
@@ -216,6 +233,8 @@ export default function Maintenance() {
           </Card>
         ))}
       </div>
+
+      </>}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
