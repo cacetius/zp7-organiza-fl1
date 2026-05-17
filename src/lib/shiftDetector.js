@@ -6,13 +6,13 @@ export function detectCurrentShift() {
   const now = new Date();
   const hours = now.getHours();
 
-  // 1º Turno: 06:00 - 14:59
-  if (hours >= 6 && hours < 15) {
-    return { key: "primeiro", label: "1º Turno (06h–14h)", start: 360, end: 840 };
+  // 1º Turno: 06:00 - 15:59
+  if (hours >= 6 && hours < 16) {
+    return { key: "primeiro", label: "1º Turno (06h–15h)", start: 360, end: 900 };
   }
 
-  // 2º Turno: 15:00 - 23:59
-  if (hours >= 15) {
+  // 2º Turno: 16:00 - 23:59
+  if (hours >= 16) {
     return { key: "segundo", label: "2º Turno (15h–23h)", start: 900, end: 1380 };
   }
 

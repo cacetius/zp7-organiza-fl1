@@ -9,11 +9,25 @@ import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadshe
 import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 
+// Horas extras disponíveis para sábado (além das padrão)
+const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
+const HORAS_EXTRAS_SABADO_2 = ["19:00","20:00","21:00","22:00","23:00"];
+
 const TURNOS = [
-  { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
+  { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00"] },
   { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"] },
   { label: "3º Turno (21h–06h)", key: "terceiro", horas: ["21:00","22:00","23:00","00:00","01:00","02:00","03:00","04:00","05:00","06:00"] },
 ];
+
+const TURNOS_SABADO = [
+  { label: "1º Turno Sáb (06h–12h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00"], horasExtras: HORAS_EXTRAS_SABADO_1 },
+  { label: "2º Turno Sáb (15h–18h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00"], horasExtras: HORAS_EXTRAS_SABADO_2 },
+];
+
+function isSabado(dateStr) {
+  const d = parseISO(dateStr);
+  return d.getDay() === 6;
+}
 
 export default function ProductionControl() {
   const qc = useQueryClient();
@@ -21,12 +35,21 @@ export default function ProductionControl() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState("segundo");
   const [editingCell, setEditingCell] = useState(null);
+  const [mostrarExtras, setMostrarExtras] = useState(false);
   const longPressTimers = useRef({});
   const clickCounters = useRef({});
   const clickTimers = useRef({});
   const longPressTriggered = useRef({});
 
-  const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
+  const sabado = isSabado(selectedDate);
+  const listaTurnos = sabado ? TURNOS_SABADO : TURNOS;
+
+  // Ajusta turno selecionado se trocar de dia normal ↔ sábado
+  const turnoAtualBase = listaTurnos.find(t => t.key === selectedTurno) || listaTurnos[0];
+  const horasBase = turnoAtualBase.horas;
+  const horasExtras = turnoAtualBase.horasExtras || [];
+  const horasVisiveis = sabado && mostrarExtras ? [...horasBase, ...horasExtras] : horasBase;
+  const turnoAtual = { ...turnoAtualBase, horas: horasVisiveis };
   const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
@@ -296,11 +319,26 @@ export default function ProductionControl() {
           <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
           <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
         </div>
-        <Select value={selectedTurno} onValueChange={setSelectedTurno}>
-          <SelectTrigger className="h-9 w-full sm:w-52"><SelectValue /></SelectTrigger>
-          <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
+        <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); setMostrarExtras(false); }}>
+          <SelectTrigger className="h-9 w-full sm:w-56"><SelectValue /></SelectTrigger>
+          <SelectContent>{listaTurnos.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
+        {sabado && horasExtras.length > 0 && (
+          <Button
+            variant={mostrarExtras ? "default" : "outline"}
+            size="sm"
+            onClick={() => setMostrarExtras(v => !v)}
+            className="gap-1 text-xs"
+          >
+            ⏱ {mostrarExtras ? "Ocultar Extras" : "Horas Extras"}
+          </Button>
+        )}
       </div>
+      {sabado && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-medium">
+          ⭐ Sábado — turnos reduzidos · {mostrarExtras ? "Horas extras visíveis" : "Horas extras ocultas"}
+        </div>
+      )}
 
       {/* KPIs — Produção (ProductionControl) e Perdas (LossControl) são independentes */}
       {(totalGeral > 0 || totalPerdas > 0) && (
