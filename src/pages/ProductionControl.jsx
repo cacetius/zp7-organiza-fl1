@@ -234,7 +234,9 @@ export default function ProductionControl() {
   const { totalPorHora, objetivoPorHora, perdasProdPorHora } = useMemo(() => {
     const prod = {}, obj = {}, perdProd = {};
     turnoAtual.horas.forEach(h => {
+      // Soma produção de todos os testores nesta hora
       prod[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
+      // Soma objetivo de todos os testores nesta hora
       obj[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
       // Perda de Produção = Objetivo - Produção (quando produção < objetivo)
       // Calculado apenas uma vez por hora (total da hora), não por testor
@@ -243,15 +245,15 @@ export default function ProductionControl() {
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
   }, [cellMap, testores, turnoAtual.horas]);
 
-  // Perda por Defeito = soma dos campos perdas_defeito dos registros do ProductionControl por hora
-  // IMPORTANTE: Soma apenas uma vez por hora, acumulando todos os testores
+  // Perda por Defeito = valor do campo perdas_defeito (já é o total da hora, não acumula por testor)
+  // Pega apenas o primeiro registro de cada hora para evitar duplicação
   const perdasDefPorHora = useMemo(() => {
     const map = {};
     turnoAtual.horas.forEach(h => { map[h] = 0; });
     records.forEach(r => {
-      if (r.hora && map[r.hora] !== undefined) {
-        // Acumula perdas por defeito de todos os testores nessa hora
-        map[r.hora] += (r.perdas_defeito || 0);
+      if (r.hora && map[r.hora] !== undefined && map[r.hora] === 0) {
+        // Usa o primeiro valor encontrado (não acumula)
+        map[r.hora] = (r.perdas_defeito || 0);
       }
     });
     return map;
