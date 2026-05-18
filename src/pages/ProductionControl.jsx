@@ -258,13 +258,9 @@ export default function ProductionControl() {
   turnoAtual.horas.forEach(h => {
     totalPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
     objetivoPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
-    // Perda de produção = Objetivo - Produzido (mínimo 0), só calcula se objetivo definido
-    perdasProdPorHora[h] = objetivoPorHora[h] > 0 ? Math.max(0, objetivoPorHora[h] - totalPorHora[h]) : 0;
-    // Perda por defeito = soma do Controle de Perdas; se não há registros lá, usa o valor salvo manualmente
-    const lossDefSum = getLossSumForHora(h, "perda_defeito");
-    perdasDefPorHora[h] = lossDefSum > 0
-      ? lossDefSum
-      : testores.reduce((acc, t) => acc + (getCell(t.id, h).perdas_defeito || 0), 0);
+    // Ambas as perdas vêm diretamente do Controle de Perdas
+    perdasProdPorHora[h] = getLossSumForHora(h, "perda_producao");
+    perdasDefPorHora[h] = getLossSumForHora(h, "perda_defeito");
   });
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
@@ -471,18 +467,7 @@ export default function ProductionControl() {
                   <span className={`text-lg font-black ${color === "orange" ? "text-orange-400" : "text-red-400"}`}>{total}</span>
                 </div>
               )}
-              <div className="flex gap-2">
-                <button onClick={() => setLossModal(null)} className="flex-1 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Fechar</button>
-                {total > 0 && (
-                  <button onClick={() => {
-                    const val = total;
-                    saveField(testores[0], lossModal.hora, tipo === "perdas_producao" ? "perdas_producao" : "perdas_defeito", val);
-                    setLossModal(null);
-                  }} className={`flex-1 py-2.5 rounded-md text-sm font-bold text-white ${color === "orange" ? "bg-orange-600 hover:bg-orange-700" : "bg-red-600 hover:bg-red-700"}`}>
-                    Usar Total ({total})
-                  </button>
-                )}
-              </div>
+              <button onClick={() => setLossModal(null)} className="w-full py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Fechar</button>
             </div>
           </div>
         );
@@ -678,23 +663,16 @@ export default function ProductionControl() {
               <tr className="bg-orange-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-orange-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>PRODUÇÃO</td>
                 {turnoAtual.horas.map(h => {
-                  const val = perdasProdPorHora[h] || 0;
-                  const lossSum = getLossSumForHora(h, "perda_producao");
-                  return (
+                 const val = perdasProdPorHora[h] || 0;
+                 return (
                     <td key={h} className="border border-border p-0.5">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <button
-                          onClick={() => setLossModal({ hora: h, field: "perdas_producao" })}
-                          className={`w-full h-7 rounded font-bold text-xs transition-all touch-manipulation relative ${val > 0 ? "text-orange-300 bg-orange-500/15 hover:bg-orange-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                          title="Clique para ver itens do Controle de Perdas"
-                        >
-                          {val > 0 ? val : <span className="text-[9px] opacity-40">—</span>}
-                          {lossSum > 0 && lossSum !== val && (
-                            <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">{lossSum}</span>
-                          )}
-                        </button>
-                        <button onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_producao", value: String(val) })} className="text-[8px] text-muted-foreground/30 hover:text-orange-400 transition-colors leading-none">✎</button>
-                      </div>
+                      <button
+                         onClick={() => setLossModal({ hora: h, field: "perdas_producao" })}
+                         className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-orange-300 bg-orange-500/15 hover:bg-orange-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
+                         title="Clique para ver itens do Controle de Perdas"
+                       >
+                         {val > 0 ? val : <span className="text-[9px] opacity-40">—</span>}
+                       </button>
                     </td>
                   );
                 })}
@@ -705,23 +683,16 @@ export default function ProductionControl() {
               <tr className="bg-red-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>DEFEITO</td>
                 {turnoAtual.horas.map(h => {
-                  const val = perdasDefPorHora[h] || 0;
-                  const lossSum = getLossSumForHora(h, "perda_defeito");
-                  return (
+                 const val = perdasDefPorHora[h] || 0;
+                 return (
                     <td key={h} className="border border-border p-0.5">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <button
-                          onClick={() => setLossModal({ hora: h, field: "perdas_defeito" })}
-                          className={`w-full h-7 rounded font-bold text-xs transition-all touch-manipulation relative ${val > 0 ? "text-red-300 bg-red-500/15 hover:bg-red-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                          title="Clique para ver itens do Controle de Perdas"
-                        >
-                          {val > 0 ? val : <span className="text-[9px] opacity-40">—</span>}
-                          {lossSum > 0 && lossSum !== val && (
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">{lossSum}</span>
-                          )}
-                        </button>
-                        <button onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_defeito", value: String(val) })} className="text-[8px] text-muted-foreground/30 hover:text-red-400 transition-colors leading-none">✎</button>
-                      </div>
+                      <button
+                         onClick={() => setLossModal({ hora: h, field: "perdas_defeito" })}
+                         className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-red-300 bg-red-500/15 hover:bg-red-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
+                         title="Clique para ver itens do Controle de Perdas"
+                       >
+                         {val > 0 ? val : <span className="text-[9px] opacity-40">—</span>}
+                       </button>
                     </td>
                   );
                 })}
