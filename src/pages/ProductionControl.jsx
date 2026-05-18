@@ -258,10 +258,13 @@ export default function ProductionControl() {
   turnoAtual.horas.forEach(h => {
     totalPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
     objetivoPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
-    // Perda de produção = Objetivo - Produzido (mínimo 0)
+    // Perda de produção = Objetivo - Produzido (mínimo 0), só calcula se objetivo definido
     perdasProdPorHora[h] = objetivoPorHora[h] > 0 ? Math.max(0, objetivoPorHora[h] - totalPorHora[h]) : 0;
-    // Perda por defeito = soma dos itens de perda_defeito no Controle de Perdas
-    perdasDefPorHora[h] = getLossSumForHora(h, "perda_defeito");
+    // Perda por defeito = soma do Controle de Perdas; se não há registros lá, usa o valor salvo manualmente
+    const lossDefSum = getLossSumForHora(h, "perda_defeito");
+    perdasDefPorHora[h] = lossDefSum > 0
+      ? lossDefSum
+      : testores.reduce((acc, t) => acc + (getCell(t.id, h).perdas_defeito || 0), 0);
   });
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
