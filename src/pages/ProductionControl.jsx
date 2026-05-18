@@ -76,6 +76,12 @@ export default function ProductionControl() {
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
+  // Busca os registros do Controle de Perdas para calcular Perda por Defeito
+  const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
+  const { data: lossRecords = [] } = useQuery({
+    queryKey: [lossKey],
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+  });
 
   const sheetKeyRef = useRef(sheetKey);
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
@@ -221,18 +227,29 @@ export default function ProductionControl() {
     setEditingCell(null);
   };
 
-  // Totais por hora
-  const totalPorHora = {};
-  const perdasProdPorHora = {};
-  const perdasDefPorHora = {};
-  const objetivoPorHora = {};
+  // Totais por hora (produção e objetivo)
+  const { totalPorHora, objetivoPorHora, perdasProdPorHora } = useMemo(() => {
+    const prod = {}, obj = {}, perdProd = {};
+    turnoAtual.horas.forEach(h => {
+      prod[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
+      obj[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
+      // Perda de Produção = Objetivo - Produção
+      perdProd[h] = Math.max(0, (obj[h] || 0) - (prod[h] || 0));
+    });
+    return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
+  }, [cellMap, testores, turnoAtual.horas]);
 
-  turnoAtual.horas.forEach(h => {
-    totalPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
-    perdasProdPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).perdas_producao || 0), 0);
-    perdasDefPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).perdas_defeito || 0), 0);
-    objetivoPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
-  });
+  // Perda por Defeito = total bruto de perdas do Controle de Perdas (por hora, excluindo ganhos)
+  const perdasDefPorHora = useMemo(() => {
+    const map = {};
+    turnoAtual.horas.forEach(h => { map[h] = 0; });
+    lossRecords
+      .filter(r => r.motivo_perda !== "ganho" && r.hora)
+      .forEach(r => {
+        if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
+      });
+    return map;
+  }, [lossRecords, turnoAtual.horas]);
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
   const totalGeral = testores.reduce((acc, t) => acc + totalPorTestor(t), 0);
@@ -240,7 +257,7 @@ export default function ProductionControl() {
   const totalPerdasProd = Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0);
   const totalPerdasDef = Object.values(perdasDefPorHora).reduce((a, v) => a + v, 0);
   const producaoLiquida = Math.max(0, totalGeral - totalPerdasProd - totalPerdasDef);
-  const efic = totalGeral > 0 ? Math.round((producaoLiquida / totalGeral) * 100) : 0;
+  const efic = totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
 
   const handleExportCsv = () => {
     const headers = ["Testor", ...turnoAtual.horas, "Total"];
@@ -591,39 +608,25 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-blue-600 py-1.5 text-xs sm:text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
               </tr>
 
-              {/* PERDAS DE PRODUÇÃO — editável por hora */}
+              {/* PERDAS DE PRODUÇÃO — calculado: objetivo - produção */}
               <tr className="bg-orange-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-orange-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>PRODUÇÃO</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasProdPorHora[h] || 0;
                   return (
-                    <td key={h} className="border border-border p-0.5">
-                      <button
-                        onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_producao", value: String(val) })}
-                        className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-orange-300 bg-orange-500/15 hover:bg-orange-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                      >
-                        {val > 0 ? val : <span className="text-[9px] opacity-40">+</span>}
-                      </button>
-                    </td>
+                    <td key={h} className="border border-border text-center font-bold text-orange-400 py-1.5 text-xs sm:text-sm">{val > 0 ? val : "—"}</td>
                   );
                 })}
                 <td className="border border-border text-center font-black text-white bg-orange-600 py-1.5 text-xs sm:text-sm">{totalPerdasProd > 0 ? totalPerdasProd : "—"}</td>
               </tr>
 
-              {/* PERDAS POR DEFEITO — editável por hora */}
+              {/* PERDAS POR DEFEITO — vem do Controle de Perdas */}
               <tr className="bg-red-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>DEFEITO</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasDefPorHora[h] || 0;
                   return (
-                    <td key={h} className="border border-border p-0.5">
-                      <button
-                        onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_defeito", value: String(val) })}
-                        className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-red-300 bg-red-500/15 hover:bg-red-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                      >
-                        {val > 0 ? val : <span className="text-[9px] opacity-40">+</span>}
-                      </button>
-                    </td>
+                    <td key={h} className="border border-border text-center font-bold text-red-400 py-1.5 text-xs sm:text-sm">{val > 0 ? val : "—"}</td>
                   );
                 })}
                 <td className="border border-border text-center font-black text-white bg-red-600 py-1.5 text-xs sm:text-sm">{totalPerdasDef > 0 ? totalPerdasDef : "—"}</td>
@@ -646,7 +649,7 @@ export default function ProductionControl() {
       )}
 
       <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-        Toque +1 · 4× rápido zera · Segure digitar · Clique nas linhas de perdas/objetivo para editar · 💬 para justificativa
+        Toque +1 · 4× rápido zera · Segure digitar · Clique no Objetivo para editar · 💬 para justificativa · Perdas calculadas automaticamente
       </p>
     </div>
   );
