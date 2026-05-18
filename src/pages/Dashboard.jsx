@@ -90,7 +90,16 @@ export default function Dashboard() {
   }, [allProd, currentShift.key]);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
-  const totalObjetivoTurno = useMemo(() => allProd.filter(p => p.turno === currentShift.key).reduce((s, p) => s + (p.objetivo || 0), 0), [allProd, currentShift.key]);
+  // Objetivo também precisa agrupar por hora para evitar duplicação
+  const totalObjetivoTurno = useMemo(() => {
+    const prodTurno = allProd.filter(p => p.turno === currentShift.key);
+    const porHora = {};
+    prodTurno.forEach(p => {
+      if (!porHora[p.hora]) porHora[p.hora] = 0;
+      porHora[p.hora] += (p.objetivo || 0);
+    });
+    return Object.values(porHora).reduce((s, h) => s + h, 0);
+  }, [allProd, currentShift.key]);
   // Eficiência = Produção / Objetivo (mostra eficiência bruta)
   const eficienciaTurno = totalObjetivoTurno > 0 ? Math.min(100, Math.round((totalProduzidoTurno / totalObjetivoTurno) * 100)) : null;
 
