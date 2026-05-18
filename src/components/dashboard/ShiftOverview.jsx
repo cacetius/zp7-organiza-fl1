@@ -1,29 +1,25 @@
 import React, { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, AlertCircle, Wrench, TrendingDown } from "lucide-react";
+import { Clock, Wrench, TrendingDown } from "lucide-react";
 import { detectCurrentShift } from "@/lib/shiftDetector";
 
-export default function ShiftOverview({ prodData, maintenanceData, lossData, isHistorical }) {
+// prodData: registros do ProductionControl já filtrados pelo turno/data
+// maintenanceData: registros do MaintenanceRequest já filtrados
+export default function ShiftOverview({ prodData, maintenanceData, isHistorical }) {
   const currentShift = useMemo(() => detectCurrentShift(), []);
 
-  const shiftProduction = useMemo(() => {
-    return (prodData || []).reduce((sum, p) => sum + (p.carros_produzidos || 0), 0);
+  const { shiftProduction, shiftLosses } = useMemo(() => {
+    const records = prodData || [];
+    const producao = records.reduce((sum, p) => sum + (p.carros_produzidos || 0), 0);
+    // Perdas = perdas_producao (operacional) + perdas_defeito (qualidade)
+    const perdas = records.reduce((sum, p) => sum + (p.perdas_producao || 0) + (p.perdas_defeito || 0), 0);
+    return { shiftProduction: producao, shiftLosses: perdas };
   }, [prodData]);
 
   const shiftMaintenance = useMemo(() => {
     return (maintenanceData || []).filter(m => m.status === "aberto").length;
   }, [maintenanceData]);
-
-  const shiftLosses = useMemo(() => {
-    const brutas = (lossData || [])
-      .filter(l => l.motivo_perda !== "ganho")
-      .reduce((sum, l) => sum + (l.carros_perdidos || 0), 0);
-    const ganhos = (lossData || [])
-      .filter(l => l.motivo_perda === "ganho")
-      .reduce((sum, l) => sum + (l.carros_perdidos || 0), 0);
-    return Math.max(0, brutas - ganhos);
-  }, [lossData]);
 
   return (
     <Card className="border-primary/20 bg-primary/5">
@@ -66,7 +62,7 @@ export default function ShiftOverview({ prodData, maintenanceData, lossData, isH
             <p className={`text-2xl font-black ${shiftLosses > 0 ? "text-red-400" : "text-muted-foreground"}`}>
               {shiftLosses}
             </p>
-            <p className="text-[10px] text-muted-foreground">{isHistorical ? "reais no último dia" : "reais neste turno"}</p>
+            <p className="text-[10px] text-muted-foreground">{isHistorical ? "no último dia" : "neste turno"}</p>
           </div>
         </div>
 

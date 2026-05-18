@@ -21,28 +21,20 @@ const TURNOS = [
   { key: "terceiro", label: "3º Turno" },
 ];
 
-export default function ShiftProductionChart({ prodData, lossData, date }) {
+// prodData: registros do ProductionControl — única fonte de verdade para produção e perdas
+export default function ShiftProductionChart({ prodData, date }) {
   const chartData = useMemo(() => {
     return TURNOS.map(({ key, label }) => {
-      const prod = prodData
-        .filter(r => r.turno === key && (!date || r.data === date))
-        .reduce((s, r) => s + (r.carros_produzidos || 0), 0);
-
-      const perdasBrutas = lossData
-        .filter(r => r.turno === key && r.motivo_perda !== "ganho" && (!date || r.data === date))
-        .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-
-      const ganhos = lossData
-        .filter(r => r.turno === key && r.motivo_perda === "ganho" && (!date || r.data === date))
-        .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-
-      const perdaReal = Math.max(0, perdasBrutas - ganhos);
-      const liquida = Math.max(0, prod - perdaReal);
+      const records = prodData.filter(r => r.turno === key && (!date || r.data === date));
+      const prod = records.reduce((s, r) => s + (r.carros_produzidos || 0), 0);
+      // Perdas = perdas_producao (operacional) + perdas_defeito (qualidade)
+      const perdas = records.reduce((s, r) => s + (r.perdas_producao || 0) + (r.perdas_defeito || 0), 0);
+      const liquida = Math.max(0, prod - perdas);
       const efic = prod > 0 ? Math.round((liquida / prod) * 100) : 0;
 
-      return { turno: label, Produção: prod, Perdas: perdaReal, Líquida: liquida, efic };
+      return { turno: label, Produção: prod, Perdas: perdas, Líquida: liquida, efic };
     });
-  }, [prodData, lossData, date]);
+  }, [prodData, date]);
 
   const hasData = chartData.some(d => d.Produção > 0 || d.Perdas > 0);
 

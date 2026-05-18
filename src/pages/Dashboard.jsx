@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 import ShiftOverview from "@/components/dashboard/ShiftOverview";
 import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
 import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
+// ProductionControl é a única fonte de verdade para produção, perdas operacionais e defeitos.
 
 const gravBadge = {
   critica: "bg-red-500/15 text-red-400 border-red-500/40",
@@ -44,7 +45,6 @@ export default function Dashboard() {
       base44.entities.Testor.subscribe(() => qc.invalidateQueries({ queryKey: ["testores"] })),
       base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-open"] })),
       base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-open"] })),
-      base44.entities.LossControl.subscribe(() => qc.invalidateQueries({ queryKey: ["losses-today"] })),
       base44.entities.ProductionControl.subscribe(() => qc.invalidateQueries({ queryKey: ["prod-today"] })),
     ];
     return () => subs.forEach(u => u());
@@ -53,14 +53,12 @@ export default function Dashboard() {
   const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 30_000 });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 60_000 });
   const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 60_000 });
-  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000 });
   const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000 });
   const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000 });
 
   const currentShift = detectCurrentShift();
   const shiftProdData = getTodayShiftData(allProd, currentShift.key);
   const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
-  const shiftLossData = getTodayShiftData(allLosses, currentShift.key);
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => t.status === "parado" || t.status === "manutencao").length;
@@ -90,7 +88,7 @@ export default function Dashboard() {
       </div>
 
       {/* Visão do turno atual */}
-       <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} lossData={shiftLossData} isHistorical={false} />
+       <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} isHistorical={false} />
 
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -170,7 +168,7 @@ export default function Dashboard() {
       </div>
 
       {/* Gráfico produção & perdas por turno */}
-      <ShiftProductionChart prodData={allProd} lossData={allLosses} date={today} />
+      <ShiftProductionChart prodData={allProd} date={today} />
 
       {/* Status Testores + Ocorrências */}
       <div className="grid lg:grid-cols-2 gap-4">
