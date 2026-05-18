@@ -31,6 +31,25 @@
     "carros_produzidos": {
       "type": "number",
       "description": "Quantidade de carros produzidos na hora"
+    },
+    "perdas_producao": {
+      "type": "number",
+      "default": 0,
+      "description": "Perdas por parada/operacional nessa hora"
+    },
+    "perdas_defeito": {
+      "type": "number",
+      "default": 0,
+      "description": "Perdas por defeito/qualidade nessa hora"
+    },
+    "objetivo": {
+      "type": "number",
+      "default": 0,
+      "description": "Meta planejada para a hora"
+    },
+    "justificativa": {
+      "type": "string",
+      "description": "Justificativa das perdas nessa hora"
     }
   },
   "required": [
@@ -40,66 +59,5 @@
     "turno",
     "hora",
     "carros_produzidos"
-  ],
-  "rls": {
-    "create": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
-        }
-      ]
-    },
-    "read": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "data.turno": "{{user.data.turno}}"
-        }
-      ]
-    },
-    "update": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
-        }
-      ]
-    },
-    "delete": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
-    }
-  }
+  ]
 }
