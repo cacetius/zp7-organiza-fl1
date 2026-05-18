@@ -616,24 +616,25 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-green-600 py-1.5 text-xs sm:text-sm">{producaoLiquida > 0 ? producaoLiquida : "—"}</td>
               </tr>
 
-              {/* JUSTIFICATIVAS por hora */}
-              <tr className="bg-muted/5">
-                <td className="border border-border px-2 py-1.5 font-black text-muted-foreground uppercase text-[10px] sm:text-xs leading-tight">JUSTIF.</td>
+              {/* JUSTIFICATIVAS — logo abaixo dos testores, por horário */}
+              <tr className="bg-yellow-500/5 border-t-2 border-yellow-500/20">
+                <td className="border border-border px-2 py-1.5 font-black text-yellow-400 uppercase text-[10px] sm:text-xs leading-tight">💬 JUSTIF.</td>
                 {turnoAtual.horas.map(h => {
                   const just = justificativasPorHora[h] || "";
                   return (
-                    <td key={h} className="border border-border p-0.5">
+                    <td key={h} className="border border-border p-1">
                       <button
                         onClick={() => setEditingJustificativa({ hora: h, value: just })}
-                        className={`w-full h-8 rounded text-[9px] transition-all touch-manipulation px-1 leading-tight text-center ${just ? "text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                        title={just || "Adicionar justificativa"}
+                        className={`w-full min-h-[40px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation whitespace-pre-wrap break-words
+                          ${just ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/30 hover:bg-muted/30 text-center"}`}
+                        title={just || "Clique para adicionar justificativa"}
                       >
-                        {just ? (just.length > 10 ? just.slice(0, 8) + "…" : just) : <span className="opacity-40">💬</span>}
+                        {just || <span className="text-[10px] opacity-40 block text-center">✎</span>}
                       </button>
                     </td>
                   );
                 })}
-                <td className="border border-border text-center text-muted-foreground text-[9px] py-1.5">—</td>
+                <td className="border border-border text-center text-muted-foreground/30 text-[9px] py-1.5">—</td>
               </tr>
             </tbody>
           </table>
