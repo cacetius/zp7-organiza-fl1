@@ -14,6 +14,7 @@ export default function Onboarding({ onComplete }) {
     funcao: "",
     area: "",
     turno: "",
+    telefone: "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -40,7 +41,7 @@ export default function Onboarding({ onComplete }) {
           </div>
           <CardTitle className="text-2xl font-bold">ZP7 Organização</CardTitle>
           <p className="text-muted-foreground text-sm">
-            Volkswagen Taubaté — Registro inicial
+            Volkswagen Taubaté — Cadastro inicial
           </p>
         </CardHeader>
         <CardContent>
@@ -55,10 +56,10 @@ export default function Onboarding({ onComplete }) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Matrícula</Label>
+              <Label>Chapa</Label>
               <Input
                 required
-                placeholder="Número da matrícula"
+                placeholder="Número da chapa"
                 value={form.matricula}
                 onChange={(e) => update("matricula", e.target.value)}
               />
@@ -84,6 +85,14 @@ export default function Onboarding({ onComplete }) {
                 placeholder="Ex: ZP7 - Linha 1"
                 value={form.area}
                 onChange={(e) => update("area", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Telefone / WhatsApp</Label>
+              <Input
+                placeholder="Ex: 5512999999999"
+                value={form.telefone}
+                onChange={(e) => update("telefone", e.target.value)}
               />
             </div>
             <div className="space-y-2">

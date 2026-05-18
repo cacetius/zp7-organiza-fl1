@@ -16,6 +16,7 @@ import {
   Filter, Printer, Send, GitCompare
 } from "lucide-react";
 import { format, subDays, parseISO, eachDayOfInterval } from "date-fns";
+import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
 import { ptBR } from "date-fns/locale";
 import html2canvas from "html2canvas";
 
@@ -610,6 +611,43 @@ export default function Reports() {
         ✅ Nenhuma ocorrência registrada neste turno!
       </div>`}
 
+      <!-- PRODUÇÃO & PERDAS POR TURNO -->
+      <h2><span class="dot" style="background:#0284c7"></span> Comparativo por Turno — ${dateLabel}</h2>
+      <div class="section-box" style="margin-bottom:14px">
+        <table>
+          <thead><tr>
+            <th>Turno</th>
+            <th style="text-align:center;color:#93c5fd">Produção</th>
+            <th style="text-align:center;color:#fca5a5">Perdas</th>
+            <th style="text-align:center;color:#86efac">Ganhos</th>
+            <th style="text-align:center;color:#fdba74">Perda Real</th>
+            <th style="text-align:center;color:#6ee7b7">Líquida</th>
+            <th style="text-align:center;color:#c4b5fd">Eficiência</th>
+          </tr></thead>
+          <tbody>
+            ${["primeiro","segundo","terceiro"].map(tKey => {
+              const tLabel = { primeiro:"1º Turno", segundo:"2º Turno", terceiro:"3º Turno" }[tKey];
+              const tProd = prodCtrlAll.filter(r => r.turno === tKey && r.data === resumoDate).reduce((s,r) => s+(r.carros_produzidos||0),0);
+              const tPerdBruto = lossRecords.filter(r => r.turno === tKey && r.data === resumoDate && r.motivo_perda !== "ganho").reduce((s,r) => s+(r.carros_perdidos||0),0);
+              const tGanho = lossRecords.filter(r => r.turno === tKey && r.data === resumoDate && r.motivo_perda === "ganho").reduce((s,r) => s+(r.carros_perdidos||0),0);
+              const tPerdReal = Math.max(0, tPerdBruto - tGanho);
+              const tLiq = Math.max(0, tProd - tPerdReal);
+              const tEfic = tProd > 0 ? Math.round((tLiq/tProd)*100) : null;
+              const isActive = tKey === resumoTurno;
+              return `<tr style="${isActive?"font-weight:900;background:#eff6ff":""}">
+                <td><strong>${tLabel}</strong>${isActive?' <span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:999px;font-size:8px;font-weight:700">ESTE TURNO</span>':''}</td>
+                <td style="text-align:center;color:#1d4ed8;font-weight:700">${tProd || "—"}</td>
+                <td style="text-align:center;color:#dc2626;font-weight:700">${tPerdBruto > 0 ? tPerdBruto : "—"}</td>
+                <td style="text-align:center;color:#16a34a;font-weight:700">${tGanho > 0 ? tGanho : "—"}</td>
+                <td style="text-align:center;color:#ea580c;font-weight:700">${tPerdReal > 0 ? tPerdReal : "—"}</td>
+                <td style="text-align:center;color:#059669;font-weight:700">${tLiq > 0 ? tLiq : "—"}</td>
+                <td style="text-align:center;font-weight:900;color:${tEfic === null ? '#94a3b8' : tEfic >= 80 ? '#16a34a' : tEfic >= 60 ? '#d97706' : '#dc2626'}">${tEfic !== null ? tEfic+'%' : "—"}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+
       <!-- TABELA CONSOLIDADA POR HORA -->
       <h2><span class="dot" style="background:#7c3aed"></span> Consolidado por Hora</h2>
       <div class="section-box">
@@ -1006,6 +1044,9 @@ export default function Reports() {
               </Card>
             ))}
           </div>
+
+          {/* Gráfico comparativo por turno */}
+          <ShiftProductionChart prodData={prodCtrlAll} lossData={lossRecords} date={resumoDate} />
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
