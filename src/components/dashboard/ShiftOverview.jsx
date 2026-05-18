@@ -12,9 +12,11 @@ export default function ShiftOverview({ prodData, maintenanceData, isHistorical 
   const { shiftProduction, shiftLosses } = useMemo(() => {
     const records = prodData || [];
     const producao = records.reduce((sum, p) => sum + (p.carros_produzidos || 0), 0);
-    // Perdas = perdas_producao (operacional) + perdas_defeito (qualidade)
-    const perdas = records.reduce((sum, p) => sum + (p.perdas_producao || 0) + (p.perdas_defeito || 0), 0);
-    return { shiftProduction: producao, shiftLosses: perdas };
+    const objetivo = records.reduce((sum, p) => sum + (p.objetivo || 0), 0);
+    // Perdas de produção = objetivo - produção (quando objetivo definido), + perdas por defeito
+    const perdasProd = objetivo > 0 ? Math.max(0, objetivo - producao) : 0;
+    const perdasDef = records.reduce((sum, p) => sum + (p.perdas_defeito || 0), 0);
+    return { shiftProduction: producao, shiftLosses: perdasProd + perdasDef };
   }, [prodData]);
 
   const shiftMaintenance = useMemo(() => {

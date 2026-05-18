@@ -67,8 +67,11 @@ export default function Dashboard() {
   const { totalProduzidoTurno, totalPerdidoTurno, producaoLiquidaTurno } = useMemo(() => {
     const prodTurno = allProd.filter(p => p.turno === currentShift.key);
     const totalProd = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
-    // Perdas vêm dos próprios registros do ProductionControl (perdas operacionais + defeito)
-    const totalPerdido = prodTurno.reduce((s, p) => s + (p.perdas_producao || 0) + (p.perdas_defeito || 0), 0);
+    const totalObj = prodTurno.reduce((s, p) => s + (p.objetivo || 0), 0);
+    // Perdas de produção = objetivo - produção (calculado), + perdas_defeito (gravado)
+    const perdasProd = totalObj > 0 ? Math.max(0, totalObj - totalProd) : 0;
+    const perdasDef = prodTurno.reduce((s, p) => s + (p.perdas_defeito || 0), 0);
+    const totalPerdido = perdasProd + perdasDef;
     return { totalProduzidoTurno: totalProd, totalPerdidoTurno: totalPerdido, producaoLiquidaTurno: Math.max(0, totalProd - totalPerdido) };
   }, [allProd, currentShift.key]);
 
