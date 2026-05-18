@@ -18,6 +18,8 @@ const DEFAULT_ITEMS = [
   "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
 ];
 
+const STORAGE_KEY_TIPOS = "zp7_loss_tipos_perda";
+
 const TURNOS = [
   { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00"] },
   { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"] },
@@ -47,6 +49,21 @@ export default function LossControl() {
   const [itensGanhoLocal, setItensGanhoLocal] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY_GANHOS) || "[]"); } catch { return []; }
   });
+  // Mapa de tipo por item: { "ITEM": "perda_producao" | "perda_defeito" }
+  const [tiposPerda, setTiposPerda] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_TIPOS) || "{}"); } catch { return {}; }
+  });
+
+  const getTipoItem = (item) => tiposPerda[item] || "perda_producao";
+
+  const toggleTipoItem = (item) => {
+    const atual = getTipoItem(item);
+    const novo = atual === "perda_producao" ? "perda_defeito" : "perda_producao";
+    const updated = { ...tiposPerda, [item]: novo };
+    setTiposPerda(updated);
+    localStorage.setItem(STORAGE_KEY_TIPOS, JSON.stringify(updated));
+  };
+
   const [novoItem, setNovoItem] = useState("");
   const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
@@ -180,7 +197,7 @@ export default function LossControl() {
     } else if (!cell) {
       pendingOps.current[opKey] = true;
       createCell.mutate(
-        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro", tipo_perda: "perda_producao" },
+        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro", tipo_perda: getTipoItem(item) },
         { onSettled: () => { delete pendingOps.current[opKey]; } }
       );
     }
@@ -593,7 +610,20 @@ export default function LossControl() {
                 <tr key={item} className={`group transition-colors ${isTop ? "bg-red-500/10 hover:bg-red-500/15" : idx % 2 === 0 ? "bg-card hover:bg-red-500/5" : "bg-muted/10 hover:bg-red-500/5"}`}>
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
-                      <span className={isTop ? "text-red-300 font-bold" : ""}>{isTop && "⚠ "}{item}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={isTop ? "text-red-300 font-bold truncate" : "truncate"}>{isTop && "⚠ "}{item}</span>
+                        <button
+                          onClick={() => toggleTipoItem(item)}
+                          title="Clique para alternar: Produção ↔ Defeito"
+                          className={`shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full border transition-all ${
+                            getTipoItem(item) === "perda_defeito"
+                              ? "bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/35"
+                              : "bg-orange-500/20 text-orange-300 border-orange-500/40 hover:bg-orange-500/35"
+                          }`}
+                        >
+                          {getTipoItem(item) === "perda_defeito" ? "DEF" : "PROD"}
+                        </button>
+                      </div>
                       <button onClick={() => {
                         const newItens = itens.filter(i => i !== item);
                         const newExtras = itensExtras.filter(i => i !== item);
