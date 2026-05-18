@@ -207,12 +207,26 @@ export default function Dashboard() {
                 bloqueado: "bg-gray-500/10 text-gray-400 border-gray-500/30",
               };
               const statusLabel = { rodando: "Rodando", atencao: "Atenção", parado: "Parado", manutencao: "Manutenção", bloqueado: "Bloqueado" };
+
+              // Última justificativa registrada hoje para este testor
+              const ultimaJust = prodToday
+                .filter(p => p.testor_nome === t.nome && p.justificativa)
+                .sort((a, b) => (b.hora || "").localeCompare(a.hora || ""))
+                [0]?.justificativa;
+
               return (
-                <div key={t.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30">
-                  <span className="font-medium text-sm">{t.nome}</span>
-                  <Badge className={`text-[10px] border ${statusColors[t.status] || statusColors.parado}`}>
-                    {statusLabel[t.status] || t.status}
-                  </Badge>
+                <div key={t.id} className="p-2.5 rounded-lg bg-muted/30 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">{t.nome}</span>
+                    <Badge className={`text-[10px] border ${statusColors[t.status] || statusColors.parado}`}>
+                      {statusLabel[t.status] || t.status}
+                    </Badge>
+                  </div>
+                  {ultimaJust && (
+                    <p className="text-[11px] text-muted-foreground leading-tight truncate" title={ultimaJust}>
+                      📝 {ultimaJust}
+                    </p>
+                  )}
                 </div>
               );
             })}
