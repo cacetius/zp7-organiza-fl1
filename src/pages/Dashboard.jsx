@@ -60,8 +60,10 @@ export default function Dashboard() {
   const shiftProdData = getTodayShiftData(allProd, currentShift.key);
   const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
 
+  // Contagem correta dos status dos testores
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
-  const testoresParados = testores.filter(t => t.status === "parado" || t.status === "manutencao").length;
+  const testoresAtencao = testores.filter(t => t.status === "atencao").length;
+  const testoresParados = testores.filter(t => t.status === "parado" || t.status === "manutencao" || t.status === "bloqueado").length;
 
   // KPIs do turno atual (memoizados)
   const { totalProduzidoTurno, totalPerdidoTurno, producaoLiquidaTurno } = useMemo(() => {
@@ -77,6 +79,7 @@ export default function Dashboard() {
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
   const totalObjetivoTurno = useMemo(() => allProd.filter(p => p.turno === currentShift.key).reduce((s, p) => s + (p.objetivo || 0), 0), [allProd, currentShift.key]);
+  // Eficiência = Produção / Objetivo (mostra eficiência bruta)
   const eficienciaTurno = totalObjetivoTurno > 0 ? Math.min(100, Math.round((totalProduzidoTurno / totalObjetivoTurno) * 100)) : null;
 
   return (
@@ -93,7 +96,24 @@ export default function Dashboard() {
       </div>
 
       {/* Visão do turno atual */}
-       <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} isHistorical={false} />
+      <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} isHistorical={false} />
+
+      {/* Status detalhado dos testores */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { label: "Rodando", value: testoresRodando, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
+          { label: "Atenção", value: testoresAtencao, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" },
+          { label: "Parados", value: testores.filter(t => t.status === "parado").length, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
+          { label: "Manutenção", value: testores.filter(t => t.status === "manutencao").length, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+        ].map(s => (
+          <Card key={s.label} className={`border ${s.border}`}>
+            <CardContent className="p-2.5 text-center">
+              <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+              <p className="text-[10px] text-muted-foreground">{s.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -101,7 +121,7 @@ export default function Dashboard() {
           { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
           { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
           { label: `Perdas ${shiftLabel}`, value: totalPerdidoTurno, icon: TrendingDown, color: totalPerdidoTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoTurno > 0 ? "border-red-500/20" : "border-border" },
-          { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
+          { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-orange-400" : "text-green-400", bg: testoresParados > 0 ? "bg-orange-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-orange-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>
             <CardContent className="p-3 sm:p-4 flex items-center gap-2.5">

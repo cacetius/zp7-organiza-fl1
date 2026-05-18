@@ -258,7 +258,9 @@ export default function ProductionControl() {
   const totalObjetivo = Object.values(objetivoPorHora).reduce((a, v) => a + v, 0);
   const totalPerdasProd = Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0);
   const totalPerdasDef = Object.values(perdasDefPorHora).reduce((a, v) => a + v, 0);
+  // Real Líquido = Produção - Perdas de Produção - Perdas por Defeito
   const producaoLiquida = Math.max(0, totalGeral - totalPerdasProd - totalPerdasDef);
+  // Eficiência = Produção / Objetivo
   const efic = totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
 
   const handleExportCsv = () => {

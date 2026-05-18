@@ -9,14 +9,18 @@ import { detectCurrentShift } from "@/lib/shiftDetector";
 export default function ShiftOverview({ prodData, maintenanceData, isHistorical }) {
   const currentShift = useMemo(() => detectCurrentShift(), []);
 
-  const { shiftProduction, shiftLosses, shiftObjetivo, eficiencia } = useMemo(() => {
+  const { shiftProduction, shiftLosses, shiftObjetivo, eficiencia, perdasProducao, perdasDefeito } = useMemo(() => {
     const records = prodData || [];
     const producao = records.reduce((sum, p) => sum + (p.carros_produzidos || 0), 0);
     const objetivo = records.reduce((sum, p) => sum + (p.objetivo || 0), 0);
+    // Perdas de produção = objetivo - produção (calculado)
     const perdasProd = objetivo > 0 ? Math.max(0, objetivo - producao) : 0;
+    // Perdas por defeito = soma do campo perdas_defeito
     const perdasDef = records.reduce((sum, p) => sum + (p.perdas_defeito || 0), 0);
+    // Total de perdas = perdas de produção + perdas por defeito
+    const perdasTotais = perdasProd + perdasDef;
     const efic = objetivo > 0 ? Math.min(100, Math.round((producao / objetivo) * 100)) : null;
-    return { shiftProduction: producao, shiftLosses: perdasProd + perdasDef, shiftObjetivo: objetivo, eficiencia: efic };
+    return { shiftProduction: producao, shiftLosses: perdasTotais, shiftObjetivo: objetivo, eficiencia: efic, perdasProducao: perdasProd, perdasDefeito: perdasDef };
   }, [prodData]);
 
   const shiftMaintenance = useMemo(() => {
@@ -64,7 +68,9 @@ export default function ShiftOverview({ prodData, maintenanceData, isHistorical 
             <p className={`text-2xl font-black ${shiftLosses > 0 ? "text-red-400" : "text-muted-foreground"}`}>
               {shiftLosses}
             </p>
-            <p className="text-[10px] text-muted-foreground">{isHistorical ? "no último dia" : "neste turno"}</p>
+            <p className="text-[10px] text-muted-foreground">
+              {perdasProducao > 0 && perdasDefeito > 0 ? `${perdasProducao} prod + ${perdasDefeito} def` : (isHistorical ? "no último dia" : "neste turno")}
+            </p>
           </div>
         </div>
 

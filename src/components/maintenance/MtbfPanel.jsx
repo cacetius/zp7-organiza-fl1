@@ -30,17 +30,21 @@ function calcularIndicadores(eventos) {
   const datasUnicas = [...new Set(eventos.map(e => e.data))].length;
   const tempoOperacaoTotal = datasUnicas * 540; // 540 min = 9h por turno ZP7
 
-  // MTBF = (Tempo total de operação - Tempo total parado) / Nº de falhas
-  const tempoDisponivel = Math.max(0, tempoOperacaoTotal - totalTempoParado);
-  const mtbf = totalFalhas > 0 ? Math.round(tempoDisponivel / totalFalhas) : 0;
+  // MTBF = Tempo total de operação / Número de falhas
+  // Fórmula padrão: quanto tempo o equipamento opera entre falhas
+  const mtbf = totalFalhas > 0 ? Math.round(tempoOperacaoTotal / totalFalhas) : null;
 
-  // MTTR = Tempo total de reparo / Nº de falhas
-  const mttr = totalFalhas > 0 ? Math.round(totalTempoReparo / totalFalhas) : 0;
+  // MTTR = Tempo total de reparo / Número de reparos
+  // Fórmula padrão: tempo médio para consertar
+  const mttr = totalFalhas > 0 ? Math.round(totalTempoReparo / totalFalhas) : null;
 
-  // Disponibilidade = Tempo disponível / Tempo total × 100
-  const disponibilidade = tempoOperacaoTotal > 0
-    ? Math.min(100, Math.round((tempoDisponivel / tempoOperacaoTotal) * 100))
-    : 100;
+  // Disponibilidade = MTBF / (MTBF + MTTR) × 100
+  // Fórmula padrão de disponibilidade
+  let disponibilidade = null;
+  if (mtbf !== null && mttr !== null) {
+    const denom = mtbf + mttr;
+    disponibilidade = denom > 0 ? Math.round((mtbf / denom) * 100) : 100;
+  }
 
   return { mtbf, mttr, disponibilidade, totalFalhas, totalTempoParado, totalTempoReparo };
 }
@@ -89,7 +93,12 @@ export default function MtbfPanel() {
     const evs = eventos.filter(e => e.testor_nome === nome);
     const ind = calcularIndicadores(evs);
     return { nome, ...ind, falhas: evs.length };
-  }).sort((a, b) => (a.disponibilidade || 100) - (b.disponibilidade || 100));
+  }).sort((a, b) => {
+    // Ordenar por disponibilidade (menor primeiro = mais crítico)
+    const dispA = a.disponibilidade !== null ? a.disponibilidade : 100;
+    const dispB = b.disponibilidade !== null ? b.disponibilidade : 100;
+    return dispA - dispB;
+  });
 
   const indicadoresFiltrado = calcularIndicadores(eventosFiltrados);
 
@@ -211,14 +220,23 @@ export default function MtbfPanel() {
               <Card className="border-border">
                 <CardContent className="p-4 text-center space-y-1">
                   <div className="text-2xl">⏳</div>
-                  <p className="text-2xl font-black text-primary">{indicadoresFiltrado.mtbf}</p>
-                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min entre falhas</p>
+                  {indicadoresFiltrado.mtbf !== null ? (
+                    <>
+                      <p className="text-2xl font-black text-primary">{indicadoresFiltrado.mtbf}</p>
+                      <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min entre falhas</p>
+                      <div className="mt-1 pt-1 border-t border-border">
+                        <p className="text-[10px] text-muted-foreground">
+                          {indicadoresFiltrado.mtbf >= 120 ? "✅ Bom" : indicadoresFiltrado.mtbf >= 60 ? "⚠️ Atenção" : "🔴 Crítico"}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-black text-muted-foreground">—</p>
+                      <p className="text-[10px] text-muted-foreground">Sem dados suficientes</p>
+                    </>
+                  )}
                   <p className="text-[9px] text-muted-foreground">MTBF — quanto tempo funciona sem parar</p>
-                  <div className="mt-1 pt-1 border-t border-border">
-                    <p className="text-[10px] text-muted-foreground">
-                      {indicadoresFiltrado.mtbf >= 120 ? "✅ Bom" : indicadoresFiltrado.mtbf >= 60 ? "⚠️ Atenção" : "🔴 Crítico"}
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -226,31 +244,47 @@ export default function MtbfPanel() {
               <Card className="border-border">
                 <CardContent className="p-4 text-center space-y-1">
                   <div className="text-2xl">🔧</div>
-                  <p className="text-2xl font-black text-orange-400">{indicadoresFiltrado.mttr}</p>
-                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min p/ consertar</p>
+                  {indicadoresFiltrado.mttr !== null ? (
+                    <>
+                      <p className="text-2xl font-black text-orange-400">{indicadoresFiltrado.mttr}</p>
+                      <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min p/ consertar</p>
+                      <div className="mt-1 pt-1 border-t border-border">
+                        <p className="text-[10px] text-muted-foreground">
+                          {indicadoresFiltrado.mttr <= 30 ? "✅ Bom" : indicadoresFiltrado.mttr <= 60 ? "⚠️ Atenção" : "🔴 Lento"}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-black text-muted-foreground">—</p>
+                      <p className="text-[10px] text-muted-foreground">Sem dados suficientes</p>
+                    </>
+                  )}
                   <p className="text-[9px] text-muted-foreground">MTTR — tempo médio de reparo</p>
-                  <div className="mt-1 pt-1 border-t border-border">
-                    <p className="text-[10px] text-muted-foreground">
-                      {indicadoresFiltrado.mttr <= 30 ? "✅ Bom" : indicadoresFiltrado.mttr <= 60 ? "⚠️ Atenção" : "🔴 Lento"}
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
 
               {/* Disponibilidade */}
-              <Card className={`border ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).bg}`}>
+              <Card className={`border ${indicadoresFiltrado.disponibilidade !== null ? getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).bg : "border-border"}`}>
                 <CardContent className="p-4 text-center space-y-1">
-                  <div className="text-2xl">{getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).emoji}</div>
-                  <p className={`text-2xl font-black ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
-                    {indicadoresFiltrado.disponibilidade}%
-                  </p>
+                  <div className="text-2xl">{indicadoresFiltrado.disponibilidade !== null ? getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).emoji : "📊"}</div>
+                  {indicadoresFiltrado.disponibilidade !== null ? (
+                    <>
+                      <p className={`text-2xl font-black ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
+                        {indicadoresFiltrado.disponibilidade}%
+                      </p>
+                      <p className={`text-[10px] font-semibold ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
+                        {getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).label}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-black text-muted-foreground">—</p>
+                      <p className="text-[10px] text-muted-foreground">Sem dados suficientes</p>
+                    </>
+                  )}
                   <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">disponibilidade</p>
                   <p className="text-[9px] text-muted-foreground">Tempo que ficou produzindo</p>
-                  <div className="mt-1 pt-1 border-t border-border">
-                    <p className={`text-[10px] font-semibold ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
-                      {getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).label}
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -278,13 +312,13 @@ export default function MtbfPanel() {
                 {/* Fórmulas explicadas */}
                 <div className="grid grid-cols-3 gap-2 text-center border-t border-border pt-3">
                   <div>
-                    <p className="text-[9px] text-muted-foreground font-mono">MTBF = (T.Op − T.Parado) / Falhas</p>
+                    <p className="text-[9px] text-muted-foreground font-mono">MTBF = T.Op / Falhas</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-muted-foreground font-mono">MTTR = T.Reparo / Falhas</p>
                   </div>
                   <div>
-                    <p className="text-[9px] text-muted-foreground font-mono">Disp = (T.Op − T.Parado) / T.Op</p>
+                    <p className="text-[9px] text-muted-foreground font-mono">Disp = MTBF/(MTBF+MTTR)</p>
                   </div>
                 </div>
               </CardContent>
@@ -299,7 +333,8 @@ export default function MtbfPanel() {
               </h3>
               <p className="text-xs text-muted-foreground -mt-1">Testores ordenados do mais crítico ao mais estável.</p>
               {rankingTestores.map((t, i) => {
-                const info = getDisponibilidadeInfo(t.disponibilidade || 100);
+                const disp = t.disponibilidade !== null ? t.disponibilidade : 100;
+                const info = getDisponibilidadeInfo(disp);
                 return (
                   <Card key={t.nome} className={`border ${info.bg}`}>
                     <CardContent className="p-3">
@@ -311,13 +346,13 @@ export default function MtbfPanel() {
                             <Badge className={`text-[10px] border ${info.bg} ${info.color}`}>{info.emoji} {info.label}</Badge>
                           </div>
                           <div className="flex gap-4 mt-1 flex-wrap">
-                            <span className="text-[11px] text-muted-foreground">⏳ MTBF: <span className="text-foreground font-semibold">{t.mtbf} min</span></span>
-                            <span className="text-[11px] text-muted-foreground">🔧 MTTR: <span className="text-foreground font-semibold">{t.mttr} min</span></span>
+                            <span className="text-[11px] text-muted-foreground">⏳ MTBF: <span className="text-foreground font-semibold">{t.mtbf !== null ? t.mtbf : "—"}</span></span>
+                            <span className="text-[11px] text-muted-foreground">🔧 MTTR: <span className="text-foreground font-semibold">{t.mttr !== null ? t.mttr : "—"}</span></span>
                             <span className="text-[11px] text-muted-foreground">🔴 Falhas: <span className="text-foreground font-semibold">{t.totalFalhas}</span></span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className={`text-xl font-black ${info.color}`}>{t.disponibilidade}%</p>
+                          <p className={`text-xl font-black ${info.color}`}>{t.disponibilidade !== null ? t.disponibilidade : "—"}%</p>
                           <p className="text-[9px] text-muted-foreground">disponível</p>
                         </div>
                       </div>
