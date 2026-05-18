@@ -59,7 +59,19 @@ export default function Occurrences() {
   });
 
   const createMut = useMutation({
-    mutationFn: (d) => base44.entities.Occurrence.create({ ...d, tempo_parada: Number(d.tempo_parada) || 0, impacto_producao: Number(d.impacto_producao) || 0, data: new Date().toISOString().slice(0, 10), hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) }),
+    mutationFn: async (d) => {
+      const occ = await base44.entities.Occurrence.create({ ...d, tempo_parada: Number(d.tempo_parada) || 0, impacto_producao: Number(d.impacto_producao) || 0, data: new Date().toISOString().slice(0, 10), hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) });
+      // Se crítica, busca líderes e abre link WhatsApp
+      if (d.gravidade === "critica") {
+        const res = await base44.functions.invoke("notifyLeaderCriticalOccurrence", { event: { type: "create" }, data: occ });
+        const notificados = res?.data?.notificados || [];
+        if (notificados.length > 0) {
+          // Abre o WhatsApp para cada líder com telefone cadastrado
+          notificados.forEach(n => window.open(n.whatsapp_link, "_blank"));
+        }
+      }
+      return occ;
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["occurrences"] }); setOpen(false); setForm(emptyForm); },
   });
 
