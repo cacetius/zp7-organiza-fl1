@@ -48,10 +48,6 @@ export default function LossControl() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY_GANHOS) || "[]"); } catch { return []; }
   });
   const [novoItem, setNovoItem] = useState("");
-  const [novoItemTipo, setNovoItemTipo] = useState("perda_producao"); // perda_producao | perda_defeito
-  const [novoItemTipoMap, setNovoItemTipoMap] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("zp7_loss_tipo_map") || "{}"); } catch { return {}; }
-  });
   const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
   const longPressTriggered = useRef({});
@@ -184,7 +180,7 @@ export default function LossControl() {
     } else if (!cell) {
       pendingOps.current[opKey] = true;
       createCell.mutate(
-        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro", tipo_perda: novoItemTipoMap[item] || "perda_producao" },
+        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro", tipo_perda: "perda_producao" },
         { onSettled: () => { delete pendingOps.current[opKey]; } }
       );
     }
@@ -311,12 +307,9 @@ export default function LossControl() {
     if (t && !itens.includes(t)) {
       const newItens = [...itens, t];
       const newExtras = [...itensExtras, t];
-      const newTipoMap = { ...novoItemTipoMap, [t]: novoItemTipo };
       setItens(newItens);
       setItensExtras(newExtras);
-      setNovoItemTipoMap(newTipoMap);
       localStorage.setItem(STORAGE_KEY_ITENS, JSON.stringify(newExtras));
-      localStorage.setItem("zp7_loss_tipo_map", JSON.stringify(newTipoMap));
       setNovoItem("");
     }
   };
@@ -526,15 +519,6 @@ export default function LossControl() {
             onKeyDown={e => e.key === "Enter" && addItem()}
             className="h-9 text-sm flex-1 min-w-[140px]"
           />
-          <Select value={novoItemTipo} onValueChange={setNovoItemTipo}>
-            <SelectTrigger className="h-9 w-40 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="perda_producao">⚙️ Perda Produção</SelectItem>
-              <SelectItem value="perda_defeito">🔴 Perda Defeito</SelectItem>
-            </SelectContent>
-          </Select>
           <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400 px-3">
             <Plus className="w-3.5 h-3.5" />
           </Button>
@@ -609,12 +593,7 @@ export default function LossControl() {
                 <tr key={item} className={`group transition-colors ${isTop ? "bg-red-500/10 hover:bg-red-500/15" : idx % 2 === 0 ? "bg-card hover:bg-red-500/5" : "bg-muted/10 hover:bg-red-500/5"}`}>
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className={isTop ? "text-red-300 font-bold" : ""}>{isTop && "⚠ "}{item}</span>
-                        <span className={`text-[9px] font-semibold uppercase tracking-wide ${novoItemTipoMap[item] === "perda_defeito" ? "text-red-400/70" : "text-orange-400/70"}`}>
-                          {novoItemTipoMap[item] === "perda_defeito" ? "🔴 Defeito" : "⚙️ Produção"}
-                        </span>
-                      </div>
+                      <span className={isTop ? "text-red-300 font-bold" : ""}>{isTop && "⚠ "}{item}</span>
                       <button onClick={() => {
                         const newItens = itens.filter(i => i !== item);
                         const newExtras = itensExtras.filter(i => i !== item);
