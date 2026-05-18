@@ -9,6 +9,7 @@ import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadshe
 import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { detectCurrentShift } from "@/lib/shiftDetector";
+import { ProductionKpis } from "@/components/production/ProductionKpis";
 
 // Horas extras disponíveis para sábado
 const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
@@ -236,17 +237,20 @@ export default function ProductionControl() {
       prod[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
       obj[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
       // Perda de Produção = Objetivo - Produção (quando produção < objetivo)
+      // Calculado apenas uma vez por hora (total da hora), não por testor
       perdProd[h] = Math.max(0, (obj[h] || 0) - (prod[h] || 0));
     });
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
   }, [cellMap, testores, turnoAtual.horas]);
 
   // Perda por Defeito = soma dos campos perdas_defeito dos registros do ProductionControl por hora
+  // IMPORTANTE: Soma apenas uma vez por hora, acumulando todos os testores
   const perdasDefPorHora = useMemo(() => {
     const map = {};
     turnoAtual.horas.forEach(h => { map[h] = 0; });
     records.forEach(r => {
       if (r.hora && map[r.hora] !== undefined) {
+        // Acumula perdas por defeito de todos os testores nessa hora
         map[r.hora] += (r.perdas_defeito || 0);
       }
     });
@@ -256,7 +260,9 @@ export default function ProductionControl() {
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
   const totalGeral = testores.reduce((acc, t) => acc + totalPorTestor(t), 0);
   const totalObjetivo = Object.values(objetivoPorHora).reduce((a, v) => a + v, 0);
+  // Perdas de Produção = soma das diferenças (objetivo - produção) por hora
   const totalPerdasProd = Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0);
+  // Perdas por Defeito = soma dos campos perdas_defeito por hora
   const totalPerdasDef = Object.values(perdasDefPorHora).reduce((a, v) => a + v, 0);
   // Real Líquido = Produção - Perdas de Produção - Perdas por Defeito
   const producaoLiquida = Math.max(0, totalGeral - totalPerdasProd - totalPerdasDef);
@@ -492,41 +498,7 @@ export default function ProductionControl() {
       )}
 
       {/* KPIs */}
-      {(totalGeral > 0 || totalPerdasProd > 0 || totalPerdasDef > 0) && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {[
-              { label: "Objetivo", value: totalObjetivo || "—", color: "text-cyan-400", border: "border-cyan-500/20" },
-              { label: "Produção", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
-              { label: "Perdas Produção", value: totalPerdasProd, color: "text-orange-400", border: "border-orange-500/20" },
-              { label: "Perdas Defeito", value: totalPerdasDef, color: "text-red-400", border: "border-red-500/20" },
-              { label: "Real Líquido", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
-            ].map(k => (
-              <Card key={k.label} className={`border ${k.border}`}>
-                <CardContent className="p-2.5 sm:p-3 text-center">
-                  <p className={`text-xl sm:text-2xl font-black ${k.color}`}>{k.value}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{k.label}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          {/* Barra de eficiência */}
-          {totalObjetivo > 0 && (
-            <div className="px-3 py-2 rounded-lg bg-muted/30 border border-border space-y-1">
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-muted-foreground font-medium">Eficiência do turno (Produção / Objetivo)</span>
-                <span className={`font-black ${efic >= 90 ? "text-green-400" : efic >= 70 ? "text-yellow-400" : "text-red-400"}`}>{efic}%</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(efic, 100)}%`, background: efic >= 90 ? "hsl(142,71%,45%)" : efic >= 70 ? "hsl(38,92%,50%)" : "hsl(0,72%,51%)" }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <ProductionKpis totalObjetivo={totalObjetivo} totalGeral={totalGeral} totalPerdasProd={totalPerdasProd} totalPerdasDef={totalPerdasDef} producaoLiquida={producaoLiquida} efic={efic} />
 
       {loadingTestores ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted/30 animate-pulse" />)}</div>

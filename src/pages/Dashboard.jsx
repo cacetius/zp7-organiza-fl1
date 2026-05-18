@@ -66,13 +66,25 @@ export default function Dashboard() {
   const testoresParados = testores.filter(t => t.status === "parado" || t.status === "manutencao" || t.status === "bloqueado").length;
 
   // KPIs do turno atual (memoizados)
+  // IMPORTANTE: allProd contém registros POR TESTOR, então precisamos agrupar por hora primeiro
   const { totalProduzidoTurno, totalPerdidoTurno, producaoLiquidaTurno } = useMemo(() => {
     const prodTurno = allProd.filter(p => p.turno === currentShift.key);
-    const totalProd = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
-    const totalObj = prodTurno.reduce((s, p) => s + (p.objetivo || 0), 0);
-    // Perdas de produção = objetivo - produção (calculado), + perdas_defeito (gravado)
-    const perdasProd = totalObj > 0 ? Math.max(0, totalObj - totalProd) : 0;
-    const perdasDef = prodTurno.reduce((s, p) => s + (p.perdas_defeito || 0), 0);
+    
+    // Agrupar por hora para calcular totais corretamente (evita duplicação)
+    const porHora = {};
+    prodTurno.forEach(p => {
+      if (!porHora[p.hora]) porHora[p.hora] = { producao: 0, objetivo: 0, perdas_defeito: 0 };
+      porHora[p.hora].producao += (p.carros_produzidos || 0);
+      porHora[p.hora].objetivo += (p.objetivo || 0);
+      porHora[p.hora].perdas_defeito += (p.perdas_defeito || 0);
+    });
+    
+    // Calcular totais a partir do agrupamento por hora
+    const totalProd = Object.values(porHora).reduce((s, h) => s + h.producao, 0);
+    const totalObj = Object.values(porHora).reduce((s, h) => s + h.objetivo, 0);
+    // Perdas de produção = objetivo - produção (calculado por hora, depois somado)
+    const perdasProd = Object.values(porHora).reduce((s, h) => s + Math.max(0, h.objetivo - h.producao), 0);
+    const perdasDef = Object.values(porHora).reduce((s, h) => s + h.perdas_defeito, 0);
     const totalPerdido = perdasProd + perdasDef;
     return { totalProduzidoTurno: totalProd, totalPerdidoTurno: totalPerdido, producaoLiquidaTurno: Math.max(0, totalProd - totalPerdido) };
   }, [allProd, currentShift.key]);
