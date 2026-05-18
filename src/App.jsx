@@ -22,8 +22,6 @@ const Maintenance = React.lazy(() => import("./pages/Maintenance"));
 const Reports = React.lazy(() => import("./pages/Reports"));
 const LossControl = React.lazy(() => import("./pages/LossControl"));
 const ProductionControl = React.lazy(() => import("./pages/ProductionControl"));
-const PredictiveAI = React.lazy(() => import("./pages/PredictiveAI"));
-const DailyPassword = React.lazy(() => import("./pages/DailyPassword"));
 
 // Prefetch das páginas mais usadas após o app estar idle
 function prefetchPages() {
@@ -90,8 +88,6 @@ function AppShell() {
         <Route path="/relatorios" element={<React.Suspense fallback={<PageLoader />}><Reports /></React.Suspense>} />
         <Route path="/controle-perdas" element={<React.Suspense fallback={<PageLoader />}><LossControl /></React.Suspense>} />
         <Route path="/controle-producao" element={<React.Suspense fallback={<PageLoader />}><ProductionControl /></React.Suspense>} />
-        <Route path="/ia-preditiva" element={<React.Suspense fallback={<PageLoader />}><PredictiveAI /></React.Suspense>} />
-        <Route path="/senha-diaria" element={<React.Suspense fallback={<PageLoader />}><DailyPassword /></React.Suspense>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

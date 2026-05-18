@@ -229,12 +229,13 @@ export default function ProductionControl() {
   };
 
   // Totais por hora (produção e objetivo)
+  // Perdas de produção = objetivo - produção (calculado automaticamente)
   const { totalPorHora, objetivoPorHora, perdasProdPorHora } = useMemo(() => {
     const prod = {}, obj = {}, perdProd = {};
     turnoAtual.horas.forEach(h => {
       prod[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
       obj[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
-      // Perda de Produção = Objetivo - Produção
+      // Perda de Produção = Objetivo - Produção (quando produção < objetivo)
       perdProd[h] = Math.max(0, (obj[h] || 0) - (prod[h] || 0));
     });
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
