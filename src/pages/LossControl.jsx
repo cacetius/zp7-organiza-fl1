@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
 import { format, addDays, subDays, parseISO } from "date-fns";
+import { detectCurrentShift } from "@/lib/shiftDetector";
 
 const DEFAULT_ITEMS = [
   "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
@@ -31,7 +32,7 @@ export default function LossControl() {
   const qc = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedTurno, setSelectedTurno] = useState(() => localStorage.getItem(STORAGE_KEY_TURNO) || "segundo");
+  const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
   const [itensExtras, setItensExtras] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY_ITENS) || "[]"); } catch { return []; }
   });
@@ -505,7 +506,7 @@ export default function LossControl() {
             <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
             <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
           </div>
-          <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); localStorage.setItem(STORAGE_KEY_TURNO, v); }}>
+          <Select value={selectedTurno} onValueChange={v => setSelectedTurno(v)}>
             <SelectTrigger className="h-9 flex-1 min-w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
           </Select>

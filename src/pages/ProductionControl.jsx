@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadsheet } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
+import { detectCurrentShift } from "@/lib/shiftDetector";
 
 // Horas extras disponíveis para sábado (além das padrão)
 const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
@@ -33,7 +34,7 @@ export default function ProductionControl() {
   const qc = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedTurno, setSelectedTurno] = useState(() => localStorage.getItem("zp7_prod_turno") || "segundo");
+  const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
   const [editingCell, setEditingCell] = useState(null);
   const [mostrarExtras, setMostrarExtras] = useState(false);
   const longPressTimers = useRef({});
@@ -319,7 +320,7 @@ export default function ProductionControl() {
           <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
           <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
         </div>
-        <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); setMostrarExtras(false); localStorage.setItem("zp7_prod_turno", v); }}>
+        <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); setMostrarExtras(false); }}>
           <SelectTrigger className="h-9 w-full sm:w-56"><SelectValue /></SelectTrigger>
           <SelectContent>{listaTurnos.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
