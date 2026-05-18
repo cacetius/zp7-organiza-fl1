@@ -18,18 +18,34 @@ const DEFAULT_ITEMS = [
 ];
 
 const TURNOS = [
-  { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
+  { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00"] },
   { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"] },
   { label: "3º Turno (21h–06h)", key: "terceiro", horas: ["21:00","22:00","23:00","00:00","01:00","02:00","03:00","04:00","05:00","06:00"] },
 ];
+
+const STORAGE_KEY_TURNO = "zp7_loss_turno";
+const STORAGE_KEY_ITENS = "zp7_loss_itens_extras";
+const STORAGE_KEY_GANHOS = "zp7_loss_ganhos_extras";
 
 export default function LossControl() {
   const qc = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedTurno, setSelectedTurno] = useState("segundo");
-  const [itens, setItens] = useState(DEFAULT_ITEMS);
-  const [itensGanhoLocal, setItensGanhoLocal] = useState([]);
+  const [selectedTurno, setSelectedTurno] = useState(() => localStorage.getItem(STORAGE_KEY_TURNO) || "segundo");
+  const [itensExtras, setItensExtras] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_ITENS) || "[]"); } catch { return []; }
+  });
+  const [itens, setItens] = useState(() => {
+    try {
+      const extras = JSON.parse(localStorage.getItem(STORAGE_KEY_ITENS) || "[]");
+      const combined = [...DEFAULT_ITEMS];
+      extras.forEach(i => { if (!combined.includes(i)) combined.push(i); });
+      return combined;
+    } catch { return DEFAULT_ITEMS; }
+  });
+  const [itensGanhoLocal, setItensGanhoLocal] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_GANHOS) || "[]"); } catch { return []; }
+  });
   const [novoItem, setNovoItem] = useState("");
   const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
@@ -287,11 +303,20 @@ export default function LossControl() {
 
   const addItem = () => {
     const t = novoItem.trim().toUpperCase();
-    if (t && !itens.includes(t)) { setItens(prev => [...prev, t]); setNovoItem(""); }
+    if (t && !itens.includes(t)) {
+      const newItens = [...itens, t];
+      const newExtras = [...itensExtras, t];
+      setItens(newItens);
+      setItensExtras(newExtras);
+      localStorage.setItem(STORAGE_KEY_ITENS, JSON.stringify(newExtras));
+      setNovoItem("");
+    }
   };
   const addGanhoItem = () => {
     if (ganhoSelecionado && !itensGanho.includes(ganhoSelecionado)) {
-      setItensGanhoLocal(prev => [...prev, ganhoSelecionado]);
+      const newGanhos = [...itensGanhoLocal, ganhoSelecionado];
+      setItensGanhoLocal(newGanhos);
+      localStorage.setItem(STORAGE_KEY_GANHOS, JSON.stringify(newGanhos));
       setGanhoSelecionado("");
     }
   };
@@ -480,7 +505,7 @@ export default function LossControl() {
             <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
             <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
           </div>
-          <Select value={selectedTurno} onValueChange={setSelectedTurno}>
+          <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); localStorage.setItem(STORAGE_KEY_TURNO, v); }}>
             <SelectTrigger className="h-9 flex-1 min-w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
           </Select>
@@ -566,7 +591,13 @@ export default function LossControl() {
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
                       <span className={isTop ? "text-red-300 font-bold" : ""}>{isTop && "⚠ "}{item}</span>
-                      <button onClick={() => setItens(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                      <button onClick={() => {
+                        const newItens = itens.filter(i => i !== item);
+                        const newExtras = itensExtras.filter(i => i !== item);
+                        setItens(newItens);
+                        setItensExtras(newExtras);
+                        localStorage.setItem(STORAGE_KEY_ITENS, JSON.stringify(newExtras));
+                      }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
                   {turnoAtual.horas.map(hora => {
@@ -631,7 +662,11 @@ export default function LossControl() {
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
                       <span>{item}</span>
-                      <button onClick={() => setItensGanhoLocal(prev => prev.filter(i => i !== item))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
+                      <button onClick={() => {
+                        const newGanhos = itensGanhoLocal.filter(i => i !== item);
+                        setItensGanhoLocal(newGanhos);
+                        localStorage.setItem(STORAGE_KEY_GANHOS, JSON.stringify(newGanhos));
+                      }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
                   {turnoAtual.horas.map(hora => {

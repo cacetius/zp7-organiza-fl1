@@ -33,7 +33,7 @@ export default function ProductionControl() {
   const qc = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedTurno, setSelectedTurno] = useState("segundo");
+  const [selectedTurno, setSelectedTurno] = useState(() => localStorage.getItem("zp7_prod_turno") || "segundo");
   const [editingCell, setEditingCell] = useState(null);
   const [mostrarExtras, setMostrarExtras] = useState(false);
   const longPressTimers = useRef({});
@@ -319,7 +319,7 @@ export default function ProductionControl() {
           <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border-0 bg-transparent h-7 w-32 text-sm text-center p-0 focus-visible:ring-0" />
           <button onClick={() => setSelectedDate(format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd"))} className="p-1 hover:text-primary rounded"><ChevronRight className="w-4 h-4" /></button>
         </div>
-        <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); setMostrarExtras(false); }}>
+        <Select value={selectedTurno} onValueChange={v => { setSelectedTurno(v); setMostrarExtras(false); localStorage.setItem("zp7_prod_turno", v); }}>
           <SelectTrigger className="h-9 w-full sm:w-56"><SelectValue /></SelectTrigger>
           <SelectContent>{listaTurnos.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
         </Select>
