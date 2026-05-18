@@ -18,8 +18,6 @@ const DEFAULT_ITEMS = [
   "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
 ];
 
-const STORAGE_KEY_TIPOS = "zp7_loss_tipos_perda";
-
 const TURNOS = [
   { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00"] },
   { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"] },
@@ -49,21 +47,6 @@ export default function LossControl() {
   const [itensGanhoLocal, setItensGanhoLocal] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY_GANHOS) || "[]"); } catch { return []; }
   });
-  // Mapa de tipo por item: { "ITEM": "perda_producao" | "perda_defeito" }
-  const [tiposPerda, setTiposPerda] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_TIPOS) || "{}"); } catch { return {}; }
-  });
-
-  const getTipoItem = (item) => tiposPerda[item] || "perda_defeito";
-
-  const toggleTipoItem = (item) => {
-    const atual = getTipoItem(item);
-    const novo = atual === "perda_producao" ? "perda_defeito" : "perda_producao";
-    const updated = { ...tiposPerda, [item]: novo };
-    setTiposPerda(updated);
-    localStorage.setItem(STORAGE_KEY_TIPOS, JSON.stringify(updated));
-  };
-
   const [novoItem, setNovoItem] = useState("");
   const [ganhoSelecionado, setGanhoSelecionado] = useState("");
   const longPressTimers = useRef({});
@@ -197,7 +180,7 @@ export default function LossControl() {
     } else if (!cell) {
       pendingOps.current[opKey] = true;
       createCell.mutate(
-        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro", tipo_perda: getTipoItem(item) },
+        { item_perda: item, hora, turno: selectedTurno, data: selectedDate, carros_perdidos: newVal, carros_planejados: 0, carros_produzidos: 0, motivo_perda: "outro" },
         { onSettled: () => { delete pendingOps.current[opKey]; } }
       );
     }
@@ -528,19 +511,17 @@ export default function LossControl() {
             <SelectContent>{TURNOS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2">
           <Input
-            placeholder="+ Novo item de perda..."
+            placeholder="+ Item de perda..."
             value={novoItem}
             onChange={e => setNovoItem(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addItem()}
-            className="h-9 text-sm flex-1 min-w-[140px]"
+            className="h-9 text-sm flex-1"
           />
           <Button size="sm" variant="outline" onClick={addItem} disabled={!novoItem.trim()} className="border-red-500/40 text-red-400 px-3">
             <Plus className="w-3.5 h-3.5" />
           </Button>
-        </div>
-        <div className="flex gap-2">
           <Select value={ganhoSelecionado} onValueChange={setGanhoSelecionado}>
             <SelectTrigger className="h-9 flex-1 min-w-[130px] text-sm border-green-500/40 text-green-400">
               <SelectValue placeholder="+ Ganho..." />
@@ -610,27 +591,14 @@ export default function LossControl() {
                 <tr key={item} className={`group transition-colors ${isTop ? "bg-red-500/10 hover:bg-red-500/15" : idx % 2 === 0 ? "bg-card hover:bg-red-500/5" : "bg-muted/10 hover:bg-red-500/5"}`}>
                   <td className="border border-border px-3 py-1.5 font-medium whitespace-nowrap">
                     <div className="flex items-center justify-between gap-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={isTop ? "text-red-300 font-bold truncate" : "truncate"}>{isTop && "⚠ "}{item}</span>
-                        <button
-                          onClick={() => toggleTipoItem(item)}
-                          title="Clique para alternar: Produção ↔ Defeito"
-                          className={`shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full border transition-all ${
-                            getTipoItem(item) === "perda_defeito"
-                              ? "bg-red-500/20 text-red-300 border-red-500/40 hover:bg-red-500/35"
-                              : "bg-orange-500/20 text-orange-300 border-orange-500/40 hover:bg-orange-500/35"
-                          }`}
-                        >
-                          {getTipoItem(item) === "perda_producao" ? "PROD" : "DEF"}
-                        </button>
-                      </div>
+                      <span className={isTop ? "text-red-300 font-bold" : ""}>{isTop && "⚠ "}{item}</span>
                       <button onClick={() => {
                         const newItens = itens.filter(i => i !== item);
                         const newExtras = itensExtras.filter(i => i !== item);
                         setItens(newItens);
                         setItensExtras(newExtras);
                         localStorage.setItem(STORAGE_KEY_ITENS, JSON.stringify(newExtras));
-                      }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1 shrink-0"><X className="w-3 h-3" /></button>
+                      }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all ml-1"><X className="w-3 h-3" /></button>
                     </div>
                   </td>
                   {turnoAtual.horas.map(hora => {

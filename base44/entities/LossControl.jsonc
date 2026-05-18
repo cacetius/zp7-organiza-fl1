@@ -48,17 +48,8 @@
         "setup",
         "qualidade",
         "operacional",
-        "outro",
-        "ganho"
+        "outro"
       ]
-    },
-    "tipo_perda": {
-      "type": "string",
-      "enum": [
-        "perda_producao",
-        "perda_defeito"
-      ],
-      "description": "Classifica se a perda impacta produ\u00e7\u00e3o ou defeito/qualidade"
     },
     "tempo_parado_min": {
       "type": "number",
@@ -75,5 +66,66 @@
   "required": [
     "turno",
     "data"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "data.turno": "{{user.data.turno}}"
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }
