@@ -68,13 +68,11 @@ export default function Dashboard() {
   // KPIs do turno atual (memoizados)
   const { totalProduzidoTurno, totalPerdidoTurno, producaoLiquidaTurno } = useMemo(() => {
     const prodTurno = allProd.filter(p => p.turno === currentShift.key);
-    const lossesTurno = allLosses.filter(l => l.turno === currentShift.key);
     const totalProd = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
-    const perdas = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-    const ganhos = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-    const totalPerdido = Math.max(0, perdas - ganhos);
+    // Perdas vêm dos próprios registros do ProductionControl (perdas operacionais + defeito)
+    const totalPerdido = prodTurno.reduce((s, p) => s + (p.perdas_producao || 0) + (p.perdas_defeito || 0), 0);
     return { totalProduzidoTurno: totalProd, totalPerdidoTurno: totalPerdido, producaoLiquidaTurno: Math.max(0, totalProd - totalPerdido) };
-  }, [allProd, allLosses, currentShift.key]);
+  }, [allProd, currentShift.key]);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 
