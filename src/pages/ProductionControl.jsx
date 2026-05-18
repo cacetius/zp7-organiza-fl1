@@ -48,6 +48,7 @@ export default function ProductionControl() {
   const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
   const [editingCell, setEditingCell] = useState(null); // { testor, hora, field, value }
   const [mostrarExtras, setMostrarExtras] = useState(false);
+  const [lossModal, setLossModal] = useState(null); // { hora, field: "perdas_producao"|"perdas_defeito" }
 
   // Para justificativas por hora (globais, não por testor)
   const [editingJustificativa, setEditingJustificativa] = useState(null); // { hora, value }
@@ -75,6 +76,12 @@ export default function ProductionControl() {
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
+  });
+
+  const lossSheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
+  const { data: lossRecords = [] } = useQuery({
+    queryKey: [lossSheetKey],
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
   });
 
   const sheetKeyRef = useRef(sheetKey);
@@ -141,6 +148,27 @@ export default function ProductionControl() {
     });
     return map;
   }, [records]);
+
+  // Loss items grouped by tipo_perda and hora
+  const lossMapByTipoHora = useMemo(() => {
+    // { "perda_producao": { "07:00": [{item, count},...], ... }, "perda_defeito": {...} }
+    const map = { perda_producao: {}, perda_defeito: {} };
+    lossRecords.forEach(r => {
+      if (!r.item_perda || !r.hora || r.motivo_perda === "ganho") return;
+      const tipo = r.tipo_perda || "perda_producao";
+      if (!map[tipo]) return;
+      if (!map[tipo][r.hora]) map[tipo][r.hora] = [];
+      const existing = map[tipo][r.hora].find(x => x.item === r.item_perda);
+      if (existing) { existing.count += r.carros_perdidos ?? 1; }
+      else { map[tipo][r.hora].push({ item: r.item_perda, count: r.carros_perdidos ?? 1 }); }
+    });
+    return map;
+  }, [lossRecords]);
+
+  const getLossSumForHora = (hora, tipo) => {
+    const items = lossMapByTipoHora[tipo]?.[hora] || [];
+    return items.reduce((acc, x) => acc + x.count, 0);
+  };
 
   const getCell = (testorId, hora) => cellMapRef.current[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
 
@@ -405,6 +433,56 @@ export default function ProductionControl() {
         </div>
       )}
 
+      {/* Modal Itens do Controle de Perdas */}
+      {lossModal && (() => {
+        const tipo = lossModal.field; // "perdas_producao" | "perdas_defeito"
+        const tipoKey = tipo === "perdas_producao" ? "perda_producao" : "perda_defeito";
+        const tipoLabel = tipo === "perdas_producao" ? "Perdas de Produção" : "Perdas por Defeito";
+        const color = tipo === "perdas_producao" ? "orange" : "red";
+        const items = lossMapByTipoHora[tipoKey]?.[lossModal.hora] || [];
+        const total = items.reduce((a, x) => a + x.count, 0);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setLossModal(null)}>
+            <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-80 mx-4" onClick={e => e.stopPropagation()}>
+              <p className={`text-sm font-bold mb-0.5 ${color === "orange" ? "text-orange-400" : "text-red-400"}`}>
+                {tipoLabel} · {lossModal.hora}
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">Itens registrados no Controle de Perdas</p>
+              {items.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">Nenhum item registrado nessa hora no Controle de Perdas.</p>
+              ) : (
+                <div className="space-y-1.5 mb-3 max-h-52 overflow-y-auto">
+                  {items.map(x => (
+                    <div key={x.item} className="flex items-center justify-between px-3 py-1.5 rounded-md bg-muted/30">
+                      <span className="text-xs font-medium truncate flex-1">{x.item}</span>
+                      <span className={`text-sm font-black ml-3 ${color === "orange" ? "text-orange-400" : "text-red-400"}`}>{x.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {items.length > 0 && (
+                <div className={`flex items-center justify-between px-3 py-2 rounded-md mb-3 ${color === "orange" ? "bg-orange-500/15" : "bg-red-500/15"}`}>
+                  <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Total</span>
+                  <span className={`text-lg font-black ${color === "orange" ? "text-orange-400" : "text-red-400"}`}>{total}</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setLossModal(null)} className="flex-1 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Fechar</button>
+                {total > 0 && (
+                  <button onClick={() => {
+                    const val = total;
+                    saveField(testores[0], lossModal.hora, tipo === "perdas_producao" ? "perdas_producao" : "perdas_defeito", val);
+                    setLossModal(null);
+                  }} className={`flex-1 py-2.5 rounded-md text-sm font-bold text-white ${color === "orange" ? "bg-orange-600 hover:bg-orange-700" : "bg-red-600 hover:bg-red-700"}`}>
+                    Usar Total ({total})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal justificativa por hora */}
       {editingJustificativa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingJustificativa(null)}>
@@ -591,38 +669,54 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-blue-600 py-1.5 text-xs sm:text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
               </tr>
 
-              {/* PERDAS DE PRODUÇÃO — editável por hora */}
+              {/* PERDAS DE PRODUÇÃO — clique abre itens do controle de perdas */}
               <tr className="bg-orange-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-orange-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>PRODUÇÃO</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasProdPorHora[h] || 0;
+                  const lossSum = getLossSumForHora(h, "perda_producao");
                   return (
                     <td key={h} className="border border-border p-0.5">
-                      <button
-                        onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_producao", value: String(val) })}
-                        className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-orange-300 bg-orange-500/15 hover:bg-orange-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                      >
-                        {val > 0 ? val : <span className="text-[9px] opacity-40">+</span>}
-                      </button>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button
+                          onClick={() => setLossModal({ hora: h, field: "perdas_producao" })}
+                          className={`w-full h-7 rounded font-bold text-xs transition-all touch-manipulation relative ${val > 0 ? "text-orange-300 bg-orange-500/15 hover:bg-orange-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
+                          title="Clique para ver itens do Controle de Perdas"
+                        >
+                          {val > 0 ? val : <span className="text-[9px] opacity-40">—</span>}
+                          {lossSum > 0 && lossSum !== val && (
+                            <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">{lossSum}</span>
+                          )}
+                        </button>
+                        <button onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_producao", value: String(val) })} className="text-[8px] text-muted-foreground/30 hover:text-orange-400 transition-colors leading-none">✎</button>
+                      </div>
                     </td>
                   );
                 })}
                 <td className="border border-border text-center font-black text-white bg-orange-600 py-1.5 text-xs sm:text-sm">{totalPerdasProd > 0 ? totalPerdasProd : "—"}</td>
               </tr>
 
-              {/* PERDAS POR DEFEITO — editável por hora */}
+              {/* PERDAS POR DEFEITO — clique abre itens do controle de perdas */}
               <tr className="bg-red-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>DEFEITO</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasDefPorHora[h] || 0;
+                  const lossSum = getLossSumForHora(h, "perda_defeito");
                   return (
                     <td key={h} className="border border-border p-0.5">
-                      <button
-                        onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_defeito", value: String(val) })}
-                        className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-red-300 bg-red-500/15 hover:bg-red-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
-                      >
-                        {val > 0 ? val : <span className="text-[9px] opacity-40">+</span>}
-                      </button>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button
+                          onClick={() => setLossModal({ hora: h, field: "perdas_defeito" })}
+                          className={`w-full h-7 rounded font-bold text-xs transition-all touch-manipulation relative ${val > 0 ? "text-red-300 bg-red-500/15 hover:bg-red-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
+                          title="Clique para ver itens do Controle de Perdas"
+                        >
+                          {val > 0 ? val : <span className="text-[9px] opacity-40">—</span>}
+                          {lossSum > 0 && lossSum !== val && (
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full w-3.5 h-3.5 flex items-center justify-center leading-none">{lossSum}</span>
+                          )}
+                        </button>
+                        <button onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "perdas_defeito", value: String(val) })} className="text-[8px] text-muted-foreground/30 hover:text-red-400 transition-colors leading-none">✎</button>
+                      </div>
                     </td>
                   );
                 })}
