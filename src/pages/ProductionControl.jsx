@@ -257,9 +257,10 @@ export default function ProductionControl() {
 
   turnoAtual.horas.forEach(h => {
     totalPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
-    perdasProdPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).perdas_producao || 0), 0);
     perdasDefPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).perdas_defeito || 0), 0);
     objetivoPorHora[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
+    // Perda de produção = Objetivo - Produzido (mínimo 0)
+    perdasProdPorHora[h] = objetivoPorHora[h] > 0 ? Math.max(0, objetivoPorHora[h] - totalPorHora[h]) : 0;
   });
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
