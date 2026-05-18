@@ -77,12 +77,7 @@ export default function ProductionControl() {
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
     staleTime: 30_000,
   });
-  const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
-  const { data: lossRecords = [] } = useQuery({
-    queryKey: [lossKey],
-    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
-    staleTime: 30_000,
-  });
+
 
   const sheetKeyRef = useRef(sheetKey);
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
@@ -245,17 +240,17 @@ export default function ProductionControl() {
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
   }, [cellMap, testores, turnoAtual.horas]);
 
-  // Perda por Defeito = total bruto de perdas do Controle de Perdas (por hora, excluindo ganhos)
+  // Perda por Defeito = soma dos campos perdas_defeito dos registros do ProductionControl por hora
   const perdasDefPorHora = useMemo(() => {
     const map = {};
     turnoAtual.horas.forEach(h => { map[h] = 0; });
-    lossRecords
-      .filter(r => r.motivo_perda !== "ganho" && r.hora)
-      .forEach(r => {
-        if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
-      });
+    records.forEach(r => {
+      if (r.hora && map[r.hora] !== undefined) {
+        map[r.hora] += (r.perdas_defeito || 0);
+      }
+    });
     return map;
-  }, [lossRecords, turnoAtual.horas]);
+  }, [records, turnoAtual.horas]);
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
   const totalGeral = testores.reduce((acc, t) => acc + totalPorTestor(t), 0);
