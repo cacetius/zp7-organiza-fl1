@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Plus, ArrowRightLeft, Printer, RefreshCw, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { Plus, ArrowRightLeft, Printer, RefreshCw, CheckCircle2, FileSpreadsheet, Pencil, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { exportCsv } from "@/lib/exportCsv";
 import { format } from "date-fns";
 
@@ -29,6 +30,8 @@ const emptyForm = {
 export default function ShiftHandoff() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [loadingAutoFill, setLoadingAutoFill] = useState(false);
   const qc = useQueryClient();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -63,10 +66,53 @@ export default function ShiftHandoff() {
       qc.invalidateQueries({ queryKey: ["handoffs"] });
       setOpen(false);
       setForm(emptyForm);
-      // Guarda para imprimir após o estado ser atualizado
       pendingPrintRef.current = { ...vars, producao_realizada: Number(vars.producao_realizada) || 0, producao_planejada: Number(vars.producao_planejada) || 0, data: today };
     },
   });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, d }) => base44.entities.ShiftHandoff.update(id, {
+      ...d,
+      producao_realizada: Number(d.producao_realizada) || 0,
+      producao_planejada: Number(d.producao_planejada) || 0,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["handoffs"] });
+      setOpen(false);
+      setForm(emptyForm);
+      setEditingId(null);
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.ShiftHandoff.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["handoffs"] }); setDeleteTarget(null); },
+  });
+
+  const openEdit = (h) => {
+    setEditingId(h.id);
+    setForm({
+      turno_saindo: h.turno_saindo || "",
+      turno_entrando: h.turno_entrando || "",
+      responsavel: h.responsavel || "",
+      producao_realizada: String(h.producao_realizada || ""),
+      producao_planejada: String(h.producao_planejada || ""),
+      testores_com_problema: h.testores_com_problema || "",
+      ocorrencias_criticas: h.ocorrencias_criticas || "",
+      acoes_em_andamento: h.acoes_em_andamento || "",
+      alertas_proximo_turno: h.alertas_proximo_turno || "",
+    });
+    setOpen(true);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (editingId) {
+      updateMut.mutate({ id: editingId, d: form });
+    } else {
+      createMut.mutate(form);
+    }
+  };
 
   // Dispara impressão após salvar (evita closure stale)
   useEffect(() => {
@@ -181,13 +227,13 @@ export default function ShiftHandoff() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5"><FileSpreadsheet className="w-4 h-4" /> CSV</Button>
-          <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) setForm(emptyForm); }}>
+          <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) { setForm(emptyForm); setEditingId(null); } }}>
           <DialogTrigger asChild>
             <Button><Plus className="w-4 h-4 mr-1" /> Nova Passagem</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Encerrar Turno e Registrar Passagem</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(form); }} className="space-y-3">
+            <DialogHeader><DialogTitle>{editingId ? "Editar Passagem de Turno" : "Encerrar Turno e Registrar Passagem"}</DialogTitle></DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-3">
 
               {/* Seleção de turno — dispara auto-preenchimento */}
               <div className="grid grid-cols-2 gap-3">
@@ -262,9 +308,9 @@ export default function ShiftHandoff() {
                 <Textarea value={form.alertas_proximo_turno} onChange={e => u("alertas_proximo_turno", e.target.value)} rows={2} placeholder="O que o próximo turno precisa saber" />
               </div>
 
-              <Button type="submit" size="lg" className="w-full bg-primary" disabled={createMut.isPending}>
-                <Printer className="w-4 h-4 mr-2" />
-                {createMut.isPending ? "Salvando..." : "Encerrar Turno e Gerar Relatório PDF"}
+              <Button type="submit" size="lg" className="w-full bg-primary" disabled={createMut.isPending || updateMut.isPending}>
+                {editingId ? <Pencil className="w-4 h-4 mr-2" /> : <Printer className="w-4 h-4 mr-2" />}
+                {createMut.isPending || updateMut.isPending ? "Salvando..." : editingId ? "Salvar Alterações" : "Encerrar Turno e Gerar Relatório PDF"}
               </Button>
             </form>
           </DialogContent>
@@ -289,9 +335,11 @@ export default function ShiftHandoff() {
                   <CardTitle className="text-base font-bold">
                     {turnoLabels[h.turno_saindo] || h.turno_saindo} → {turnoLabels[h.turno_entrando] || h.turno_entrando}
                   </CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">{h.data}</span>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePrint(h)}><Printer className="w-3.5 h-3.5" /></Button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary" onClick={() => openEdit(h)}><Pencil className="w-3.5 h-3.5" /></Button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(h)}><Trash2 className="w-3.5 h-3.5" /></Button>
                   </div>
                 </div>
                 {h.responsavel && <p className="text-xs text-muted-foreground">Responsável: {h.responsavel}</p>}
@@ -320,6 +368,18 @@ export default function ShiftHandoff() {
           );
         })}
       </div>
+      <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Passagem de Turno</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground" onClick={() => deleteMut.mutate(deleteTarget.id)}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
