@@ -49,8 +49,7 @@ export default function ProductionControl() {
   const [editingCell, setEditingCell] = useState(null); // { testor, hora, field, value }
   const [mostrarExtras, setMostrarExtras] = useState(false);
 
-  // Para justificativas por hora (globais, não por testor)
-  const [editingJustificativa, setEditingJustificativa] = useState(null); // { hora, value }
+  const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value }
 
   const longPressTimers = useRef({});
   const clickCounters = useRef({});
@@ -137,7 +136,18 @@ export default function ProductionControl() {
   }, [records]);
   useEffect(() => { cellMapRef.current = cellMap; }, [cellMap]);
 
-  // Justificativas globais por hora (agrupadas de todos os testores)
+  // Justificativas por testor+hora
+  const justificativasPorTestorHora = useMemo(() => {
+    const map = {};
+    records.forEach(r => {
+      if (r.testor_id && r.hora && r.justificativa) {
+        map[`${r.testor_id}-${r.hora}`] = r.justificativa;
+      }
+    });
+    return map;
+  }, [records]);
+
+  // Para impressão: justificativas por hora (qualquer testor)
   const justificativasPorHora = useMemo(() => {
     const map = {};
     records.forEach(r => {
@@ -170,19 +180,13 @@ export default function ProductionControl() {
     }
   };
 
-  // Salvar justificativa para todos os testores nessa hora
-  const saveJustificativaHora = (hora, texto) => {
-    const testoresComRegistro = testores.filter(t => cellMapRef.current[t.id]?.[hora]);
-    if (testoresComRegistro.length > 0) {
-      testoresComRegistro.forEach(t => {
-        const cell = cellMapRef.current[t.id]?.[hora];
-        if (cell && !cell.id?.startsWith?.("temp-")) {
-          updateRec.mutate({ id: cell.id, justificativa: texto });
-        }
-      });
-    } else if (testores.length > 0) {
-      // Salva no primeiro testor
-      saveField(testores[0], hora, "justificativa", texto);
+  // Salvar justificativa apenas para o testor específico nessa hora
+  const saveJustificativaTestorHora = (testor, hora, texto) => {
+    const cell = cellMapRef.current[testor.id]?.[hora];
+    if (cell && !cell.id?.startsWith?.("temp-")) {
+      updateRec.mutate({ id: cell.id, justificativa: texto });
+    } else {
+      saveField(testor, hora, "justificativa", texto);
     }
   };
 
@@ -219,7 +223,7 @@ export default function ProductionControl() {
     if (!editingCell) return;
     const { testor, hora, field, value } = editingCell;
     if (field === "justificativa") {
-      saveJustificativaHora(hora, value);
+      saveJustificativaTestorHora(testor, hora, value);
     } else {
       const num = parseInt(value, 10);
       if (!isNaN(num) && num >= 0) saveField(testor, hora, field, num);
@@ -426,19 +430,19 @@ export default function ProductionControl() {
       {editingJustificativa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingJustificativa(null)}>
           <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-80 mx-4" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-semibold mb-1 text-foreground">Justificativa · {editingJustificativa.hora}</p>
-            <p className="text-xs text-muted-foreground mb-3">Descreva o motivo das perdas nesse horário</p>
+            <p className="text-sm font-semibold mb-1 text-foreground">{editingJustificativa.testor?.nome} · {editingJustificativa.hora}</p>
+            <p className="text-xs text-muted-foreground mb-3">Justificativa das perdas nesse horário</p>
             <textarea
               autoFocus rows={3}
               value={editingJustificativa.value}
               onChange={e => setEditingJustificativa(prev => ({ ...prev, value: e.target.value }))}
               onKeyDown={e => { if (e.key === "Escape") setEditingJustificativa(null); }}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-4 resize-none"
-              placeholder="Ex: Testor 03 parado por ajuste de sensor..."
+              placeholder="Descreva o motivo das perdas nesse horário..."
             />
             <div className="flex gap-2">
               <button onClick={() => setEditingJustificativa(null)} className="flex-1 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
-              <button onClick={() => { saveJustificativaHora(editingJustificativa.hora, editingJustificativa.value); setEditingJustificativa(null); }} className="flex-1 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90">Salvar</button>
+              <button onClick={() => { saveJustificativaTestorHora(editingJustificativa.testor, editingJustificativa.hora, editingJustificativa.value); setEditingJustificativa(null); }} className="flex-1 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90">Salvar</button>
             </div>
           </div>
         </div>
@@ -558,15 +562,15 @@ export default function ProductionControl() {
                       })}
                       <td className="border border-border px-1 py-2 text-center font-black text-blue-400 bg-blue-500/5 text-sm">{total > 0 ? total : "—"}</td>
                     </tr>
-                    {/* Linha de justificativa — abaixo do testor */}
+                    {/* Linha de justificativa — abaixo do testor, independente por testor */}
                     <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
                       <td className="border border-border px-2 py-1 text-yellow-400/70 text-[9px] font-semibold whitespace-nowrap">💬 justif.</td>
                       {turnoAtual.horas.map(hora => {
-                        const just = justificativasPorHora[hora] || "";
+                        const just = justificativasPorTestorHora[`${testor.id}-${hora}`] || "";
                         return (
                           <td key={hora} className="border border-border p-0.5">
                             <button
-                              onClick={() => setEditingJustificativa({ hora, value: just })}
+                              onClick={() => setEditingJustificativa({ testor, hora, value: just })}
                               className={`w-full min-h-[28px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation break-words
                                 ${just ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/20 hover:bg-muted/20 text-center"}`}
                               title={just || "Clique para adicionar justificativa"}

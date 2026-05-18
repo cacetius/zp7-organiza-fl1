@@ -208,9 +208,9 @@ export default function Dashboard() {
               };
               const statusLabel = { rodando: "Rodando", atencao: "Atenção", parado: "Parado", manutencao: "Manutenção", bloqueado: "Bloqueado" };
 
-              // Última justificativa registrada hoje para este testor
+              // Última justificativa registrada hoje para este testor (por testor_id ou testor_nome)
               const ultimaJust = prodToday
-                .filter(p => p.testor_nome === t.nome && p.justificativa)
+                .filter(p => (p.testor_id === t.id || p.testor_nome === t.nome) && p.justificativa)
                 .sort((a, b) => (b.hora || "").localeCompare(a.hora || ""))
                 [0]?.justificativa;
 
