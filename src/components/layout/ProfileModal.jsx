@@ -24,6 +24,7 @@ export default function ProfileModal({ open, onClose, profile, onSaved }) {
       funcao: form.funcao,
       turno: form.turno,
       area: form.area,
+      telefone: form.telefone,
     });
     setSaving(false);
     onSaved?.();
@@ -55,12 +56,16 @@ export default function ProfileModal({ open, onClose, profile, onSaved }) {
             <Input required value={form.nome || ""} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
           </div>
           <div className="space-y-1">
-            <Label>Matrícula</Label>
+            <Label>Chapa</Label>
             <Input required value={form.matricula || ""} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} />
           </div>
           <div className="space-y-1">
             <Label>Área</Label>
             <Input value={form.area || ""} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} placeholder="Ex: ZP7 - Linha A" />
+          </div>
+          <div className="space-y-1">
+            <Label>Telefone / WhatsApp</Label>
+            <Input value={form.telefone || ""} onChange={e => setForm(f => ({ ...f, telefone: e.target.value }))} placeholder="Ex: 5512999999999" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
