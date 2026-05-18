@@ -11,15 +11,17 @@ import { base44 } from "@/api/base44Client";
 import AppLayout from "./components/layout/AppLayout";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
-import Tasks from "./pages/Tasks";
-import Testores from "./pages/Testores";
-import Occurrences from "./pages/Occurrences";
-import Checklist from "./pages/Checklist";
-import ShiftHandoff from "./pages/ShiftHandoff";
-import Maintenance from "./pages/Maintenance";
-import Reports from "./pages/Reports";
-import LossControl from "./pages/LossControl";
-import ProductionControl from "./pages/ProductionControl";
+
+// Lazy load de todas as páginas secundárias — carregam só quando o usuário navegar
+const Tasks = React.lazy(() => import("./pages/Tasks"));
+const Testores = React.lazy(() => import("./pages/Testores"));
+const Occurrences = React.lazy(() => import("./pages/Occurrences"));
+const Checklist = React.lazy(() => import("./pages/Checklist"));
+const ShiftHandoff = React.lazy(() => import("./pages/ShiftHandoff"));
+const Maintenance = React.lazy(() => import("./pages/Maintenance"));
+const Reports = React.lazy(() => import("./pages/Reports"));
+const LossControl = React.lazy(() => import("./pages/LossControl"));
+const ProductionControl = React.lazy(() => import("./pages/ProductionControl"));
 
 function AppShell() {
   const [profile, setProfile] = useState(null);
@@ -53,19 +55,25 @@ function AppShell() {
     return <Onboarding onComplete={loadProfile} />;
   }
 
+  const PageLoader = () => (
+    <div className="flex items-center justify-center h-40">
+      <div className="w-7 h-7 border-4 border-muted border-t-primary rounded-full animate-spin" />
+    </div>
+  );
+
   return (
     <Routes>
       <Route element={<AppLayout profile={profile} onProfileSaved={loadProfile} />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/tarefas" element={<Tasks />} />
-        <Route path="/testores" element={<Testores />} />
-        <Route path="/ocorrencias" element={<Occurrences />} />
-        <Route path="/checklist" element={<Checklist />} />
-        <Route path="/passagem-turno" element={<ShiftHandoff />} />
-        <Route path="/manutencao" element={<Maintenance />} />
-        <Route path="/relatorios" element={<Reports />} />
-        <Route path="/controle-perdas" element={<LossControl />} />
-        <Route path="/controle-producao" element={<ProductionControl />} />
+        <Route path="/tarefas" element={<React.Suspense fallback={<PageLoader />}><Tasks /></React.Suspense>} />
+        <Route path="/testores" element={<React.Suspense fallback={<PageLoader />}><Testores /></React.Suspense>} />
+        <Route path="/ocorrencias" element={<React.Suspense fallback={<PageLoader />}><Occurrences /></React.Suspense>} />
+        <Route path="/checklist" element={<React.Suspense fallback={<PageLoader />}><Checklist /></React.Suspense>} />
+        <Route path="/passagem-turno" element={<React.Suspense fallback={<PageLoader />}><ShiftHandoff /></React.Suspense>} />
+        <Route path="/manutencao" element={<React.Suspense fallback={<PageLoader />}><Maintenance /></React.Suspense>} />
+        <Route path="/relatorios" element={<React.Suspense fallback={<PageLoader />}><Reports /></React.Suspense>} />
+        <Route path="/controle-perdas" element={<React.Suspense fallback={<PageLoader />}><LossControl /></React.Suspense>} />
+        <Route path="/controle-producao" element={<React.Suspense fallback={<PageLoader />}><ProductionControl /></React.Suspense>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

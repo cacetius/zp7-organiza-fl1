@@ -53,18 +53,13 @@ export default function Dashboard() {
   const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });
   const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }) });
-  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.list("-created_date", 500) });
-   const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.list("-created_date", 500) });
-   const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.list() });
+  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000 });
+  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000 });
+  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000 });
 
-   // Usa data mais recente disponível (hoje se houver, senão o último dia com dados)
-   const lastProdDate = allProd.length > 0
-     ? allProd.reduce((latest, p) => p.data > latest ? p.data : latest, allProd[0].data)
-     : today;
-   const activeDate = allProd.some(p => p.data === today) ? today : lastProdDate;
-
-   const prodToday = allProd.filter(p => p.data === activeDate);
-   const lossesToday = allLosses.filter(l => l.data === activeDate);
+  const activeDate = today;
+  const prodToday = allProd;
+  const lossesToday = allLosses;
 
    const currentShift = detectCurrentShift();
    const shiftProdData = getTodayShiftData(prodToday, currentShift.key);
