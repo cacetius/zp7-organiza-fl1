@@ -507,38 +507,61 @@ export default function ProductionControl() {
               </tr>
             </thead>
             <tbody>
-              {/* Linhas de testores — só produção (toque/incremento) */}
+              {/* Linhas de testores — produção + justificativa logo abaixo */}
               {testores.map((testor, idx) => {
                 const total = totalPorTestor(testor);
                 return (
-                  <tr key={testor.id} className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
-                    <td className="border border-border px-2 py-1 font-semibold whitespace-nowrap text-[11px] sm:text-sm">{testor.nome}</td>
-                    {turnoAtual.horas.map(hora => {
-                      const cell = getCell(testor.id, hora);
-                      const val = cell.producao || 0;
-                      return (
-                        <td key={hora} className="border border-border p-0.5 sm:p-1">
-                          <div className="flex flex-col items-center gap-0">
-                            <button
-                              onPointerDown={() => startLongPress(testor, hora, "producao")}
-                              onPointerUp={() => { cancelLongPress(testor, hora, "producao"); handleIncrementProducao(testor, hora); }}
-                              onPointerLeave={() => cancelLongPress(testor, hora, "producao")}
-                              className={`w-full min-w-[44px] h-10 sm:h-11 rounded-md font-black text-sm sm:text-base transition-all select-none touch-manipulation
-                                ${val > 0 ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/35 active:scale-95" : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"}`}
-                            >
-                              {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
-                            </button>
-                            {val > 0 && (
-                              <button onClick={() => saveField(testor, hora, "producao", val - 1)} className="text-muted-foreground/40 hover:text-red-400 transition-colors p-1 touch-manipulation">
-                                <Minus className="w-3.5 h-3.5" />
+                  <React.Fragment key={testor.id}>
+                    {/* Linha de produção */}
+                    <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                      <td className="border border-border px-2 py-1 font-semibold whitespace-nowrap text-[11px] sm:text-sm">{testor.nome}</td>
+                      {turnoAtual.horas.map(hora => {
+                        const cell = getCell(testor.id, hora);
+                        const val = cell.producao || 0;
+                        return (
+                          <td key={hora} className="border border-border p-0.5 sm:p-1">
+                            <div className="flex flex-col items-center gap-0">
+                              <button
+                                onPointerDown={() => startLongPress(testor, hora, "producao")}
+                                onPointerUp={() => { cancelLongPress(testor, hora, "producao"); handleIncrementProducao(testor, hora); }}
+                                onPointerLeave={() => cancelLongPress(testor, hora, "producao")}
+                                className={`w-full min-w-[44px] h-10 sm:h-11 rounded-md font-black text-sm sm:text-base transition-all select-none touch-manipulation
+                                  ${val > 0 ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/35 active:scale-95" : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"}`}
+                              >
+                                {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="border border-border px-1 py-2 text-center font-black text-blue-400 bg-blue-500/5 text-sm">{total > 0 ? total : "—"}</td>
-                  </tr>
+                              {val > 0 && (
+                                <button onClick={() => saveField(testor, hora, "producao", val - 1)} className="text-muted-foreground/40 hover:text-red-400 transition-colors p-1 touch-manipulation">
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className="border border-border px-1 py-2 text-center font-black text-blue-400 bg-blue-500/5 text-sm">{total > 0 ? total : "—"}</td>
+                    </tr>
+                    {/* Linha de justificativa — abaixo do testor */}
+                    <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                      <td className="border border-border px-2 py-1 text-yellow-400/70 text-[9px] font-semibold whitespace-nowrap">💬 justif.</td>
+                      {turnoAtual.horas.map(hora => {
+                        const just = justificativasPorHora[hora] || "";
+                        return (
+                          <td key={hora} className="border border-border p-0.5">
+                            <button
+                              onClick={() => setEditingJustificativa({ hora, value: just })}
+                              className={`w-full min-h-[28px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation break-words
+                                ${just ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/20 hover:bg-muted/20 text-center"}`}
+                              title={just || "Clique para adicionar justificativa"}
+                            >
+                              {just ? (just.length > 12 ? just.slice(0, 10) + "…" : just) : <span className="block text-center opacity-40">✎</span>}
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td className="border border-border" />
+                    </tr>
+                  </React.Fragment>
                 );
               })}
 
@@ -616,26 +639,7 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-green-600 py-1.5 text-xs sm:text-sm">{producaoLiquida > 0 ? producaoLiquida : "—"}</td>
               </tr>
 
-              {/* JUSTIFICATIVAS — logo abaixo dos testores, por horário */}
-              <tr className="bg-yellow-500/5 border-t-2 border-yellow-500/20">
-                <td className="border border-border px-2 py-1.5 font-black text-yellow-400 uppercase text-[10px] sm:text-xs leading-tight">💬 JUSTIF.</td>
-                {turnoAtual.horas.map(h => {
-                  const just = justificativasPorHora[h] || "";
-                  return (
-                    <td key={h} className="border border-border p-1">
-                      <button
-                        onClick={() => setEditingJustificativa({ hora: h, value: just })}
-                        className={`w-full min-h-[40px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation whitespace-pre-wrap break-words
-                          ${just ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/30 hover:bg-muted/30 text-center"}`}
-                        title={just || "Clique para adicionar justificativa"}
-                      >
-                        {just || <span className="text-[10px] opacity-40 block text-center">✎</span>}
-                      </button>
-                    </td>
-                  );
-                })}
-                <td className="border border-border text-center text-muted-foreground/30 text-[9px] py-1.5">—</td>
-              </tr>
+
             </tbody>
           </table>
         </div>
