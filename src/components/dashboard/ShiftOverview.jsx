@@ -11,12 +11,23 @@ export default function ShiftOverview({ prodData, maintenanceData, isHistorical 
 
   const { shiftProduction, shiftLosses, shiftObjetivo, eficiencia, perdasProducao, perdasDefeito } = useMemo(() => {
     const records = prodData || [];
-    const producao = records.reduce((sum, p) => sum + (p.carros_produzidos || 0), 0);
-    const objetivo = records.reduce((sum, p) => sum + (p.objetivo || 0), 0);
-    // Perdas de produção = objetivo - produção (calculado)
-    const perdasProd = objetivo > 0 ? Math.max(0, objetivo - producao) : 0;
-    // Perdas por defeito = soma do campo perdas_defeito
-    const perdasDef = records.reduce((sum, p) => sum + (p.perdas_defeito || 0), 0);
+    
+    // Agrupar por hora para evitar duplicação (múltiplos testores na mesma hora)
+    const porHora = {};
+    records.forEach(p => {
+      if (!porHora[p.hora]) porHora[p.hora] = { producao: 0, objetivo: 0, perdas_defeito: 0 };
+      porHora[p.hora].producao += (p.carros_produzidos || 0);
+      porHora[p.hora].objetivo += (p.objetivo || 0);
+      porHora[p.hora].perdas_defeito += (p.perdas_defeito || 0);
+    });
+    
+    // Calcular totais a partir do agrupamento por hora
+    const producao = Object.values(porHora).reduce((s, h) => s + h.producao, 0);
+    const objetivo = Object.values(porHora).reduce((s, h) => s + h.objetivo, 0);
+    // Perdas de produção = objetivo - produção (calculado por hora, depois somado)
+    const perdasProd = Object.values(porHora).reduce((s, h) => s + Math.max(0, h.objetivo - h.producao), 0);
+    // Perdas por defeito = soma do campo perdas_defeito por hora
+    const perdasDef = Object.values(porHora).reduce((s, h) => s + h.perdas_defeito, 0);
     // Total de perdas = perdas de produção + perdas por defeito
     const perdasTotais = perdasProd + perdasDef;
     const efic = objetivo > 0 ? Math.min(100, Math.round((producao / objetivo) * 100)) : null;
