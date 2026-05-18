@@ -450,8 +450,14 @@ export default function ProductionControl() {
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2"><Factory className="w-5 h-5 text-blue-400 shrink-0" /> Controle de Produção</h1>
           <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-snug">
-            Toque para +1 · 4× zera · Segure para digitar · Botão − diminui
+            Toque: +1 · 4× zera · Segure: digitar · Botão −: diminuir
           </p>
+          {(createRec.isPending || updateRec.isPending || deleteRec.isPending) && (
+            <p className="text-[10px] text-primary mt-0.5 flex items-center gap-1">
+              <span className="w-2.5 h-2.5 border-2 border-primary border-t-transparent rounded-full animate-spin inline-block" />
+              Salvando...
+            </p>
+          )}
         </div>
         <div className="flex gap-1.5 shrink-0">
           <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline text-xs">CSV</span></Button>
@@ -484,21 +490,38 @@ export default function ProductionControl() {
 
       {/* KPIs */}
       {(totalGeral > 0 || totalPerdasProd > 0 || totalPerdasDef > 0) && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {[
-            { label: "Objetivo", value: totalObjetivo || "—", color: "text-cyan-400", border: "border-cyan-500/20" },
-            { label: "Produção", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
-            { label: "Perdas Produção", value: totalPerdasProd, color: "text-orange-400", border: "border-orange-500/20" },
-            { label: "Perdas Defeito", value: totalPerdasDef, color: "text-red-400", border: "border-red-500/20" },
-            { label: "Real Líquido", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
-          ].map(k => (
-            <Card key={k.label} className={`border ${k.border}`}>
-              <CardContent className="p-2.5 sm:p-3 text-center">
-                <p className={`text-xl sm:text-2xl font-black ${k.color}`}>{k.value}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{k.label}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {[
+              { label: "Objetivo", value: totalObjetivo || "—", color: "text-cyan-400", border: "border-cyan-500/20" },
+              { label: "Produção", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
+              { label: "Perdas Produção", value: totalPerdasProd, color: "text-orange-400", border: "border-orange-500/20" },
+              { label: "Perdas Defeito", value: totalPerdasDef, color: "text-red-400", border: "border-red-500/20" },
+              { label: "Real Líquido", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
+            ].map(k => (
+              <Card key={k.label} className={`border ${k.border}`}>
+                <CardContent className="p-2.5 sm:p-3 text-center">
+                  <p className={`text-xl sm:text-2xl font-black ${k.color}`}>{k.value}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{k.label}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {/* Barra de eficiência */}
+          {totalObjetivo > 0 && (
+            <div className="px-3 py-2 rounded-lg bg-muted/30 border border-border space-y-1">
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-muted-foreground font-medium">Eficiência do turno (Produção / Objetivo)</span>
+                <span className={`font-black ${efic >= 90 ? "text-green-400" : efic >= 70 ? "text-yellow-400" : "text-red-400"}`}>{efic}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(efic, 100)}%`, background: efic >= 90 ? "hsl(142,71%,45%)" : efic >= 70 ? "hsl(38,92%,50%)" : "hsl(0,72%,51%)" }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

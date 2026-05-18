@@ -76,6 +76,8 @@ export default function Dashboard() {
   }, [allProd, currentShift.key]);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
+  const totalObjetivoTurno = useMemo(() => allProd.filter(p => p.turno === currentShift.key).reduce((s, p) => s + (p.objetivo || 0), 0), [allProd, currentShift.key]);
+  const eficienciaTurno = totalObjetivoTurno > 0 ? Math.min(100, Math.round((totalProduzidoTurno / totalObjetivoTurno) * 100)) : null;
 
   return (
     <div className="space-y-4 pb-24 lg:pb-6">
@@ -114,6 +116,25 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Barra de eficiência do turno */}
+      {eficienciaTurno !== null && (
+        <div className="px-4 py-3 rounded-xl bg-muted/30 border border-border space-y-1.5">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-semibold text-muted-foreground">Eficiência — {shiftLabel}</span>
+            <span className={`font-black text-sm ${eficienciaTurno >= 90 ? "text-green-400" : eficienciaTurno >= 70 ? "text-yellow-400" : "text-red-400"}`}>{eficienciaTurno}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${eficienciaTurno}%`,
+                background: eficienciaTurno >= 90 ? "hsl(142,71%,45%)" : eficienciaTurno >= 70 ? "hsl(38,92%,50%)" : "hsl(0,72%,51%)"
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Indicador tempo real */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -24,7 +24,7 @@ export default function AppLayout({ profile, onProfileSaved }) {
             profile={profile}
             onProfileSaved={onProfileSaved}
           />
-          <main className="flex-1 p-4 pb-20 lg:p-6 lg:pb-6 overflow-auto">
+          <main className="flex-1 p-4 pb-24 lg:p-6 lg:pb-6 overflow-auto" style={{ overscrollBehavior: "contain" }}>
             <div className="max-w-screen-2xl mx-auto">
               <Outlet />
             </div>

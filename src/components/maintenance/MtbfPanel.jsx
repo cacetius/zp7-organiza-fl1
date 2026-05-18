@@ -26,20 +26,32 @@ function calcularIndicadores(eventos) {
   const totalTempoParado = eventos.reduce((sum, e) => sum + (Number(e.tempo_parado) || 0), 0);
   const totalTempoReparo = eventos.reduce((sum, e) => sum + (Number(e.tempo_reparo) || 0), 0);
 
-  // Tempo de operação estimado: 8h por turno, soma das entradas distintas de datas
+  // Tempo de operação: 9h por turno (turnos ZP7), soma das entradas distintas de datas
   const datasUnicas = [...new Set(eventos.map(e => e.data))].length;
-  const tempoOperacaoTotal = datasUnicas * 480; // 480 min = 8h por dia
+  const tempoOperacaoTotal = datasUnicas * 540; // 540 min = 9h por turno ZP7
 
-  const mtbf = totalFalhas > 0 ? Math.round((tempoOperacaoTotal - totalTempoParado) / totalFalhas) : 0;
+  // MTBF = (Tempo total de operação - Tempo total parado) / Nº de falhas
+  const tempoDisponivel = Math.max(0, tempoOperacaoTotal - totalTempoParado);
+  const mtbf = totalFalhas > 0 ? Math.round(tempoDisponivel / totalFalhas) : 0;
+
+  // MTTR = Tempo total de reparo / Nº de falhas
   const mttr = totalFalhas > 0 ? Math.round(totalTempoReparo / totalFalhas) : 0;
+
+  // Disponibilidade = Tempo disponível / Tempo total × 100
   const disponibilidade = tempoOperacaoTotal > 0
-    ? Math.round(((tempoOperacaoTotal - totalTempoParado) / tempoOperacaoTotal) * 100)
+    ? Math.min(100, Math.round((tempoDisponivel / tempoOperacaoTotal) * 100))
     : 100;
 
-  return { mtbf, mttr, disponibilidade, totalFalhas, totalTempoParado };
+  return { mtbf, mttr, disponibilidade, totalFalhas, totalTempoParado, totalTempoReparo };
 }
 
-const emptyForm = { testor_nome: "", data: new Date().toISOString().slice(0, 10), tempo_parado: "", tempo_reparo: "", motivo: "" };
+const TURNOS_LABELS = [
+  { key: "primeiro", label: "1º Turno (06h–15h)" },
+  { key: "segundo",  label: "2º Turno (15h–23h)" },
+  { key: "terceiro", label: "3º Turno (22h–06h)" },
+];
+
+const emptyForm = { testor_nome: "", data: new Date().toISOString().slice(0, 10), turno: "primeiro", tempo_parado: "", tempo_reparo: "", motivo: "" };
 
 export default function MtbfPanel() {
   const [open, setOpen] = useState(false);
@@ -105,7 +117,13 @@ export default function MtbfPanel() {
               <DialogTitle>📋 Registrar Parada</DialogTitle>
               <p className="text-xs text-muted-foreground">Preencha apenas o essencial. Os cálculos são automáticos.</p>
             </DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); createMut.mutate({ ...form, tempo_parado: Number(form.tempo_parado), tempo_reparo: Number(form.tempo_reparo) }); }} className="space-y-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!form.testor_nome) return;
+              if (!form.tempo_parado || Number(form.tempo_parado) <= 0) return;
+              if (!form.tempo_reparo || Number(form.tempo_reparo) < 0) return;
+              createMut.mutate({ ...form, tempo_parado: Number(form.tempo_parado), tempo_reparo: Number(form.tempo_reparo) });
+            }} className="space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Qual testor parou? *</Label>
                 <Select value={form.testor_nome} onValueChange={v => setForm({ ...form, testor_nome: v })} required>
@@ -117,9 +135,18 @@ export default function MtbfPanel() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Data da parada *</Label>
-                <Input type="date" required value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Data da parada *</Label>
+                  <Input type="date" required value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Turno</Label>
+                  <Select value={form.turno} onValueChange={v => setForm({ ...form, turno: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{TURNOS_LABELS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -232,19 +259,32 @@ export default function MtbfPanel() {
           {/* Resumo rápido */}
           {indicadoresFiltrado && (
             <Card className="bg-muted/20 border-border">
-              <CardContent className="p-4">
+              <CardContent className="p-4 space-y-3">
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold">O que isso significa?</p>
+                    <p className="text-sm font-semibold">Resumo de Falhas</p>
                     <p className="text-xs text-muted-foreground">
                       {filtroTestor === "todos" ? "Os testores registrados pararam" : `${filtroTestor} parou`}{" "}
                       <span className="text-foreground font-semibold">{indicadoresFiltrado.totalFalhas}x</span>,
-                      ficando parado por <span className="text-foreground font-semibold">{indicadoresFiltrado.totalTempoParado} min</span> no total.
-                      {indicadoresFiltrado.mttr > 60 && " ⚠️ O tempo de reparo está alto — vale investigar a causa raiz."}
-                      {indicadoresFiltrado.disponibilidade < 75 && " 🔴 Disponibilidade crítica — prioridade de ação imediata."}
-                      {indicadoresFiltrado.disponibilidade >= 90 && " ✅ Equipamento com boa disponibilidade."}
+                      ficando parado por <span className="text-foreground font-semibold">{indicadoresFiltrado.totalTempoParado} min</span> no total
+                      (reparo: <span className="text-orange-400 font-semibold">{indicadoresFiltrado.totalTempoReparo} min</span>).
+                      {indicadoresFiltrado.mttr > 60 && " ⚠️ Tempo de reparo alto — investigar causa raiz."}
+                      {indicadoresFiltrado.disponibilidade < 75 && " 🔴 Disponibilidade crítica — ação imediata."}
+                      {indicadoresFiltrado.disponibilidade >= 90 && " ✅ Boa disponibilidade."}
                     </p>
+                  </div>
+                </div>
+                {/* Fórmulas explicadas */}
+                <div className="grid grid-cols-3 gap-2 text-center border-t border-border pt-3">
+                  <div>
+                    <p className="text-[9px] text-muted-foreground font-mono">MTBF = (T.Op − T.Parado) / Falhas</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground font-mono">MTTR = T.Reparo / Falhas</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground font-mono">Disp = (T.Op − T.Parado) / T.Op</p>
                   </div>
                 </div>
               </CardContent>

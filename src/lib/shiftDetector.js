@@ -6,18 +6,18 @@ export function detectCurrentShift() {
   const now = new Date();
   const hours = now.getHours();
 
+  // 3º Turno: 00:00 - 05:59 (vem primeiro para não ser sobreposto)
+  if (hours >= 0 && hours < 6) {
+    return { key: "terceiro", label: "3º Turno (22h–06h)", start: 1320, end: 360 };
+  }
+
   // 1º Turno: 06:00 - 15:59
   if (hours >= 6 && hours < 16) {
-    return { key: "primeiro", label: "1º Turno (06h–15h)", start: 360, end: 900 };
+    return { key: "primeiro", label: "1º Turno (06h–15h)", start: 360, end: 960 };
   }
 
   // 2º Turno: 16:00 - 23:59
-  if (hours >= 16) {
-    return { key: "segundo", label: "2º Turno (15h–23h)", start: 900, end: 1380 };
-  }
-
-  // 3º Turno: 00:00 - 05:59
-  return { key: "terceiro", label: "3º Turno (01h–05h)", start: 60, end: 360 };
+  return { key: "segundo", label: "2º Turno (15h–23h)", start: 960, end: 1440 };
 }
 
 /**

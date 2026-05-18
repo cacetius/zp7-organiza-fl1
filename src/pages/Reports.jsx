@@ -86,7 +86,9 @@ export default function Reports() {
   const { data: lossRecords = [] } = useQuery({
     queryKey: ["loss-all"],
     queryFn: () => base44.entities.LossControl.list("-created_date", 2000),
-    staleTime: stale2m, enabled: tab === "perdas" || tab === "resumo",
+    staleTime: stale2m,
+    // Habilita para perdas e resumo; para as outras abas a comparação de datas pode precisar
+    enabled: tab === "perdas" || tab === "resumo" || tab === "producao",
   });
 
   const resumoTurnoObj = RESUMO_TURNOS.find(t => t.key === resumoTurno);
@@ -176,10 +178,11 @@ export default function Reports() {
   });
 
   // Global KPIs — baseados em ProductionControl e LossControl (não em testores)
+  // Habilitado sempre: usado no resumo (comparativo de turnos) e nas outras abas
   const { data: prodCtrlAll = [], isLoading: loadingProdAll } = useQuery({
     queryKey: ["prod-ctrl-all"],
     queryFn: () => base44.entities.ProductionControl.list("-created_date", 2000),
-    staleTime: stale2m, enabled: tab !== "resumo",
+    staleTime: stale2m,
   });
 
   const filteredProdCtrl = useMemo(() => {

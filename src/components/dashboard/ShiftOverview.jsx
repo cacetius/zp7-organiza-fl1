@@ -9,14 +9,14 @@ import { detectCurrentShift } from "@/lib/shiftDetector";
 export default function ShiftOverview({ prodData, maintenanceData, isHistorical }) {
   const currentShift = useMemo(() => detectCurrentShift(), []);
 
-  const { shiftProduction, shiftLosses } = useMemo(() => {
+  const { shiftProduction, shiftLosses, shiftObjetivo, eficiencia } = useMemo(() => {
     const records = prodData || [];
     const producao = records.reduce((sum, p) => sum + (p.carros_produzidos || 0), 0);
     const objetivo = records.reduce((sum, p) => sum + (p.objetivo || 0), 0);
-    // Perdas de produção = objetivo - produção (quando objetivo definido), + perdas por defeito
     const perdasProd = objetivo > 0 ? Math.max(0, objetivo - producao) : 0;
     const perdasDef = records.reduce((sum, p) => sum + (p.perdas_defeito || 0), 0);
-    return { shiftProduction: producao, shiftLosses: perdasProd + perdasDef };
+    const efic = objetivo > 0 ? Math.min(100, Math.round((producao / objetivo) * 100)) : null;
+    return { shiftProduction: producao, shiftLosses: perdasProd + perdasDef, shiftObjetivo: objetivo, eficiencia: efic };
   }, [prodData]);
 
   const shiftMaintenance = useMemo(() => {
@@ -68,16 +68,35 @@ export default function ShiftOverview({ prodData, maintenanceData, isHistorical 
           </div>
         </div>
 
-        {/* Status do turno */}
-        <div className="mt-4 pt-4 border-t border-border">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Status:</span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-green-400 font-medium">Em andamento</span>
-            </span>
+        {/* Eficiência do turno */}
+        {eficiencia !== null && (
+          <div className="mt-4 pt-4 border-t border-border space-y-1.5">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground">Eficiência (Prod/Obj)</span>
+              <span className={`font-black ${eficiencia >= 90 ? "text-green-400" : eficiencia >= 70 ? "text-yellow-400" : "text-red-400"}`}>{eficiencia}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${eficiencia}%`,
+                  background: eficiencia >= 90 ? "hsl(142,71%,45%)" : eficiencia >= 70 ? "hsl(38,92%,50%)" : "hsl(0,72%,51%)"
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
+        {eficiencia === null && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Status:</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="text-green-400 font-medium">{isHistorical ? "Encerrado" : "Em andamento"}</span>
+              </span>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

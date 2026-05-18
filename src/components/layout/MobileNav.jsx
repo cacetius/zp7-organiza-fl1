@@ -14,9 +14,9 @@ export default function MobileNav() {
   const location = useLocation();
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-      <div className="grid grid-cols-5 h-14">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/98 backdrop-blur-md border-t border-border shadow-lg"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}>
+      <div className="grid grid-cols-5 h-[56px]">
         {mobileNav.map((item) => {
           const active = location.pathname === item.path;
           return (

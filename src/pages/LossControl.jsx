@@ -486,7 +486,13 @@ export default function LossControl() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-bold flex items-center gap-2"><TrendingDown className="w-5 h-5 text-red-400" /> Controle de Perdas</h1>
-          <p className="text-[11px] text-muted-foreground">Toque +1 · Segure para digitar · − diminui</p>
+          <p className="text-[11px] text-muted-foreground">Toque: +1 · Segure: digitar · −: diminuir</p>
+          {(createCell.isPending || updateCell.isPending || deleteCell.isPending) && (
+            <p className="text-[10px] text-primary mt-0.5 flex items-center gap-1">
+              <span className="w-2.5 h-2.5 border-2 border-primary border-t-transparent rounded-full animate-spin inline-block" />
+              Salvando...
+            </p>
+          )}
         </div>
         <div className="flex gap-1.5">
           <Button variant="outline" size="sm" className="gap-1.5 text-green-400 border-green-500/30 px-2.5" onClick={handleExportExcel}>
