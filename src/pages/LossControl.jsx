@@ -54,7 +54,7 @@ export default function LossControl() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY_TIPOS) || "{}"); } catch { return {}; }
   });
 
-  const getTipoItem = (item) => tiposPerda[item] || "perda_producao";
+  const getTipoItem = (item) => tiposPerda[item] || "perda_defeito";
 
   const toggleTipoItem = (item) => {
     const atual = getTipoItem(item);
@@ -621,7 +621,7 @@ export default function LossControl() {
                               : "bg-orange-500/20 text-orange-300 border-orange-500/40 hover:bg-orange-500/35"
                           }`}
                         >
-                          {getTipoItem(item) === "perda_defeito" ? "DEF" : "PROD"}
+                          {getTipoItem(item) === "perda_producao" ? "PROD" : "DEF"}
                         </button>
                       </div>
                       <button onClick={() => {
