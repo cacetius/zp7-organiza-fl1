@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -70,16 +70,18 @@ export default function ProductionControl() {
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
     queryFn: () => base44.entities.Testor.list(),
+    staleTime: 60_000,
   });
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
+    staleTime: 30_000,
   });
-  // Busca os registros do Controle de Perdas para calcular Perda por Defeito
   const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+    staleTime: 30_000,
   });
 
   const sheetKeyRef = useRef(sheetKey);
@@ -158,7 +160,7 @@ export default function ProductionControl() {
     return map;
   }, [records]);
 
-  const getCell = (testorId, hora) => cellMapRef.current[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
+  const getCell = useCallback((testorId, hora) => cellMapRef.current[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" }, []);
 
   const saveField = (testor, hora, field, newVal) => {
     const cell = cellMapRef.current[testor.id]?.[hora];

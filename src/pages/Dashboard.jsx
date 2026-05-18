@@ -1,10 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import {
   Car, Target, TrendingDown, Gauge, AlertTriangle,
-  ClipboardList, Clock, ArrowRight, CheckCircle2, Factory,
+  ClipboardList, ArrowRight, CheckCircle2, Factory,
   Wrench, ArrowRightLeft, BarChart3, CheckSquare
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,39 +50,31 @@ export default function Dashboard() {
     return () => subs.forEach(u => u());
   }, []);
 
-  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });
-  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }) });
+  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 30_000 });
+  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 60_000 });
+  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 60_000 });
   const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000 });
   const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000 });
   const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000 });
 
-  const activeDate = today;
-  const prodToday = allProd;
-  const lossesToday = allLosses;
-
-   const currentShift = detectCurrentShift();
-   const shiftProdData = getTodayShiftData(prodToday, currentShift.key);
-   const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
-   const shiftLossData = getTodayShiftData(lossesToday, currentShift.key);
+  const currentShift = detectCurrentShift();
+  const shiftProdData = getTodayShiftData(allProd, currentShift.key);
+  const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
+  const shiftLossData = getTodayShiftData(allLosses, currentShift.key);
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
-  const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
+  const testoresParados = testores.filter(t => t.status === "parado" || t.status === "manutencao").length;
 
-  // Dados do turno atual (filtrados por turno)
-  const prodTurno = prodToday.filter(p => p.turno === currentShift.key);
-  const lossesTurno = lossesToday.filter(l => l.turno === currentShift.key);
-
-  // Produção bruta do turno
-  const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
-
-  // Perdas do turno
-  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const totalPerdidoTurno = Math.max(0, perdasBrutasTurno - ganhosTurno);
-
-  // Produção líquida do turno
-  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno - totalPerdidoTurno);
+  // KPIs do turno atual (memoizados)
+  const { totalProduzidoTurno, totalPerdidoTurno, producaoLiquidaTurno } = useMemo(() => {
+    const prodTurno = allProd.filter(p => p.turno === currentShift.key);
+    const lossesTurno = allLosses.filter(l => l.turno === currentShift.key);
+    const totalProd = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
+    const perdas = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+    const ganhos = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+    const totalPerdido = Math.max(0, perdas - ganhos);
+    return { totalProduzidoTurno: totalProd, totalPerdidoTurno: totalPerdido, producaoLiquidaTurno: Math.max(0, totalProd - totalPerdido) };
+  }, [allProd, allLosses, currentShift.key]);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 
@@ -100,13 +92,7 @@ export default function Dashboard() {
       </div>
 
       {/* Visão do turno atual */}
-       {activeDate !== today && (
-         <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-3 py-2 rounded-lg">
-           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-           Sem dados para hoje — exibindo dados de {format(new Date(activeDate + "T12:00:00"), "dd/MM/yyyy")}
-         </div>
-       )}
-       <ShiftOverview prodData={activeDate === today ? shiftProdData : prodToday} maintenanceData={shiftMaintenanceData} lossData={activeDate === today ? shiftLossData : lossesToday} isHistorical={activeDate !== today} />
+       <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} lossData={shiftLossData} isHistorical={false} />
 
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -186,7 +172,7 @@ export default function Dashboard() {
       </div>
 
       {/* Gráfico produção & perdas por turno */}
-      <ShiftProductionChart prodData={allProd} lossData={allLosses} date={activeDate} />
+      <ShiftProductionChart prodData={allProd} lossData={allLosses} date={today} />
 
       {/* Status Testores + Ocorrências */}
       <div className="grid lg:grid-cols-2 gap-4">
@@ -208,8 +194,8 @@ export default function Dashboard() {
               };
               const statusLabel = { rodando: "Rodando", atencao: "Atenção", parado: "Parado", manutencao: "Manutenção", bloqueado: "Bloqueado" };
 
-              // Última justificativa registrada hoje para este testor (por testor_id ou testor_nome)
-              const ultimaJust = prodToday
+              // Última justificativa registrada hoje para este testor
+              const ultimaJust = allProd
                 .filter(p => (p.testor_id === t.id || p.testor_nome === t.nome) && p.justificativa)
                 .sort((a, b) => (b.hora || "").localeCompare(a.hora || ""))
                 [0]?.justificativa;
