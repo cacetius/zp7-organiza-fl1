@@ -27,8 +27,11 @@ export default function ShiftProductionChart({ prodData, date }) {
     return TURNOS.map(({ key, label }) => {
       const records = prodData.filter(r => r.turno === key && (!date || r.data === date));
       const prod = records.reduce((s, r) => s + (r.carros_produzidos || 0), 0);
-      // Perdas = perdas_producao (operacional) + perdas_defeito (qualidade)
-      const perdas = records.reduce((s, r) => s + (r.perdas_producao || 0) + (r.perdas_defeito || 0), 0);
+      const obj = records.reduce((s, r) => s + (r.objetivo || 0), 0);
+      // Perdas produção = objetivo − produção (calculado); defeito = campo gravado
+      const perdasProd = obj > 0 ? Math.max(0, obj - prod) : 0;
+      const perdasDef = records.reduce((s, r) => s + (r.perdas_defeito || 0), 0);
+      const perdas = perdasProd + perdasDef;
       const liquida = Math.max(0, prod - perdas);
       const efic = prod > 0 ? Math.round((liquida / prod) * 100) : 0;
 
