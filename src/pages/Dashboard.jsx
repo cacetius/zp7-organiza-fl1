@@ -73,10 +73,16 @@ export default function Dashboard() {
     // Agrupar por hora para calcular totais corretamente (evita duplicação)
     const porHora = {};
     prodTurno.forEach(p => {
-      if (!porHora[p.hora]) porHora[p.hora] = { producao: 0, objetivo: 0, perdas_defeito: 0 };
+      if (!porHora[p.hora]) {
+        porHora[p.hora] = { producao: 0, objetivo: 0, perdas_defeito: 0 };
+      }
       porHora[p.hora].producao += (p.carros_produzidos || 0);
       porHora[p.hora].objetivo += (p.objetivo || 0);
-      porHora[p.hora].perdas_defeito += (p.perdas_defeito || 0);
+      // IMPORTANTE: perdas_defeito JÁ É O TOTAL DA HORA (não acumula por testor)
+      // Pega apenas o primeiro valor encontrado para esta hora
+      if (porHora[p.hora].perdas_defeito === 0) {
+        porHora[p.hora].perdas_defeito = (p.perdas_defeito || 0);
+      }
     });
     
     // Calcular totais a partir do agrupamento por hora
@@ -84,6 +90,7 @@ export default function Dashboard() {
     const totalObj = Object.values(porHora).reduce((s, h) => s + h.objetivo, 0);
     // Perdas de produção = objetivo - produção (calculado por hora, depois somado)
     const perdasProd = Object.values(porHora).reduce((s, h) => s + Math.max(0, h.objetivo - h.producao), 0);
+    // Perdas por defeito = usa o valor já registrado (não acumula)
     const perdasDef = Object.values(porHora).reduce((s, h) => s + h.perdas_defeito, 0);
     const totalPerdido = perdasProd + perdasDef;
     return { totalProduzidoTurno: totalProd, totalPerdidoTurno: totalPerdido, producaoLiquidaTurno: Math.max(0, totalProd - totalPerdido) };
