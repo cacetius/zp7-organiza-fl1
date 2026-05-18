@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertTriangle, Clock, TrendingUp, Zap, Plus, Info, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Clock, TrendingUp, Zap, Plus, Info, CheckCircle2, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 // Classificação do equipamento com base na disponibilidade
 function getDisponibilidadeInfo(disp) {
@@ -44,6 +45,7 @@ export default function MtbfPanel() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [filtroTestor, setFiltroTestor] = useState("todos");
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const qc = useQueryClient();
 
   const { data: testores = [] } = useQuery({
@@ -59,6 +61,11 @@ export default function MtbfPanel() {
   const createMut = useMutation({
     mutationFn: (d) => base44.entities.MtbfEvent.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["mtbf-eventos"] }); setOpen(false); setForm(emptyForm); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => base44.entities.MtbfEvent.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["mtbf-eventos"] }); setDeleteTarget(null); },
   });
 
   // Agrupa eventos por testor
@@ -299,6 +306,9 @@ export default function MtbfPanel() {
                       <p className="text-xs"><span className="text-muted-foreground">Parado:</span> <span className="font-semibold">{ev.tempo_parado} min</span></p>
                       <p className="text-xs"><span className="text-muted-foreground">Reparo:</span> <span className="font-semibold text-orange-400">{ev.tempo_reparo} min</span></p>
                     </div>
+                    <button onClick={() => setDeleteTarget(ev)} className="text-muted-foreground hover:text-destructive transition-colors p-1 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </CardContent>
               </Card>
@@ -306,6 +316,19 @@ export default function MtbfPanel() {
           </div>
         </>
       )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir registro</AlertDialogTitle>
+            <AlertDialogDescription>Excluir parada de "{deleteTarget?.testor_nome}" em {deleteTarget?.data}?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground" onClick={() => deleteMut.mutate(deleteTarget.id)}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

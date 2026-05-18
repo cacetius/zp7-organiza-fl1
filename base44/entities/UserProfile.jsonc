@@ -38,6 +38,10 @@
       ],
       "description": "Turno de trabalho"
     },
+    "telefone": {
+      "type": "string",
+      "description": "N\u00famero de WhatsApp (ex: 5511999999999)"
+    },
     "ativo": {
       "type": "boolean",
       "default": true

@@ -29,7 +29,32 @@ const statusConfig = {
 };
 
 const tipoFalhaLabel = { mecanica: "Mecânica", eletrica: "Elétrica", software: "Software", calibracao: "Calibração", outro: "Outro" };
-const emptyForm = { testor_nome: "", tipo_falha: "mecanica", descricao: "", prioridade: "media", tempo_estimado_reparo: "", impacto_carros: "", responsavel: "", pecas_necessarias: "" };
+const emptyForm = { testor_nome: "", tipo_falha: "mecanica", descricao: "", prioridade: "media", tempo_estimado_reparo: "", impacto_carros: "", responsavel: "", responsavel_telefone: "", pecas_necessarias: "" };
+
+const tipoFalhaEmoji = { mecanica: "🔩", eletrica: "⚡", software: "💻", calibracao: "🔬", outro: "🔧" };
+const prioEmoji = { baixa: "🟢", media: "🟡", alta: "🟠", critica: "🔴" };
+
+function enviarWhatsApp(chamado) {
+  if (!chamado.responsavel_telefone) return;
+  const msg = [
+    `🚨 *CHAMADO DE MANUTENÇÃO — ZP7*`,
+    ``,
+    `${tipoFalhaEmoji[chamado.tipo_falha] || "🔧"} *Tipo:* ${tipoFalhaLabel[chamado.tipo_falha] || chamado.tipo_falha}`,
+    `🖥️ *Testor:* ${chamado.testor_nome}`,
+    `${prioEmoji[chamado.prioridade] || "🟡"} *Prioridade:* ${chamado.prioridade?.toUpperCase()}`,
+    `👷 *Responsável:* ${chamado.responsavel}`,
+    ``,
+    `📝 *Descrição:*`,
+    chamado.descricao,
+    chamado.pecas_necessarias ? `\n🔩 *Peças:* ${chamado.pecas_necessarias}` : "",
+    chamado.impacto_carros > 0 ? `🚗 *Carros impactados:* ${chamado.impacto_carros}` : "",
+    ``,
+    `⏰ Aberto em: ${new Date().toLocaleString("pt-BR")}`,
+  ].filter(l => l !== undefined).join("\n");
+
+  const url = `https://wa.me/${chamado.responsavel_telefone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, "_blank");
+}
 
 export default function Maintenance() {
   const [tab, setTab] = useState("chamados");
@@ -38,6 +63,11 @@ export default function Maintenance() {
   const [filter, setFilter] = useState("todos");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const qc = useQueryClient();
+
+  const { data: tecnicos = [] } = useQuery({
+    queryKey: ["perfis-manutencao"],
+    queryFn: () => base44.entities.UserProfile.filter({ funcao: "manutencao" }, "nome"),
+  });
 
   // Tempo real — atualiza para todos os usuários
   useEffect(() => {
@@ -65,7 +95,12 @@ export default function Maintenance() {
       status: "aberto",
       data_abertura: new Date().toISOString().slice(0, 10),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["maintenance"] }); setOpen(false); setForm(emptyForm); },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["maintenance"] });
+      setOpen(false);
+      enviarWhatsApp(variables);
+      setForm(emptyForm);
+    },
   });
 
   const updateMut = useMutation({
@@ -146,8 +181,30 @@ export default function Maintenance() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Responsável</Label>
-                    <Input value={form.responsavel} onChange={e => setForm({ ...form, responsavel: e.target.value })} placeholder="Nome do técnico" />
+                    <Label className="text-xs">Responsável (Manutenção)</Label>
+                    <Select
+                      value={form.responsavel}
+                      onValueChange={v => {
+                        const tec = tecnicos.find(t => t.nome === v);
+                        setForm({ ...form, responsavel: v, responsavel_telefone: tec?.telefone || "" });
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione o técnico" /></SelectTrigger>
+                      <SelectContent>
+                        {tecnicos.map(t => (
+                          <SelectItem key={t.id} value={t.nome}>
+                            {t.nome} {t.telefone ? "📱" : ""}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.responsavel_telefone && (
+                      <p className="text-[10px] text-green-400">✅ WhatsApp será enviado automaticamente</p>
+                    )}
+                    {form.responsavel && !form.responsavel_telefone && form.responsavel !== "outro" && (
+                      <p className="text-[10px] text-yellow-400">⚠️ Técnico sem telefone cadastrado</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Carros impactados</Label>
