@@ -70,6 +70,8 @@ export default function LossControl() {
   const { data: allRecords = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
   });
 
 

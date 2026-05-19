@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
@@ -50,12 +50,13 @@ export default function Dashboard() {
     return () => subs.forEach(u => u());
   }, []);
 
-  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });
-  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }) });
-  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000 });
-  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000 });
-  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000 });
+  // Dashboard: carrega apenas dados do dia atual com cache otimizado
+  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 5 * 60_000, gcTime: 10 * 60_000 });
+  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 2 * 60_000, gcTime: 5 * 60_000 });
+  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 2 * 60_000, gcTime: 5 * 60_000 });
+  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000, gcTime: 5 * 60_000 });
+  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000, gcTime: 5 * 60_000 });
+  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000, gcTime: 5 * 60_000 });
 
   const activeDate = today;
   const prodToday = allProd;
@@ -82,9 +83,16 @@ export default function Dashboard() {
   // Ganhos do turno
   const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
 
-  // Produção líquida = Produção + Ganhos - Perdas por Falha
-  const perdasFalhaTurno = lossesTurno.filter(l => l.motivo_perda === "falha_mecanica" || l.motivo_perda === "falha_eletrica").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno + ganhosTurno - perdasFalhaTurno);
+  // Produção líquida = Produção + Ganhos - Perdas por Falha (memoized)
+  const perdasFalhaTurno = useMemo(() => 
+    lossesTurno.filter(l => l.motivo_perda === "falha_mecanica" || l.motivo_perda === "falha_eletrica")
+      .reduce((s, l) => s + (l.carros_perdidos || 0), 0),
+    [lossesTurno]
+  );
+  const producaoLiquidaTurno = useMemo(() => 
+    Math.max(0, totalProduzidoTurno + ganhosTurno - perdasFalhaTurno),
+    [totalProduzidoTurno, ganhosTurno, perdasFalhaTurno]
+  );
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 

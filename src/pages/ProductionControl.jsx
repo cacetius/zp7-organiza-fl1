@@ -68,19 +68,26 @@ export default function ProductionControl() {
   const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
+  // Carregamento otimizado com cache e paginação
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
     queryFn: () => base44.entities.Testor.list(),
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
   });
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
   });
   // Busca os registros do Controle de Perdas para calcular Perda por Defeito
   const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
   });
 
   const sheetKeyRef = useRef(sheetKey);
@@ -136,13 +143,12 @@ export default function ProductionControl() {
     return map;
   }, [records]);
   useEffect(() => { cellMapRef.current = cellMap; }, [cellMap]);
-
   // Justificativas globais por hora (agrupadas de todos os testores)
   const justificativasPorHora = useMemo(() => {
     const map = {};
     records.forEach(r => {
-      if (r.hora && r.justificativa) {
-        if (!map[r.hora]) map[r.hora] = r.justificativa;
+      if (r.hora && r.justificativa && !map[r.hora]) {
+        map[r.hora] = r.justificativa;
       }
     });
     return map;

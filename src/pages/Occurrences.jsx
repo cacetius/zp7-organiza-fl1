@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,9 +53,12 @@ export default function Occurrences() {
     return unsub;
   }, [qc]);
 
+  // Otimizado: carrega apenas 50 registros iniciais com cache
   const { data: occurrences = [], isLoading } = useQuery({
     queryKey: ["occurrences"],
-    queryFn: () => base44.entities.Occurrence.list("-created_date"),
+    queryFn: () => base44.entities.Occurrence.list("-created_date", 50),
+    staleTime: 2 * 60_000,
+    gcTime: 5 * 60_000,
   });
 
   const createMut = useMutation({
@@ -85,7 +88,10 @@ export default function Occurrences() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["occurrences"] }); setDeleteTarget(null); },
   });
 
-  const filtered = filter === "todas" ? occurrences : occurrences.filter(o => o.status === filter);
+  const filtered = useMemo(() => 
+    filter === "todas" ? occurrences : occurrences.filter(o => o.status === filter),
+    [occurrences, filter]
+  );
 
   const handleExportCsv = () => {
     exportCsv("ocorrencias_zp7", ["Data", "Hora", "Tipo", "Testor", "Gravidade", "Status", "T.Parada(min)", "Carros Perdidos", "Descrição"],
