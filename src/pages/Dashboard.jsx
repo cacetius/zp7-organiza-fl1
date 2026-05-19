@@ -76,13 +76,13 @@ export default function Dashboard() {
   // Produção bruta do turno
   const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
-  // Perdas do turno
+  // Perdas do turno (apenas para exibição, não subtrai da produção)
   const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
   const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
   const totalPerdidoTurno = Math.max(0, perdasBrutasTurno - ganhosTurno);
 
-  // Produção líquida do turno
-  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno - totalPerdidoTurno);
+  // Produção líquida = produção bruta (perdas não são subtraídas)
+  const producaoLiquidaTurno = totalProduzidoTurno;
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 
