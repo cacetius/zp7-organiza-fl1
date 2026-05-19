@@ -46,15 +46,17 @@ export default function Dashboard() {
       base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-open"] })),
       base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-open"] })),
       base44.entities.ProductionControl.subscribe(() => qc.invalidateQueries({ queryKey: ["prod-today"] })),
+      base44.entities.LossControl.subscribe(() => qc.invalidateQueries({ queryKey: ["ganhos-today"] })),
     ];
     return () => subs.forEach(u => u());
   }, []);
 
-  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 30_000 });
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 60_000 });
-  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 60_000 });
-  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000 });
-  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000 });
+  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 30_000, retry: false });
+  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 60_000, retry: false });
+  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 60_000, retry: false });
+  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 0, retry: false });
+  const { data: allGanhos = [] } = useQuery({ queryKey: ["ganhos-today"], queryFn: () => base44.entities.LossControl.filter({ data: today, motivo_perda: "ganho" }), staleTime: 0, retry: false });
+  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000, retry: false });
 
   const currentShift = detectCurrentShift();
   const shiftProdData = getTodayShiftData(allProd, currentShift.key);
@@ -67,9 +69,9 @@ export default function Dashboard() {
 
   // KPIs do turno atual (memoizados)
   // IMPORTANTE: allProd contém registros POR TESTOR, então precisamos agrupar por hora primeiro
-  const { totalProduzidoTurno, totalPerdidoTurno, producaoLiquidaTurno } = useMemo(() => {
+  const { totalProduzidoTurno, totalPerdasProdTurno, totalPerdasDefTurno, producaoLiquidaTurno, totalGanhosTurno } = useMemo(() => {
     const prodTurno = allProd.filter(p => p.turno === currentShift.key);
-    
+
     // Agrupar por hora para calcular totais corretamente (evita duplicação)
     const porHora = {};
     prodTurno.forEach(p => {
@@ -84,7 +86,7 @@ export default function Dashboard() {
         porHora[p.hora].perdas_defeito = (p.perdas_defeito || 0);
       }
     });
-    
+
     // Calcular totais a partir do agrupamento por hora
     const totalProd = Object.values(porHora).reduce((s, h) => s + h.producao, 0);
     const totalObj = Object.values(porHora).reduce((s, h) => s + h.objetivo, 0);
@@ -92,9 +94,28 @@ export default function Dashboard() {
     const perdasProd = Object.values(porHora).reduce((s, h) => s + Math.max(0, h.objetivo - h.producao), 0);
     // Perdas por defeito = usa o valor já registrado (não acumula)
     const perdasDef = Object.values(porHora).reduce((s, h) => s + h.perdas_defeito, 0);
-    const totalPerdido = perdasProd + perdasDef;
-    return { totalProduzidoTurno: totalProd, totalPerdidoTurno: totalPerdido, producaoLiquidaTurno: Math.max(0, totalProd - totalPerdido) };
-  }, [allProd, currentShift.key]);
+    // Produção Líquida = Produção - Perdas Produção - Perdas Defeito
+    const liquida = Math.max(0, totalProd - perdasProd - perdasDef);
+
+    // Carros Ganhos = soma dos ganhos do LossControl por hora (não acumula por testor)
+    const ganhosTurno = allGanhos.filter(g => g.turno === currentShift.key);
+    const ganhosPorHora = {};
+    ganhosTurno.forEach(g => {
+      if (!ganhosPorHora[g.hora]) ganhosPorHora[g.hora] = 0;
+      if (ganhosPorHora[g.hora] === 0) {
+        ganhosPorHora[g.hora] = (g.carros_perdidos || 0);
+      }
+    });
+    const totalGanhos = Object.values(ganhosPorHora).reduce((s, h) => s + h, 0);
+
+    return { 
+      totalProduzidoTurno: totalProd, 
+      totalPerdasProdTurno: perdasProd,
+      totalPerdasDefTurno: perdasDef,
+      producaoLiquidaTurno: liquida,
+      totalGanhosTurno: totalGanhos
+    };
+  }, [allProd, allGanhos, currentShift.key]);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
   // Objetivo também precisa agrupar por hora para evitar duplicação
@@ -146,9 +167,9 @@ export default function Dashboard() {
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-          { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: `Perdas ${shiftLabel}`, value: totalPerdidoTurno, icon: TrendingDown, color: totalPerdidoTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoTurno > 0 ? "border-red-500/20" : "border-border" },
+          { label: `Produção Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
+          { label: `Perda Bruta ${shiftLabel}`, value: totalPerdasDefTurno, icon: TrendingDown, color: totalPerdasDefTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdasDefTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdasDefTurno > 0 ? "border-red-500/20" : "border-border" },
+          { label: `Carros Ganhos ${shiftLabel}`, value: totalGanhosTurno, icon: CheckCircle2, color: totalGanhosTurno > 0 ? "text-emerald-400" : "text-muted-foreground", bg: totalGanhosTurno > 0 ? "bg-emerald-500/10" : "bg-muted/30", border: totalGanhosTurno > 0 ? "border-emerald-500/20" : "border-border" },
           { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-orange-400" : "text-green-400", bg: testoresParados > 0 ? "bg-orange-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-orange-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>

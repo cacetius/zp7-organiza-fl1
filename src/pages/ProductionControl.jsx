@@ -71,12 +71,14 @@ export default function ProductionControl() {
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
     queryFn: () => base44.entities.Testor.list(),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
-  const { data: records = [] } = useQuery({
+  const { data: records = [], isLoading: loadingRecords } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
-    staleTime: 30_000,
+    staleTime: 0,
+    retry: false,
   });
 
 
@@ -266,7 +268,7 @@ export default function ProductionControl() {
   const totalPerdasProd = Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0);
   // Perdas por Defeito = soma dos campos perdas_defeito por hora
   const totalPerdasDef = Object.values(perdasDefPorHora).reduce((a, v) => a + v, 0);
-  // Real Líquido = Produção - Perdas de Produção - Perdas por Defeito
+  // Real Líquido = Produção - Perdas de Produção - Perdas por Defeito (não inclui ganhos)
   const producaoLiquida = Math.max(0, totalGeral - totalPerdasProd - totalPerdasDef);
   // Eficiência = Produção / Objetivo
   const efic = totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
@@ -502,7 +504,7 @@ export default function ProductionControl() {
       {/* KPIs */}
       <ProductionKpis totalObjetivo={totalObjetivo} totalGeral={totalGeral} totalPerdasProd={totalPerdasProd} totalPerdasDef={totalPerdasDef} producaoLiquida={producaoLiquida} efic={efic} />
 
-      {loadingTestores ? (
+      {loadingTestores || loadingRecords ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted/30 animate-pulse" />)}</div>
       ) : testores.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
