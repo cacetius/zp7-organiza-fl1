@@ -485,22 +485,6 @@ export default function ProductionControl() {
           </p>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={() => {
-            const exemplo = {
-              testor_id: testores[0]?.id,
-              testor_nome: testores[0]?.nome,
-              data: selectedDate,
-              turno: selectedTurno,
-              hora: turnoAtual.horas[0],
-              carros_produzidos: 10,
-              objetivo: 12,
-              justificativa: ""
-            };
-            if (exemplo.testor_id) createRec.mutate(exemplo);
-          }} disabled={!testores.length}>
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs">Exemplo</span>
-          </Button>
           <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline text-xs">CSV</span></Button>
           <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handlePrint}><Printer className="w-4 h-4" /><span className="hidden sm:inline text-xs">PDF</span></Button>
         </div>
