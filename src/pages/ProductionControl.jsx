@@ -103,6 +103,7 @@ export default function ProductionControl() {
     const unsubProduction = base44.entities.ProductionControl.subscribe((event) => {
       if (event.type === 'create' || event.type === 'update' || event.type === 'delete') {
         qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+        qc.invalidateQueries({ queryKey: ['testores'] });
       }
     });
     const unsubLoss = base44.entities.LossControl.subscribe((event) => {
@@ -114,7 +115,7 @@ export default function ProductionControl() {
       unsubProduction();
       unsubLoss();
     };
-  }, []);
+  }, [qc, lossKey]);
 
   const optimisticUpdate = (updater) => qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
 
@@ -144,8 +145,12 @@ export default function ProductionControl() {
     records.forEach(r => {
       if (!r.testor_id || !r.hora) return;
       if (!map[r.testor_id]) map[r.testor_id] = {};
+      // Sempre usa o registro mais recente (prioriza IDs reais sobre temporários)
       const existing = map[r.testor_id][r.hora];
-      if (!existing || (existing.id?.startsWith?.("temp-") && !r.id?.startsWith?.("temp-"))) {
+      const isReal = r.id && !r.id.startsWith("temp-");
+      const existingIsTemp = existing?.id?.startsWith("temp-");
+      
+      if (!existing || (existingIsTemp && isReal)) {
         map[r.testor_id][r.hora] = {
           id: r.id,
           producao: r.carros_produzidos ?? 0,
@@ -154,6 +159,13 @@ export default function ProductionControl() {
           objetivo: r.objetivo ?? 0,
           justificativa: r.justificativa ?? "",
         };
+      } else if (existing) {
+        // Atualiza valores mesmo se ID for o mesmo
+        existing.producao = r.carros_produzidos ?? existing.producao;
+        existing.perdas_producao = r.perdas_producao ?? existing.perdas_producao;
+        existing.perdas_defeito = r.perdas_defeito ?? existing.perdas_defeito;
+        existing.objetivo = r.objetivo ?? existing.objetivo;
+        existing.justificativa = r.justificativa ?? existing.justificativa;
       }
     });
     return map;
@@ -190,8 +202,14 @@ export default function ProductionControl() {
         objetivo: field === "objetivo" ? newVal : 0,
         justificativa: field === "justificativa" ? newVal : "",
       });
-    } else if (!cell.id?.startsWith?.("temp-")) {
-      updateRec.mutate({ id: cell.id, ...update });
+    } else {
+      // Atualizar registro existente (inclui temp-id)
+      if (cell.id?.startsWith?.("temp-")) {
+        // Se for temp, atualiza otimista e força refresh
+        updateRec.mutate({ id: cell.id, ...update });
+      } else {
+        updateRec.mutate({ id: cell.id, ...update });
+      }
     }
   };
 
@@ -551,7 +569,7 @@ export default function ProductionControl() {
           <p className="font-medium">Nenhum testor cadastrado.</p>
         </CardContent></Card>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border shadow-sm -mx-1 sm:mx-0">
+        <div key={`table-${sheetKey}-${records.length}`} className="overflow-x-auto rounded-xl border border-border shadow-sm -mx-1 sm:mx-0">
           <table className="w-full text-xs border-collapse" style={{ minWidth: `${140 + turnoAtual.horas.length * 64}px` }}>
             <thead>
               <tr>
