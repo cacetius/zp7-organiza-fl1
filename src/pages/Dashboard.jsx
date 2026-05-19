@@ -50,29 +50,24 @@ export default function Dashboard() {
     return () => subs.forEach(u => u());
   }, []);
 
-  // Dashboard: carrega apenas dados do dia atual com cache otimizado
+  // Dashboard: carrega dados do turno atual com cache otimizado
   const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 5 * 60_000, gcTime: 10 * 60_000 });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 2 * 60_000, gcTime: 5 * 60_000 });
   const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 2 * 60_000, gcTime: 5 * 60_000 });
-  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000, gcTime: 5 * 60_000 });
-  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000, gcTime: 5 * 60_000 });
+  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.list("-created_date", 500), staleTime: 60_000, gcTime: 5 * 60_000 });
+  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.list("-created_date", 500), staleTime: 60_000, gcTime: 5 * 60_000 });
   const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000, gcTime: 5 * 60_000 });
 
   const activeDate = today;
-  const prodToday = allProd;
-  const lossesToday = allLosses;
+  const currentShift = detectCurrentShift();
 
-   const currentShift = detectCurrentShift();
-   const shiftProdData = getTodayShiftData(prodToday, currentShift.key);
-   const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
-   const shiftLossData = getTodayShiftData(lossesToday, currentShift.key);
+  // Filtra dados do turno atual (segundo turno: 15h-23h, terceiro turno: 21h-06h pode cruzar meia-noite)
+  const prodTurno = allProd.filter(p => p.turno === currentShift.key);
+  const lossesTurno = allLosses.filter(l => l.turno === currentShift.key);
+  const maintenanceTurno = maintenanceData.filter(m => m.turno === currentShift.key || !m.turno);
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
   const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
-
-  // Dados do turno atual (filtrados por turno)
-  const prodTurno = prodToday.filter(p => p.turno === currentShift.key);
-  const lossesTurno = lossesToday.filter(l => l.turno === currentShift.key);
 
   // Produção bruta do turno
   const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
@@ -110,13 +105,7 @@ export default function Dashboard() {
       </div>
 
       {/* Visão do turno atual */}
-       {activeDate !== today && (
-         <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-3 py-2 rounded-lg">
-           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-           Sem dados para hoje — exibindo dados de {format(new Date(activeDate + "T12:00:00"), "dd/MM/yyyy")}
-         </div>
-       )}
-       <ShiftOverview prodData={activeDate === today ? shiftProdData : prodToday} maintenanceData={shiftMaintenanceData} lossData={activeDate === today ? shiftLossData : lossesToday} isHistorical={activeDate !== today} />
+       <ShiftOverview prodData={prodTurno} maintenanceData={maintenanceTurno} lossData={lossesTurno} isHistorical={false} />
 
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -219,7 +208,7 @@ export default function Dashboard() {
               const statusLabel = { rodando: "Rodando", atencao: "Atenção", parado: "Parado", manutencao: "Manutenção", bloqueado: "Bloqueado" };
 
               // Última justificativa registrada hoje para este testor
-              const ultimaJust = prodToday
+              const ultimaJust = allProd
                 .filter(p => p.testor_nome === t.nome && p.justificativa)
                 .sort((a, b) => (b.hora || "").localeCompare(a.hora || ""))
                 [0]?.justificativa;
