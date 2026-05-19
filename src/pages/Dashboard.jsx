@@ -82,8 +82,8 @@ export default function Dashboard() {
   // Ganhos do turno
   const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
 
-  // Produção líquida = Produção - Perdas + Ganhos
-  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno - perdasBrutasTurno + ganhosTurno);
+  // Produção líquida = Produção + Ganhos (perdas não entram no cálculo)
+  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno + ganhosTurno);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 
