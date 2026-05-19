@@ -248,8 +248,8 @@ export default function ProductionControl() {
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
   }, [cellMap, testores, turnoAtual.horas]);
 
-  // Perda por Defeito = total bruto de perdas do Controle de Perdas (por hora, excluindo ganhos)
-  const perdasDefPorHora = useMemo(() => {
+  // Perda por Falha = total de perdas do Controle de Perdas (por hora, excluindo ganhos)
+  const perdasFalhaPorHora = useMemo(() => {
     const map = {};
     turnoAtual.horas.forEach(h => { map[h] = 0; });
     lossRecords
@@ -264,13 +264,13 @@ export default function ProductionControl() {
   const totalGeral = testores.reduce((acc, t) => acc + totalPorTestor(t), 0);
   const totalObjetivo = Object.values(objetivoPorHora).reduce((a, v) => a + v, 0);
   const totalPerdasProd = Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0);
-  const totalPerdasDef = Object.values(perdasDefPorHora).reduce((a, v) => a + v, 0);
+  const totalPerdasFalha = Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0);
 
   // Ganhos do Controle de Perdas (motivo_perda === "ganho")
   const totalGanhos = lossRecords.filter(l => l.motivo_perda === "ganho").reduce((a, v) => a + (v.carros_perdidos || 0), 0);
 
-  // Produção líquida = Produção - Perdas Produção - Perdas Defeito + Ganhos
-  const producaoLiquida = Math.max(0, totalGeral - totalPerdasProd - totalPerdasDef + totalGanhos);
+  // Produção líquida = Produção - Perdas Produção - Perdas Falha + Ganhos
+  const producaoLiquida = Math.max(0, totalGeral - totalPerdasProd - totalPerdasFalha + totalGanhos);
   const efic = totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
 
   const handleExportCsv = () => {
@@ -279,8 +279,8 @@ export default function ProductionControl() {
     rows.push(["OBJETIVO", ...turnoAtual.horas.map(h => objetivoPorHora[h] || 0), totalObjetivo]);
     rows.push(["PRODUÇÃO", ...turnoAtual.horas.map(h => totalPorHora[h] || 0), totalGeral]);
     rows.push(["PERDAS PRODUÇÃO", ...turnoAtual.horas.map(h => perdasProdPorHora[h] || 0), totalPerdasProd]);
-    rows.push(["PERDAS DEFEITO", ...turnoAtual.horas.map(h => perdasDefPorHora[h] || 0), totalPerdasDef]);
-    rows.push(["REAL LÍQUIDO", ...turnoAtual.horas.map(h => Math.max(0, (totalPorHora[h]||0)-(perdasProdPorHora[h]||0)-(perdasDefPorHora[h]||0))), producaoLiquida]);
+    rows.push(["PERDAS FALHA", ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
+    rows.push(["REAL LÍQUIDO", ...turnoAtual.horas.map(h => Math.max(0, (totalPorHora[h]||0)-(perdasProdPorHora[h]||0)-(perdasFalhaPorHora[h]||0))), producaoLiquida]);
     exportCsv(`producao_${selectedDate}_${selectedTurno}`, headers, rows);
   };
 
@@ -299,9 +299,9 @@ export default function ProductionControl() {
     const objetivoRowCells = turnoAtual.horas.map(h => `<td>${objetivoPorHora[h] > 0 ? objetivoPorHora[h] : "—"}</td>`).join("");
     const totalRowCells = turnoAtual.horas.map(h => `<td>${totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>`).join("");
     const perdasProdRowCells = turnoAtual.horas.map(h => `<td>${perdasProdPorHora[h] > 0 ? perdasProdPorHora[h] : "—"}</td>`).join("");
-    const perdasDefRowCells = turnoAtual.horas.map(h => `<td>${perdasDefPorHora[h] > 0 ? perdasDefPorHora[h] : "—"}</td>`).join("");
+    const perdasFalhaRowCells = turnoAtual.horas.map(h => `<td>${perdasFalhaPorHora[h] > 0 ? perdasFalhaPorHora[h] : "—"}</td>`).join("");
     const liquidoRowCells = turnoAtual.horas.map(h => {
-      const liq = Math.max(0, (totalPorHora[h]||0) - (perdasProdPorHora[h]||0) - (perdasDefPorHora[h]||0));
+      const liq = Math.max(0, (totalPorHora[h]||0) - (perdasProdPorHora[h]||0) - (perdasFalhaPorHora[h]||0));
       return `<td style="color:#16a34a;font-weight:900">${liq > 0 ? liq : "—"}</td>`;
     }).join("");
 
@@ -368,7 +368,7 @@ export default function ProductionControl() {
       <div class="kpi"><div class="kpi-val" style="color:#0369a1">${totalObjetivo || "—"}</div><div class="kpi-lbl">Objetivo</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#1d4ed8">${totalGeral}</div><div class="kpi-lbl">Produção</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#ea580c">${totalPerdasProd}</div><div class="kpi-lbl">Perdas Produção</div></div>
-      <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasDef}</div><div class="kpi-lbl">Perdas Defeito</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasFalha}</div><div class="kpi-lbl">Perdas Falha</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#16a34a">${producaoLiquida}</div><div class="kpi-lbl">Real Líquido</div></div>
     </div>
     <div class="efic-bar">
@@ -383,7 +383,7 @@ export default function ProductionControl() {
         <tr class="objetivo-row"><td class="name"><strong>OBJETIVO</strong></td>${objetivoRowCells}<td class="grand-cyan">${totalObjetivo > 0 ? totalObjetivo : "—"}</td></tr>
         <tr class="total-row"><td class="name"><strong>PRODUÇÃO</strong></td>${totalRowCells}<td class="grand-blue">${totalGeral > 0 ? totalGeral : "—"}</td></tr>
         <tr class="perdas-prod-row"><td class="name"><strong>PERDAS DE PRODUÇÃO</strong></td>${perdasProdRowCells}<td class="grand-orange">${totalPerdasProd > 0 ? totalPerdasProd : "—"}</td></tr>
-        <tr class="perdas-def-row"><td class="name"><strong>PERDAS POR DEFEITO</strong></td>${perdasDefRowCells}<td class="grand-red">${totalPerdasDef > 0 ? totalPerdasDef : "—"}</td></tr>
+        <tr class="perdas-def-row"><td class="name"><strong>PERDAS POR FALHA</strong></td>${perdasFalhaRowCells}<td class="grand-red">${totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td></tr>
         <tr class="liquido-row"><td class="name"><strong>REAL LÍQUIDO</strong></td>${liquidoRowCells}<td class="grand-green">${producaoLiquida > 0 ? producaoLiquida : "—"}</td></tr>
       </tbody>
     </table>
@@ -499,13 +499,13 @@ export default function ProductionControl() {
       )}
 
       {/* KPIs */}
-      {(totalGeral > 0 || totalPerdasProd > 0 || totalPerdasDef > 0) && (
+      {(totalGeral > 0 || totalPerdasProd > 0 || totalPerdasFalha > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {[
             { label: "Objetivo", value: totalObjetivo || "—", color: "text-cyan-400", border: "border-cyan-500/20" },
             { label: "Produção", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
             { label: "Perdas Produção", value: totalPerdasProd, color: "text-orange-400", border: "border-orange-500/20" },
-            { label: "Perdas Defeito", value: totalPerdasDef, color: "text-red-400", border: "border-red-500/20" },
+            { label: "Perdas Falha", value: totalPerdasFalha, color: "text-red-400", border: "border-red-500/20" },
             { label: "Real Líquido", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
           ].map(k => (
             <Card key={k.label} className={`border ${k.border}`}>
@@ -638,23 +638,23 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-orange-600 py-1.5 text-xs sm:text-sm">{totalPerdasProd > 0 ? totalPerdasProd : "—"}</td>
               </tr>
 
-              {/* PERDAS POR DEFEITO — vem do Controle de Perdas */}
+              {/* PERDAS POR FALHA — vem do Controle de Perdas */}
               <tr className="bg-red-500/10">
-                <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>DEFEITO</td>
+                <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>FALHA</td>
                 {turnoAtual.horas.map(h => {
-                  const val = perdasDefPorHora[h] || 0;
+                  const val = perdasFalhaPorHora[h] || 0;
                   return (
                     <td key={h} className="border border-border text-center font-bold text-red-400 py-1.5 text-xs sm:text-sm">{val > 0 ? val : "—"}</td>
                   );
                 })}
-                <td className="border border-border text-center font-black text-white bg-red-600 py-1.5 text-xs sm:text-sm">{totalPerdasDef > 0 ? totalPerdasDef : "—"}</td>
+                <td className="border border-border text-center font-black text-white bg-red-600 py-1.5 text-xs sm:text-sm">{totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td>
               </tr>
 
               {/* REAL LÍQUIDO */}
               <tr className="bg-green-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-green-400 uppercase text-[10px] sm:text-xs leading-tight">REAL<br/>LÍQUIDO</td>
                 {turnoAtual.horas.map(h => {
-                  const liq = Math.max(0, (totalPorHora[h] || 0) - (perdasProdPorHora[h] || 0) - (perdasDefPorHora[h] || 0));
+                  const liq = Math.max(0, (totalPorHora[h] || 0) - (perdasProdPorHora[h] || 0) - (perdasFalhaPorHora[h] || 0));
                   return <td key={h} className="border border-border text-center font-bold text-green-400 py-1.5 text-xs sm:text-sm">{liq > 0 ? liq : "—"}</td>;
                 })}
                 <td className="border border-border text-center font-black text-white bg-green-600 py-1.5 text-xs sm:text-sm">{producaoLiquida > 0 ? producaoLiquida : "—"}</td>
