@@ -77,7 +77,10 @@ export default function ProductionControl() {
   });
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
-    queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
+    queryFn: async () => {
+      const allRecords = await base44.entities.ProductionControl.list();
+      return allRecords.filter(r => r.data === selectedDate && r.turno === selectedTurno);
+    },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
   });
@@ -85,7 +88,10 @@ export default function ProductionControl() {
   const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
-    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+    queryFn: async () => {
+      const allRecords = await base44.entities.LossControl.list();
+      return allRecords.filter(r => r.data === selectedDate && r.turno === selectedTurno);
+    },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
   });
