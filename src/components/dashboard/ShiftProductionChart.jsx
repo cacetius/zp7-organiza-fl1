@@ -21,41 +21,28 @@ const TURNOS = [
   { key: "terceiro", label: "3º Turno" },
 ];
 
-// prodData: registros do ProductionControl — única fonte de verdade para produção e perdas
-export default function ShiftProductionChart({ prodData, date }) {
+export default function ShiftProductionChart({ prodData, lossData, date }) {
   const chartData = useMemo(() => {
     return TURNOS.map(({ key, label }) => {
-      const records = prodData.filter(r => r.turno === key && (!date || r.data === date));
-      
-      // Agrupar por hora para evitar duplicação (múltiplos testores na mesma hora)
-      const porHora = {};
-      records.forEach(r => {
-        if (!porHora[r.hora]) {
-          porHora[r.hora] = { producao: 0, objetivo: 0, perdas_defeito: 0 };
-        }
-        porHora[r.hora].producao += (r.carros_produzidos || 0);
-        porHora[r.hora].objetivo += (r.objetivo || 0);
-        // IMPORTANTE: perdas_defeito JÁ É O TOTAL DA HORA (não acumula por testor)
-        // Pega apenas o primeiro valor encontrado para esta hora
-        if (porHora[r.hora].perdas_defeito === 0) {
-          porHora[r.hora].perdas_defeito = (r.perdas_defeito || 0);
-        }
-      });
-      
-      // Calcular totais a partir do agrupamento por hora
-      const prod = Object.values(porHora).reduce((s, h) => s + h.producao, 0);
-      const obj = Object.values(porHora).reduce((s, h) => s + h.objetivo, 0);
-      // Perdas produção = objetivo − produção (calculado por hora, depois somado)
-      const perdasProd = Object.values(porHora).reduce((s, h) => s + Math.max(0, h.objetivo - h.producao), 0);
-      // Perdas por defeito = usa o valor já registrado (não acumula)
-      const perdasDef = Object.values(porHora).reduce((s, h) => s + h.perdas_defeito, 0);
-      const perdas = perdasProd + perdasDef;
-      const liquida = Math.max(0, prod - perdas);
+      const prod = prodData
+        .filter(r => r.turno === key && (!date || r.data === date))
+        .reduce((s, r) => s + (r.carros_produzidos || 0), 0);
+
+      const perdasBrutas = lossData
+        .filter(r => r.turno === key && r.motivo_perda !== "ganho" && (!date || r.data === date))
+        .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+
+      const ganhos = lossData
+        .filter(r => r.turno === key && r.motivo_perda === "ganho" && (!date || r.data === date))
+        .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+
+      const perdaReal = Math.max(0, perdasBrutas - ganhos);
+      const liquida = Math.max(0, prod - perdaReal);
       const efic = prod > 0 ? Math.round((liquida / prod) * 100) : 0;
 
-      return { turno: label, Produção: prod, Perdas: perdas, Líquida: liquida, efic };
+      return { turno: label, Produção: prod, Perdas: perdaReal, Líquida: liquida, efic };
     });
-  }, [prodData, date]);
+  }, [prodData, lossData, date]);
 
   const hasData = chartData.some(d => d.Produção > 0 || d.Perdas > 0);
 

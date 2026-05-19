@@ -26,36 +26,20 @@ function calcularIndicadores(eventos) {
   const totalTempoParado = eventos.reduce((sum, e) => sum + (Number(e.tempo_parado) || 0), 0);
   const totalTempoReparo = eventos.reduce((sum, e) => sum + (Number(e.tempo_reparo) || 0), 0);
 
-  // Tempo de operação: 9h por turno (turnos ZP7), soma das entradas distintas de datas
+  // Tempo de operação estimado: 8h por turno, soma das entradas distintas de datas
   const datasUnicas = [...new Set(eventos.map(e => e.data))].length;
-  const tempoOperacaoTotal = datasUnicas * 540; // 540 min = 9h por turno ZP7
+  const tempoOperacaoTotal = datasUnicas * 480; // 480 min = 8h por dia
 
-  // MTBF = Tempo total de operação / Número de falhas
-  // Fórmula padrão: quanto tempo o equipamento opera entre falhas
-  const mtbf = totalFalhas > 0 ? Math.round(tempoOperacaoTotal / totalFalhas) : null;
+  const mtbf = totalFalhas > 0 ? Math.round((tempoOperacaoTotal - totalTempoParado) / totalFalhas) : 0;
+  const mttr = totalFalhas > 0 ? Math.round(totalTempoReparo / totalFalhas) : 0;
+  const disponibilidade = tempoOperacaoTotal > 0
+    ? Math.round(((tempoOperacaoTotal - totalTempoParado) / tempoOperacaoTotal) * 100)
+    : 100;
 
-  // MTTR = Tempo total de reparo / Número de reparos
-  // Fórmula padrão: tempo médio para consertar
-  const mttr = totalFalhas > 0 ? Math.round(totalTempoReparo / totalFalhas) : null;
-
-  // Disponibilidade = MTBF / (MTBF + MTTR) × 100
-  // Fórmula padrão de disponibilidade
-  let disponibilidade = null;
-  if (mtbf !== null && mttr !== null) {
-    const denom = mtbf + mttr;
-    disponibilidade = denom > 0 ? Math.round((mtbf / denom) * 100) : 100;
-  }
-
-  return { mtbf, mttr, disponibilidade, totalFalhas, totalTempoParado, totalTempoReparo };
+  return { mtbf, mttr, disponibilidade, totalFalhas, totalTempoParado };
 }
 
-const TURNOS_LABELS = [
-  { key: "primeiro", label: "1º Turno (06h–15h)" },
-  { key: "segundo",  label: "2º Turno (15h–23h)" },
-  { key: "terceiro", label: "3º Turno (22h–06h)" },
-];
-
-const emptyForm = { testor_nome: "", data: new Date().toISOString().slice(0, 10), turno: "primeiro", tempo_parado: "", tempo_reparo: "", motivo: "" };
+const emptyForm = { testor_nome: "", data: new Date().toISOString().slice(0, 10), tempo_parado: "", tempo_reparo: "", motivo: "" };
 
 export default function MtbfPanel() {
   const [open, setOpen] = useState(false);
@@ -93,12 +77,7 @@ export default function MtbfPanel() {
     const evs = eventos.filter(e => e.testor_nome === nome);
     const ind = calcularIndicadores(evs);
     return { nome, ...ind, falhas: evs.length };
-  }).sort((a, b) => {
-    // Ordenar por disponibilidade (menor primeiro = mais crítico)
-    const dispA = a.disponibilidade !== null ? a.disponibilidade : 100;
-    const dispB = b.disponibilidade !== null ? b.disponibilidade : 100;
-    return dispA - dispB;
-  });
+  }).sort((a, b) => (a.disponibilidade || 100) - (b.disponibilidade || 100));
 
   const indicadoresFiltrado = calcularIndicadores(eventosFiltrados);
 
@@ -126,13 +105,7 @@ export default function MtbfPanel() {
               <DialogTitle>📋 Registrar Parada</DialogTitle>
               <p className="text-xs text-muted-foreground">Preencha apenas o essencial. Os cálculos são automáticos.</p>
             </DialogHeader>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              if (!form.testor_nome) return;
-              if (!form.tempo_parado || Number(form.tempo_parado) <= 0) return;
-              if (!form.tempo_reparo || Number(form.tempo_reparo) < 0) return;
-              createMut.mutate({ ...form, tempo_parado: Number(form.tempo_parado), tempo_reparo: Number(form.tempo_reparo) });
-            }} className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); createMut.mutate({ ...form, tempo_parado: Number(form.tempo_parado), tempo_reparo: Number(form.tempo_reparo) }); }} className="space-y-4">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Qual testor parou? *</Label>
                 <Select value={form.testor_nome} onValueChange={v => setForm({ ...form, testor_nome: v })} required>
@@ -144,18 +117,9 @@ export default function MtbfPanel() {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Data da parada *</Label>
-                  <Input type="date" required value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Turno</Label>
-                  <Select value={form.turno} onValueChange={v => setForm({ ...form, turno: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{TURNOS_LABELS.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Data da parada *</Label>
+                <Input type="date" required value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -220,23 +184,14 @@ export default function MtbfPanel() {
               <Card className="border-border">
                 <CardContent className="p-4 text-center space-y-1">
                   <div className="text-2xl">⏳</div>
-                  {indicadoresFiltrado.mtbf !== null ? (
-                    <>
-                      <p className="text-2xl font-black text-primary">{indicadoresFiltrado.mtbf}</p>
-                      <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min entre falhas</p>
-                      <div className="mt-1 pt-1 border-t border-border">
-                        <p className="text-[10px] text-muted-foreground">
-                          {indicadoresFiltrado.mtbf >= 120 ? "✅ Bom" : indicadoresFiltrado.mtbf >= 60 ? "⚠️ Atenção" : "🔴 Crítico"}
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-black text-muted-foreground">—</p>
-                      <p className="text-[10px] text-muted-foreground">Sem dados suficientes</p>
-                    </>
-                  )}
+                  <p className="text-2xl font-black text-primary">{indicadoresFiltrado.mtbf}</p>
+                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min entre falhas</p>
                   <p className="text-[9px] text-muted-foreground">MTBF — quanto tempo funciona sem parar</p>
+                  <div className="mt-1 pt-1 border-t border-border">
+                    <p className="text-[10px] text-muted-foreground">
+                      {indicadoresFiltrado.mtbf >= 120 ? "✅ Bom" : indicadoresFiltrado.mtbf >= 60 ? "⚠️ Atenção" : "🔴 Crítico"}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -244,47 +199,31 @@ export default function MtbfPanel() {
               <Card className="border-border">
                 <CardContent className="p-4 text-center space-y-1">
                   <div className="text-2xl">🔧</div>
-                  {indicadoresFiltrado.mttr !== null ? (
-                    <>
-                      <p className="text-2xl font-black text-orange-400">{indicadoresFiltrado.mttr}</p>
-                      <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min p/ consertar</p>
-                      <div className="mt-1 pt-1 border-t border-border">
-                        <p className="text-[10px] text-muted-foreground">
-                          {indicadoresFiltrado.mttr <= 30 ? "✅ Bom" : indicadoresFiltrado.mttr <= 60 ? "⚠️ Atenção" : "🔴 Lento"}
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-black text-muted-foreground">—</p>
-                      <p className="text-[10px] text-muted-foreground">Sem dados suficientes</p>
-                    </>
-                  )}
+                  <p className="text-2xl font-black text-orange-400">{indicadoresFiltrado.mttr}</p>
+                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">min p/ consertar</p>
                   <p className="text-[9px] text-muted-foreground">MTTR — tempo médio de reparo</p>
+                  <div className="mt-1 pt-1 border-t border-border">
+                    <p className="text-[10px] text-muted-foreground">
+                      {indicadoresFiltrado.mttr <= 30 ? "✅ Bom" : indicadoresFiltrado.mttr <= 60 ? "⚠️ Atenção" : "🔴 Lento"}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
 
               {/* Disponibilidade */}
-              <Card className={`border ${indicadoresFiltrado.disponibilidade !== null ? getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).bg : "border-border"}`}>
+              <Card className={`border ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).bg}`}>
                 <CardContent className="p-4 text-center space-y-1">
-                  <div className="text-2xl">{indicadoresFiltrado.disponibilidade !== null ? getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).emoji : "📊"}</div>
-                  {indicadoresFiltrado.disponibilidade !== null ? (
-                    <>
-                      <p className={`text-2xl font-black ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
-                        {indicadoresFiltrado.disponibilidade}%
-                      </p>
-                      <p className={`text-[10px] font-semibold ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
-                        {getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).label}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-black text-muted-foreground">—</p>
-                      <p className="text-[10px] text-muted-foreground">Sem dados suficientes</p>
-                    </>
-                  )}
+                  <div className="text-2xl">{getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).emoji}</div>
+                  <p className={`text-2xl font-black ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
+                    {indicadoresFiltrado.disponibilidade}%
+                  </p>
                   <p className="text-[10px] font-bold text-foreground uppercase tracking-wide">disponibilidade</p>
                   <p className="text-[9px] text-muted-foreground">Tempo que ficou produzindo</p>
+                  <div className="mt-1 pt-1 border-t border-border">
+                    <p className={`text-[10px] font-semibold ${getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).color}`}>
+                      {getDisponibilidadeInfo(indicadoresFiltrado.disponibilidade).label}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -293,32 +232,19 @@ export default function MtbfPanel() {
           {/* Resumo rápido */}
           {indicadoresFiltrado && (
             <Card className="bg-muted/20 border-border">
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-4">
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold">Resumo de Falhas</p>
+                    <p className="text-sm font-semibold">O que isso significa?</p>
                     <p className="text-xs text-muted-foreground">
                       {filtroTestor === "todos" ? "Os testores registrados pararam" : `${filtroTestor} parou`}{" "}
                       <span className="text-foreground font-semibold">{indicadoresFiltrado.totalFalhas}x</span>,
-                      ficando parado por <span className="text-foreground font-semibold">{indicadoresFiltrado.totalTempoParado} min</span> no total
-                      (reparo: <span className="text-orange-400 font-semibold">{indicadoresFiltrado.totalTempoReparo} min</span>).
-                      {indicadoresFiltrado.mttr > 60 && " ⚠️ Tempo de reparo alto — investigar causa raiz."}
-                      {indicadoresFiltrado.disponibilidade < 75 && " 🔴 Disponibilidade crítica — ação imediata."}
-                      {indicadoresFiltrado.disponibilidade >= 90 && " ✅ Boa disponibilidade."}
+                      ficando parado por <span className="text-foreground font-semibold">{indicadoresFiltrado.totalTempoParado} min</span> no total.
+                      {indicadoresFiltrado.mttr > 60 && " ⚠️ O tempo de reparo está alto — vale investigar a causa raiz."}
+                      {indicadoresFiltrado.disponibilidade < 75 && " 🔴 Disponibilidade crítica — prioridade de ação imediata."}
+                      {indicadoresFiltrado.disponibilidade >= 90 && " ✅ Equipamento com boa disponibilidade."}
                     </p>
-                  </div>
-                </div>
-                {/* Fórmulas explicadas */}
-                <div className="grid grid-cols-3 gap-2 text-center border-t border-border pt-3">
-                  <div>
-                    <p className="text-[9px] text-muted-foreground font-mono">MTBF = T.Op / Falhas</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground font-mono">MTTR = T.Reparo / Falhas</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground font-mono">Disp = MTBF/(MTBF+MTTR)</p>
                   </div>
                 </div>
               </CardContent>
@@ -333,8 +259,7 @@ export default function MtbfPanel() {
               </h3>
               <p className="text-xs text-muted-foreground -mt-1">Testores ordenados do mais crítico ao mais estável.</p>
               {rankingTestores.map((t, i) => {
-                const disp = t.disponibilidade !== null ? t.disponibilidade : 100;
-                const info = getDisponibilidadeInfo(disp);
+                const info = getDisponibilidadeInfo(t.disponibilidade || 100);
                 return (
                   <Card key={t.nome} className={`border ${info.bg}`}>
                     <CardContent className="p-3">
@@ -346,13 +271,13 @@ export default function MtbfPanel() {
                             <Badge className={`text-[10px] border ${info.bg} ${info.color}`}>{info.emoji} {info.label}</Badge>
                           </div>
                           <div className="flex gap-4 mt-1 flex-wrap">
-                            <span className="text-[11px] text-muted-foreground">⏳ MTBF: <span className="text-foreground font-semibold">{t.mtbf !== null ? t.mtbf : "—"}</span></span>
-                            <span className="text-[11px] text-muted-foreground">🔧 MTTR: <span className="text-foreground font-semibold">{t.mttr !== null ? t.mttr : "—"}</span></span>
+                            <span className="text-[11px] text-muted-foreground">⏳ MTBF: <span className="text-foreground font-semibold">{t.mtbf} min</span></span>
+                            <span className="text-[11px] text-muted-foreground">🔧 MTTR: <span className="text-foreground font-semibold">{t.mttr} min</span></span>
                             <span className="text-[11px] text-muted-foreground">🔴 Falhas: <span className="text-foreground font-semibold">{t.totalFalhas}</span></span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className={`text-xl font-black ${info.color}`}>{t.disponibilidade !== null ? t.disponibilidade : "—"}%</p>
+                          <p className={`text-xl font-black ${info.color}`}>{t.disponibilidade}%</p>
                           <p className="text-[9px] text-muted-foreground">disponível</p>
                         </div>
                       </div>

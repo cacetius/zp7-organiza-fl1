@@ -4,12 +4,9 @@ export const queryClientInstance = new QueryClient({
 	defaultOptions: {
 		queries: {
 			refetchOnWindowFocus: false,
-			refetchOnReconnect: false,
-			retry: false,
-			staleTime: 5 * 60_000,
-			gcTime: 60 * 60_000,
-			networkMode: "offlineFirst",
-			placeholderData: (prev) => prev,
+			retry: 1,
+			staleTime: 30_000,       // dados ficam "frescos" por 30s — evita refetch a cada navegação
+			gcTime: 5 * 60_000,      // cache mantido por 5 min
 		},
 	},
 });

@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import {
   Car, Target, TrendingDown, Gauge, AlertTriangle,
-  ClipboardList, ArrowRight, CheckCircle2, Factory,
+  ClipboardList, Clock, ArrowRight, CheckCircle2, Factory,
   Wrench, ArrowRightLeft, BarChart3, CheckSquare
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,6 @@ import { ptBR } from "date-fns/locale";
 import ShiftOverview from "@/components/dashboard/ShiftOverview";
 import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
 import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
-// ProductionControl é a única fonte de verdade para produção, perdas operacionais e defeitos.
 
 const gravBadge = {
   critica: "bg-red-500/15 text-red-400 border-red-500/40",
@@ -45,127 +44,47 @@ export default function Dashboard() {
       base44.entities.Testor.subscribe(() => qc.invalidateQueries({ queryKey: ["testores"] })),
       base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-open"] })),
       base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-open"] })),
+      base44.entities.LossControl.subscribe(() => qc.invalidateQueries({ queryKey: ["losses-today"] })),
       base44.entities.ProductionControl.subscribe(() => qc.invalidateQueries({ queryKey: ["prod-today"] })),
-      base44.entities.LossControl.subscribe(() => qc.invalidateQueries({ queryKey: ["ganhos-today"] })),
     ];
     return () => subs.forEach(u => u());
   }, []);
 
-  const { data: testores = [] } = useQuery({ 
-    queryKey: ["testores"], 
-    queryFn: () => base44.entities.Testor.list(), 
-    staleTime: 5 * 60_000, 
-    retry: false,
-    placeholderData: (prev) => prev || []
-  });
-  const { data: tasks = [] } = useQuery({ 
-    queryKey: ["tasks-open"], 
-    queryFn: () => base44.entities.Task.filter({ status: "aberta" }), 
-    staleTime: 2 * 60_000, 
-    retry: false,
-    placeholderData: (prev) => prev || []
-  });
-  const { data: occurrences = [] } = useQuery({ 
-    queryKey: ["occurrences-open"], 
-    queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), 
-    staleTime: 2 * 60_000, 
-    retry: false,
-    placeholderData: (prev) => prev || []
-  });
-  const { data: allProd = [] } = useQuery({ 
-    queryKey: ["prod-today"], 
-    queryFn: () => base44.entities.ProductionControl.filter({ data: today }), 
-    staleTime: 10_000, 
-    retry: false,
-    placeholderData: (prev) => prev || []
-  });
-  const { data: allGanhos = [] } = useQuery({ 
-    queryKey: ["ganhos-today"], 
-    queryFn: () => base44.entities.LossControl.filter({ data: today, motivo_perda: "ganho" }), 
-    staleTime: 10_000, 
-    retry: false,
-    placeholderData: (prev) => prev || []
-  });
-  const { data: maintenanceData = [] } = useQuery({ 
-    queryKey: ["maintenance-today"], 
-    queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), 
-    staleTime: 2 * 60_000, 
-    retry: false,
-    placeholderData: (prev) => prev || []
-  });
+  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
+  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }) });
+  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }) });
+  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.filter({ data: today }), staleTime: 60_000 });
+  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 60_000 });
+  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000 });
 
-  const currentShift = detectCurrentShift();
-  const shiftProdData = getTodayShiftData(allProd, currentShift.key);
-  const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
+  const activeDate = today;
+  const prodToday = allProd;
+  const lossesToday = allLosses;
 
-  // Contagem correta dos status dos testores
+   const currentShift = detectCurrentShift();
+   const shiftProdData = getTodayShiftData(prodToday, currentShift.key);
+   const shiftMaintenanceData = getTodayShiftData(maintenanceData, currentShift.key);
+   const shiftLossData = getTodayShiftData(lossesToday, currentShift.key);
+
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
-  const testoresAtencao = testores.filter(t => t.status === "atencao").length;
-  const testoresParados = testores.filter(t => t.status === "parado" || t.status === "manutencao" || t.status === "bloqueado").length;
+  const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
 
-  // KPIs do turno atual (memoizados)
-  // IMPORTANTE: allProd contém registros POR TESTOR, então precisamos agrupar por hora primeiro
-  const { totalProduzidoTurno, totalPerdasProdTurno, totalPerdasDefTurno, producaoLiquidaTurno, totalGanhosTurno } = useMemo(() => {
-    const prodTurno = allProd.filter(p => p.turno === currentShift.key);
+  // Dados do turno atual (filtrados por turno)
+  const prodTurno = prodToday.filter(p => p.turno === currentShift.key);
+  const lossesTurno = lossesToday.filter(l => l.turno === currentShift.key);
 
-    // Agrupar por hora para calcular totais corretamente (evita duplicação)
-    const porHora = {};
-    prodTurno.forEach(p => {
-      if (!porHora[p.hora]) {
-        porHora[p.hora] = { producao: 0, objetivo: 0, perdas_defeito: 0 };
-      }
-      porHora[p.hora].producao += (p.carros_produzidos || 0);
-      porHora[p.hora].objetivo += (p.objetivo || 0);
-      // IMPORTANTE: perdas_defeito JÁ É O TOTAL DA HORA (não acumula por testor)
-      // Pega apenas o primeiro valor encontrado para esta hora
-      if (porHora[p.hora].perdas_defeito === 0) {
-        porHora[p.hora].perdas_defeito = (p.perdas_defeito || 0);
-      }
-    });
+  // Produção bruta do turno
+  const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
-    // Calcular totais a partir do agrupamento por hora
-    const totalProd = Object.values(porHora).reduce((s, h) => s + h.producao, 0);
-    const totalObj = Object.values(porHora).reduce((s, h) => s + h.objetivo, 0);
-    // Perdas de produção = objetivo - produção (calculado por hora, depois somado)
-    const perdasProd = Object.values(porHora).reduce((s, h) => s + Math.max(0, h.objetivo - h.producao), 0);
-    // Perdas por defeito = usa o valor já registrado (não acumula)
-    const perdasDef = Object.values(porHora).reduce((s, h) => s + h.perdas_defeito, 0);
-    // Produção Líquida = Produção - Perdas Produção - Perdas Defeito
-    const liquida = Math.max(0, totalProd - perdasProd - perdasDef);
+  // Perdas do turno
+  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const totalPerdidoTurno = Math.max(0, perdasBrutasTurno - ganhosTurno);
 
-    // Carros Ganhos = soma dos ganhos do LossControl por hora (não acumula por testor)
-    const ganhosTurno = allGanhos.filter(g => g.turno === currentShift.key);
-    const ganhosPorHora = {};
-    ganhosTurno.forEach(g => {
-      if (!ganhosPorHora[g.hora]) ganhosPorHora[g.hora] = 0;
-      if (ganhosPorHora[g.hora] === 0) {
-        ganhosPorHora[g.hora] = (g.carros_perdidos || 0);
-      }
-    });
-    const totalGanhos = Object.values(ganhosPorHora).reduce((s, h) => s + h, 0);
-
-    return { 
-      totalProduzidoTurno: totalProd, 
-      totalPerdasProdTurno: perdasProd,
-      totalPerdasDefTurno: perdasDef,
-      producaoLiquidaTurno: liquida,
-      totalGanhosTurno: totalGanhos
-    };
-  }, [allProd, allGanhos, currentShift.key]);
+  // Produção líquida do turno
+  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno - totalPerdidoTurno);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
-  // Objetivo também precisa agrupar por hora para evitar duplicação
-  const totalObjetivoTurno = useMemo(() => {
-    const prodTurno = allProd.filter(p => p.turno === currentShift.key);
-    const porHora = {};
-    prodTurno.forEach(p => {
-      if (!porHora[p.hora]) porHora[p.hora] = 0;
-      porHora[p.hora] += (p.objetivo || 0);
-    });
-    return Object.values(porHora).reduce((s, h) => s + h, 0);
-  }, [allProd, currentShift.key]);
-  // Eficiência = Produção / Objetivo (mostra eficiência bruta)
-  const eficienciaTurno = totalObjetivoTurno > 0 ? Math.min(100, Math.round((totalProduzidoTurno / totalObjetivoTurno) * 100)) : null;
 
   return (
     <div className="space-y-4 pb-24 lg:pb-6">
@@ -181,32 +100,21 @@ export default function Dashboard() {
       </div>
 
       {/* Visão do turno atual */}
-      <ShiftOverview prodData={shiftProdData} maintenanceData={shiftMaintenanceData} isHistorical={false} />
-
-      {/* Status detalhado dos testores */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[
-          { label: "Rodando", value: testoresRodando, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: "Atenção", value: testoresAtencao, color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20" },
-          { label: "Parados", value: testores.filter(t => t.status === "parado").length, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20" },
-          { label: "Manutenção", value: testores.filter(t => t.status === "manutencao").length, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-        ].map(s => (
-          <Card key={s.label} className={`border ${s.border}`}>
-            <CardContent className="p-2.5 text-center">
-              <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-              <p className="text-[10px] text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+       {activeDate !== today && (
+         <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-3 py-2 rounded-lg">
+           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+           Sem dados para hoje — exibindo dados de {format(new Date(activeDate + "T12:00:00"), "dd/MM/yyyy")}
+         </div>
+       )}
+       <ShiftOverview prodData={activeDate === today ? shiftProdData : prodToday} maintenanceData={shiftMaintenanceData} lossData={activeDate === today ? shiftLossData : lossesToday} isHistorical={activeDate !== today} />
 
        {/* KPIs principais */}
        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: `Produção Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: `Perda Bruta ${shiftLabel}`, value: totalPerdasDefTurno, icon: TrendingDown, color: totalPerdasDefTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdasDefTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdasDefTurno > 0 ? "border-red-500/20" : "border-border" },
-          { label: `Carros Ganhos ${shiftLabel}`, value: totalGanhosTurno, icon: CheckCircle2, color: totalGanhosTurno > 0 ? "text-emerald-400" : "text-muted-foreground", bg: totalGanhosTurno > 0 ? "bg-emerald-500/10" : "bg-muted/30", border: totalGanhosTurno > 0 ? "border-emerald-500/20" : "border-border" },
-          { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-orange-400" : "text-green-400", bg: testoresParados > 0 ? "bg-orange-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-orange-500/20" : "border-green-500/20" },
+          { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
+          { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
+          { label: `Perdas ${shiftLabel}`, value: totalPerdidoTurno, icon: TrendingDown, color: totalPerdidoTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoTurno > 0 ? "border-red-500/20" : "border-border" },
+          { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>
             <CardContent className="p-3 sm:p-4 flex items-center gap-2.5">
@@ -221,25 +129,6 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
-
-      {/* Barra de eficiência do turno */}
-      {eficienciaTurno !== null && (
-        <div className="px-4 py-3 rounded-xl bg-muted/30 border border-border space-y-1.5">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-muted-foreground">Eficiência — {shiftLabel}</span>
-            <span className={`font-black text-sm ${eficienciaTurno >= 90 ? "text-green-400" : eficienciaTurno >= 70 ? "text-yellow-400" : "text-red-400"}`}>{eficienciaTurno}%</span>
-          </div>
-          <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{
-                width: `${eficienciaTurno}%`,
-                background: eficienciaTurno >= 90 ? "hsl(142,71%,45%)" : eficienciaTurno >= 70 ? "hsl(38,92%,50%)" : "hsl(0,72%,51%)"
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Indicador tempo real */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -297,7 +186,7 @@ export default function Dashboard() {
       </div>
 
       {/* Gráfico produção & perdas por turno */}
-      <ShiftProductionChart prodData={allProd} date={today} />
+      <ShiftProductionChart prodData={allProd} lossData={allLosses} date={activeDate} />
 
       {/* Status Testores + Ocorrências */}
       <div className="grid lg:grid-cols-2 gap-4">
@@ -320,8 +209,8 @@ export default function Dashboard() {
               const statusLabel = { rodando: "Rodando", atencao: "Atenção", parado: "Parado", manutencao: "Manutenção", bloqueado: "Bloqueado" };
 
               // Última justificativa registrada hoje para este testor
-              const ultimaJust = allProd
-                .filter(p => (p.testor_id === t.id || p.testor_nome === t.nome) && p.justificativa)
+              const ultimaJust = prodToday
+                .filter(p => p.testor_nome === t.nome && p.justificativa)
                 .sort((a, b) => (b.hora || "").localeCompare(a.hora || ""))
                 [0]?.justificativa;
 

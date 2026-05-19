@@ -126,19 +126,6 @@
   }
 }
 
-/* Mobile performance */
-* {
-  -webkit-tap-highlight-color: transparent;
-}
-.touch-manipulation {
-  touch-action: manipulation;
-}
-/* Scroll suave nativo (mais fluido que CSS em Android) */
-html {
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

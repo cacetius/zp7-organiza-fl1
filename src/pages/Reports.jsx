@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import {
 import { format, subDays, parseISO, eachDayOfInterval } from "date-fns";
 import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
 import { ptBR } from "date-fns/locale";
+import html2canvas from "html2canvas";
 
 const COLORS = [
   "hsl(217,91%,60%)", "hsl(142,71%,45%)", "hsl(38,92%,50%)",
@@ -64,57 +65,42 @@ export default function Reports() {
   const [compareDate2, setCompareDate2] = useState(format(new Date(), "yyyy-MM-dd"));
   const [exporting, setExporting] = useState(false);
   const [exportingTurno, setExportingTurno] = useState(false);
+  const reportRef = useRef(null);
   const qc = useQueryClient();
 
   const today = new Date();
 
-  const stale2m = 2 * 60_000;
-  const stale5m = 5 * 60_000;
-
-  // Queries sempre necessárias (leves)
-  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: stale5m });
-
-  // Queries por tab — só carregam quando a tab está ativa
-  const { data: occurrences = [] } = useQuery({
-    queryKey: ["occurrences-all"], queryFn: () => base44.entities.Occurrence.list("-created_date", 200),
-    staleTime: stale2m, enabled: tab === "producao" || tab === "resumo",
-  });
-  const { data: tasks = [] } = useQuery({
-    queryKey: ["tasks-all"], queryFn: () => base44.entities.Task.list(),
-    staleTime: stale5m, enabled: tab === "producao",
-  });
+  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list() });
+  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-all"], queryFn: () => base44.entities.Occurrence.list() });
+  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-all"], queryFn: () => base44.entities.Task.list() });
   const { data: lossRecords = [] } = useQuery({
     queryKey: ["loss-all"],
     queryFn: () => base44.entities.LossControl.list("-created_date", 2000),
-    staleTime: stale2m,
-    // Habilita para perdas e resumo; para as outras abas a comparação de datas pode precisar
-    enabled: tab === "perdas" || tab === "resumo" || tab === "producao",
   });
 
   const resumoTurnoObj = RESUMO_TURNOS.find(t => t.key === resumoTurno);
 
-  const { data: prodRecords = [], isLoading: loadingProdRecords } = useQuery({
+  const { data: prodRecords = [] } = useQuery({
     queryKey: [`prod-ctrl-${resumoDate}-${resumoTurno}`],
     queryFn: () => base44.entities.ProductionControl.filter({ data: resumoDate, turno: resumoTurno }),
-    staleTime: stale2m, enabled: tab === "resumo",
   });
 
   const { data: lossDay = [] } = useQuery({
     queryKey: [`loss-${resumoDate}-${resumoTurno}`],
     queryFn: () => base44.entities.LossControl.filter({ data: resumoDate, turno: resumoTurno }),
-    staleTime: stale2m, enabled: tab === "resumo",
   });
 
   const { data: occDay = [] } = useQuery({
     queryKey: [`occ-${resumoDate}-${resumoTurno}`],
     queryFn: () => base44.entities.Occurrence.list("-created_date", 100),
-    staleTime: stale2m, enabled: tab === "resumo",
+    enabled: tab === "resumo",
   });
 
   useEffect(() => {
-    // Subscriptions só para invalidar cache — não criam queries desnecessárias
     const subs = [
       base44.entities.Testor.subscribe(() => qc.invalidateQueries({ queryKey: ["testores"] })),
+      base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-all"] })),
+      base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-all"] })),
       base44.entities.LossControl.subscribe(() => {
         qc.invalidateQueries({ queryKey: ["loss-all"] });
         qc.invalidateQueries({ predicate: q => q.queryKey[0]?.toString().startsWith("loss-") });
@@ -178,11 +164,9 @@ export default function Reports() {
   });
 
   // Global KPIs — baseados em ProductionControl e LossControl (não em testores)
-  // Habilitado sempre: usado no resumo (comparativo de turnos) e nas outras abas
-  const { data: prodCtrlAll = [], isLoading: loadingProdAll } = useQuery({
+  const { data: prodCtrlAll = [] } = useQuery({
     queryKey: ["prod-ctrl-all"],
     queryFn: () => base44.entities.ProductionControl.list("-created_date", 2000),
-    staleTime: stale2m,
   });
 
   const filteredProdCtrl = useMemo(() => {
@@ -333,14 +317,26 @@ export default function Reports() {
 
   const dateRangeLabel = `${format(fromDate, "dd/MM/yyyy")} – ${format(toDate, "dd/MM/yyyy")}`;
 
-  // PDF Consolidado por Turno
+  // PDF Consolidado por Turno com gráficos capturados
   const handleExportResumoPDFConsolidado = async () => {
     setExportingTurno(true);
     try {
       const hora = new Date().toLocaleString("pt-BR");
       const dateLabel = format(parseISO(resumoDate), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
       const turnoLabel = resumoTurnoObj.label;
+
+      // Captura gráficos do resumo
+      const container = reportRef.current;
       const chartImages = [];
+      if (container) {
+        const chartEls = container.querySelectorAll("[data-chart]");
+        for (const el of chartEls) {
+          try {
+            const canvas = await html2canvas(el, { backgroundColor: "#16202e", scale: 2, logging: false, useCORS: true });
+            chartImages.push({ title: el.getAttribute("data-title") || "", src: canvas.toDataURL("image/png") });
+          } catch (_) {}
+        }
+      }
 
       const efic = resumoTotalProd > 0
         ? Math.round(((resumoTotalProd - perdaReal) / resumoTotalProd) * 100)
@@ -727,7 +723,16 @@ export default function Reports() {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
+      const container = reportRef.current;
+      const chartEls = container ? container.querySelectorAll("[data-chart]") : [];
       const chartImages = [];
+      for (const el of chartEls) {
+        try {
+          const canvas = await html2canvas(el, { backgroundColor: "#16202e", scale: 1.8, logging: false, useCORS: true });
+          chartImages.push({ title: el.getAttribute("data-title") || "", src: canvas.toDataURL("image/png") });
+        } catch (_) {}
+      }
+
       const hora = new Date().toLocaleString("pt-BR");
       const turnoLabel = TURNO_LABELS[turno];
       const testoresRows = filteredTestores.map(t => `
@@ -854,7 +859,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="space-y-4 pb-24 lg:pb-6">
+    <div className="space-y-4 pb-24 lg:pb-6" ref={reportRef}>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -997,12 +1002,6 @@ export default function Reports() {
       {/* ═══ TAB: RESUMO DIÁRIO ═══ */}
       {tab === "resumo" && (
         <div className="space-y-4">
-          {loadingProdRecords && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-              <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              Carregando dados do turno…
-            </div>
-          )}
           {/* Date & Turno selector */}
           <div className="flex flex-wrap gap-2 items-center">
             <Input type="date" value={resumoDate} onChange={e => setResumoDate(e.target.value)} className="h-9 w-36 text-sm" />
@@ -1047,7 +1046,7 @@ export default function Reports() {
           </div>
 
           {/* Gráfico comparativo por turno */}
-          <ShiftProductionChart prodData={prodCtrlAll.length > 0 ? prodCtrlAll : prodRecords} date={resumoDate} />
+          <ShiftProductionChart prodData={prodCtrlAll} lossData={lossRecords} date={resumoDate} />
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
@@ -1212,12 +1211,6 @@ export default function Reports() {
       {/* ═══ TAB: PRODUÇÃO ═══ */}
       {tab === "producao" && (
         <div className="space-y-4">
-          {loadingProdAll && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-              <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              Carregando dados de produção…
-            </div>
-          )}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">

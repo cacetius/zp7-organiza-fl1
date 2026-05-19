@@ -23,24 +23,6 @@ const Reports = React.lazy(() => import("./pages/Reports"));
 const LossControl = React.lazy(() => import("./pages/LossControl"));
 const ProductionControl = React.lazy(() => import("./pages/ProductionControl"));
 
-// Prefetch das páginas mais usadas após o app estar idle
-function prefetchPages() {
-  if (typeof requestIdleCallback !== "undefined") {
-    requestIdleCallback(() => {
-      import("./pages/ProductionControl");
-      import("./pages/LossControl");
-      import("./pages/Occurrences");
-    }, { timeout: 3000 });
-  }
-}
-
-// Spinner reutilizável — fora do componente para evitar recriação a cada render
-const PageLoader = () => (
-  <div className="flex items-center justify-center h-40">
-    <div className="w-7 h-7 border-4 border-muted border-t-primary rounded-full animate-spin" />
-  </div>
-);
-
 function AppShell() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,8 +32,6 @@ function AppShell() {
     const profiles = await base44.entities.UserProfile.filter({ user_email: user.email });
     if (profiles.length > 0) setProfile(profiles[0]);
     setLoading(false);
-    // Pré-carrega páginas mais usadas enquanto o usuário vê o Dashboard
-    prefetchPages();
   };
 
   useEffect(() => {
@@ -74,6 +54,12 @@ function AppShell() {
   if (!profile) {
     return <Onboarding onComplete={loadProfile} />;
   }
+
+  const PageLoader = () => (
+    <div className="flex items-center justify-center h-40">
+      <div className="w-7 h-7 border-4 border-muted border-t-primary rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <Routes>
