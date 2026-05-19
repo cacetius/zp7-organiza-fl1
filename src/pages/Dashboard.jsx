@@ -76,13 +76,14 @@ export default function Dashboard() {
   // Produção bruta do turno
   const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
-  // Perdas do turno (apenas para exibição, não subtrai da produção)
+  // Perdas do turno (excluindo ganhos)
   const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
-  const totalPerdidoTurno = Math.max(0, perdasBrutasTurno - ganhosTurno);
 
-  // Produção líquida = produção bruta (perdas não são subtraídas)
-  const producaoLiquidaTurno = totalProduzidoTurno;
+  // Ganhos do turno
+  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+
+  // Produção líquida = Produção - Perdas + Ganhos
+  const producaoLiquidaTurno = Math.max(0, totalProduzidoTurno - perdasBrutasTurno + ganhosTurno);
 
   const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
 
@@ -113,7 +114,7 @@ export default function Dashboard() {
         {[
           { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
           { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: `Perdas ${shiftLabel}`, value: totalPerdidoTurno, icon: TrendingDown, color: totalPerdidoTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: totalPerdidoTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: totalPerdidoTurno > 0 ? "border-red-500/20" : "border-border" },
+          { label: `Perdas ${shiftLabel}`, value: perdasBrutasTurno, icon: TrendingDown, color: perdasBrutasTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: perdasBrutasTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: perdasBrutasTurno > 0 ? "border-red-500/20" : "border-border" },
           { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>
