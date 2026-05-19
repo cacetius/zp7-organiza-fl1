@@ -81,8 +81,8 @@ export default function ProductionControl() {
       const allRecords = await base44.entities.ProductionControl.list();
       return allRecords.filter(r => r.data === selectedDate && r.turno === selectedTurno);
     },
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 0,
+    gcTime: 0,
   });
   // Busca os registros do Controle de Perdas para calcular Perda por Defeito
   const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
@@ -92,8 +92,8 @@ export default function ProductionControl() {
       const allRecords = await base44.entities.LossControl.list();
       return allRecords.filter(r => r.data === selectedDate && r.turno === selectedTurno);
     },
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const sheetKeyRef = useRef(sheetKey);
