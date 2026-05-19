@@ -83,16 +83,16 @@ export default function ProductionControl() {
     placeholderData: (prev) => prev || [],
   });
 
-
   const sheetKeyRef = useRef(sheetKey);
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
 
+  // Subscrição em tempo real para invalidar cache quando houver mudanças
   useEffect(() => {
     const unsub = base44.entities.ProductionControl.subscribe(() => {
       qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
     });
-    return unsub;
-  }, []);
+    return () => unsub();
+  }, [qc]);
 
   const optimisticUpdate = (updater) => qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
 
