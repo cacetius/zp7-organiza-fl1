@@ -73,12 +73,14 @@ export default function ProductionControl() {
     queryFn: () => base44.entities.Testor.list(),
     staleTime: 5 * 60_000,
     retry: false,
+    placeholderData: (prev) => prev || [],
   });
   const { data: records = [], isLoading: loadingRecords } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
-    staleTime: 0,
+    staleTime: 5_000,
     retry: false,
+    placeholderData: (prev) => prev || [],
   });
 
 

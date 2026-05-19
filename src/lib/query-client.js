@@ -5,11 +5,11 @@ export const queryClientInstance = new QueryClient({
 		queries: {
 			refetchOnWindowFocus: false,
 			refetchOnReconnect: false,
-			retry: 1,
-			retryDelay: 3000,
-			staleTime: 2 * 60_000,    // 2 min — menos refetches
-			gcTime: 15 * 60_000,      // cache mantido por 15 min (economiza dados em rede fraca)
-			networkMode: "offlineFirst", // usa cache mesmo offline
+			retry: false,
+			staleTime: 5 * 60_000,
+			gcTime: 60 * 60_000,
+			networkMode: "offlineFirst",
+			placeholderData: (prev) => prev,
 		},
 	},
 });

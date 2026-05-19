@@ -51,12 +51,48 @@ export default function Dashboard() {
     return () => subs.forEach(u => u());
   }, []);
 
-  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 30_000, retry: false });
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 60_000, retry: false });
-  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 60_000, retry: false });
-  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.filter({ data: today }), staleTime: 0, retry: false });
-  const { data: allGanhos = [] } = useQuery({ queryKey: ["ganhos-today"], queryFn: () => base44.entities.LossControl.filter({ data: today, motivo_perda: "ganho" }), staleTime: 0, retry: false });
-  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000, retry: false });
+  const { data: testores = [] } = useQuery({ 
+    queryKey: ["testores"], 
+    queryFn: () => base44.entities.Testor.list(), 
+    staleTime: 5 * 60_000, 
+    retry: false,
+    placeholderData: (prev) => prev || []
+  });
+  const { data: tasks = [] } = useQuery({ 
+    queryKey: ["tasks-open"], 
+    queryFn: () => base44.entities.Task.filter({ status: "aberta" }), 
+    staleTime: 2 * 60_000, 
+    retry: false,
+    placeholderData: (prev) => prev || []
+  });
+  const { data: occurrences = [] } = useQuery({ 
+    queryKey: ["occurrences-open"], 
+    queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), 
+    staleTime: 2 * 60_000, 
+    retry: false,
+    placeholderData: (prev) => prev || []
+  });
+  const { data: allProd = [] } = useQuery({ 
+    queryKey: ["prod-today"], 
+    queryFn: () => base44.entities.ProductionControl.filter({ data: today }), 
+    staleTime: 10_000, 
+    retry: false,
+    placeholderData: (prev) => prev || []
+  });
+  const { data: allGanhos = [] } = useQuery({ 
+    queryKey: ["ganhos-today"], 
+    queryFn: () => base44.entities.LossControl.filter({ data: today, motivo_perda: "ganho" }), 
+    staleTime: 10_000, 
+    retry: false,
+    placeholderData: (prev) => prev || []
+  });
+  const { data: maintenanceData = [] } = useQuery({ 
+    queryKey: ["maintenance-today"], 
+    queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), 
+    staleTime: 2 * 60_000, 
+    retry: false,
+    placeholderData: (prev) => prev || []
+  });
 
   const currentShift = detectCurrentShift();
   const shiftProdData = getTodayShiftData(allProd, currentShift.key);
