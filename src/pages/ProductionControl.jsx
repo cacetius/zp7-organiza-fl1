@@ -100,10 +100,20 @@ export default function ProductionControl() {
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
 
   useEffect(() => {
-    const unsub = base44.entities.ProductionControl.subscribe(() => {
-      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+    const unsubProduction = base44.entities.ProductionControl.subscribe((event) => {
+      if (event.type === 'create' || event.type === 'update' || event.type === 'delete') {
+        qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+      }
     });
-    return unsub;
+    const unsubLoss = base44.entities.LossControl.subscribe((event) => {
+      if (event.type === 'create' || event.type === 'update' || event.type === 'delete') {
+        qc.invalidateQueries({ queryKey: [lossKey] });
+      }
+    });
+    return () => {
+      unsubProduction();
+      unsubLoss();
+    };
   }, []);
 
   const optimisticUpdate = (updater) => qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
