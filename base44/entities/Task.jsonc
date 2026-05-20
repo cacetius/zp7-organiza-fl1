@@ -60,42 +60,54 @@
     "read": {
       "$or": [
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "created_by": "{{user.email}}"
         },
         {
           "data.responsavel": "{{user.full_name}}"
         },
         {
-          "created_by": "{{user.email}}"
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "lider",
+                "monitor"
+              ]
+            }
+          }
         }
       ]
     },
     "update": {
       "$or": [
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "created_by": "{{user.email}}"
         },
         {
           "data.responsavel": "{{user.full_name}}"
         },
         {
-          "created_by": "{{user.email}}"
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "lider",
+                "monitor"
+              ]
+            }
+          }
         }
       ]
     },
     "delete": {
       "$or": [
         {
+          "created_by": "{{user.email}}"
+        },
+        {
           "user_condition": {
             "role": "admin"
           }
-        },
-        {
-          "created_by": "{{user.email}}"
         }
       ]
     }
