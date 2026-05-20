@@ -53,45 +53,32 @@
     "resultado"
   ],
   "rls": {
-    "create": true,
-    "read": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "created_by": "{{user.email}}"
-        },
-        {
-          "data.turno": "{{user.data.turno}}"
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "lider",
+            "monitor"
+          ]
         }
-      ]
+      }
     },
+    "read": true,
     "update": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "created_by": "{{user.email}}"
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "lider"
+          ]
         }
-      ]
+      }
     },
     "delete": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "created_by": "{{user.email}}"
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
