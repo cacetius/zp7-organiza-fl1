@@ -24,14 +24,45 @@ import {
   Target,
   Gauge,
   BarChart3,
+  PieChart,
+  Activity,
 } from "lucide-react";
 import { format } from "date-fns";
 import { getTodayShiftData } from "@/lib/shiftDetector";
 
 const TURNOS = [
+  { key: "todos", label: "Resumo Diário" },
   { key: "primeiro", label: "1º Turno" },
   { key: "segundo", label: "2º Turno" },
   { key: "terceiro", label: "3º Turno" },
+];
+
+const HORAS_PADRAO = [
+  "06:00",
+  "07:00",
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "19:00",
+  "20:00",
+  "21:00",
+  "22:00",
+  "23:00",
+  "23:45",
+  "00:00",
+  "01:00",
+  "02:00",
+  "03:00",
+  "04:00",
+  "05:00",
 ];
 
 function safeNumber(value) {
@@ -100,18 +131,78 @@ function downloadCsv(filename, headers, rows) {
   URL.revokeObjectURL(url);
 }
 
+function BarLine({ label, value, max, colorClass = "bg-blue-500" }) {
+  const percent = max > 0 ? Math.max(3, Math.round((value / max) * 100)) : 0;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="truncate text-muted-foreground">{label}</span>
+        <span className="font-black">{value}</span>
+      </div>
+
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div
+          className={`h-full rounded-full ${colorClass}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MiniColumnChart({ data, valueKey, labelKey, colorClass = "bg-blue-500" }) {
+  const max = Math.max(...data.map((item) => safeNumber(item[valueKey])), 0);
+
+  if (!data.length || max <= 0) {
+    return (
+      <div className="h-40 flex items-center justify-center text-xs text-muted-foreground">
+        Sem dados para exibir gráfico.
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-44 flex items-end gap-1 overflow-x-auto pt-4">
+      {data.map((item) => {
+        const value = safeNumber(item[valueKey]);
+        const height = max > 0 ? Math.max(8, Math.round((value / max) * 130)) : 0;
+
+        return (
+          <div
+            key={item[labelKey]}
+            className="flex flex-col items-center justify-end gap-1 min-w-[34px]"
+            title={`${item[labelKey]}: ${value}`}
+          >
+            <span className="text-[10px] font-bold text-muted-foreground">
+              {value > 0 ? value : ""}
+            </span>
+
+            <div
+              className={`w-5 rounded-t ${colorClass}`}
+              style={{ height }}
+            />
+
+            <span className="text-[9px] text-muted-foreground rotate-[-35deg] origin-top-left whitespace-nowrap">
+              {item[labelKey]}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Reports() {
   const todayShift = getTodayShiftData();
   const today =
     todayShift.data || todayShift.date || format(new Date(), "yyyy-MM-dd");
 
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedTurno, setSelectedTurno] = useState(
-    todayShift.key || todayShift.turno || "segundo"
-  );
+  const [selectedTurno, setSelectedTurno] = useState("todos");
 
   const turnoLabel =
-    TURNOS.find((turno) => turno.key === selectedTurno)?.label || "Turno";
+    TURNOS.find((turno) => turno.key === selectedTurno)?.label || "Resumo";
 
   const { data: rawProductionRecords = [], isLoading: loadingProduction } =
     useQuery({
@@ -161,19 +252,21 @@ export default function Reports() {
 
   const productionRecords = useMemo(() => {
     return rawProductionRecords.filter((record) => {
-      return (
-        normalizeDate(record) === selectedDate &&
-        normalizeTurno(record) === selectedTurno
-      );
+      const sameDate = normalizeDate(record) === selectedDate;
+      const sameTurno =
+        selectedTurno === "todos" || normalizeTurno(record) === selectedTurno;
+
+      return sameDate && sameTurno;
     });
   }, [rawProductionRecords, selectedDate, selectedTurno]);
 
   const lossRecords = useMemo(() => {
     return rawLossRecords.filter((record) => {
-      return (
-        normalizeDate(record) === selectedDate &&
-        normalizeTurno(record) === selectedTurno
-      );
+      const sameDate = normalizeDate(record) === selectedDate;
+      const sameTurno =
+        selectedTurno === "todos" || normalizeTurno(record) === selectedTurno;
+
+      return sameDate && sameTurno;
     });
   }, [rawLossRecords, selectedDate, selectedTurno]);
 
@@ -183,7 +276,9 @@ export default function Reports() {
     productionRecords.forEach((record) => {
       if (!record.testor_id || !record.hora) return;
 
-      const key = `${record.testor_id}-${record.hora}`;
+      const turno = normalizeTurno(record) || "sem_turno";
+      const key = `${turno}-${record.testor_id}-${record.hora}`;
+
       map[key] = pickLatestRecord(map[key], record);
     });
 
@@ -200,8 +295,9 @@ export default function Reports() {
     lossRecords.forEach((record) => {
       if (!record.item_perda || !record.hora) return;
 
+      const turno = normalizeTurno(record) || "sem_turno";
       const tipo = record.motivo_perda === "ganho" ? "ganho" : "perda";
-      const key = `${tipo}-${record.item_perda}-${record.hora}`;
+      const key = `${turno}-${tipo}-${record.item_perda}-${record.hora}`;
 
       map[key] = pickLatestRecord(map[key], record);
     });
@@ -262,6 +358,83 @@ export default function Reports() {
     return Math.round((totalProduction / totalObjective) * 100);
   }, [totalProduction, totalObjective]);
 
+  const productionByHour = useMemo(() => {
+    const map = {};
+
+    HORAS_PADRAO.forEach((hora) => {
+      map[hora] = {
+        hora,
+        producao: 0,
+        objetivo: 0,
+        perdaProducao: 0,
+      };
+    });
+
+    productionCells.forEach((record) => {
+      const hora = record.hora;
+
+      if (!map[hora]) {
+        map[hora] = {
+          hora,
+          producao: 0,
+          objetivo: 0,
+          perdaProducao: 0,
+        };
+      }
+
+      map[hora].producao += safeNumber(record.carros_produzidos);
+      map[hora].objetivo += safeNumber(record.objetivo);
+    });
+
+    Object.values(map).forEach((item) => {
+      item.perdaProducao = Math.max(0, item.objetivo - item.producao);
+    });
+
+    return Object.values(map).filter((item) => {
+      return item.producao > 0 || item.objetivo > 0 || item.perdaProducao > 0;
+    });
+  }, [productionCells]);
+
+  const lossesByHour = useMemo(() => {
+    const map = {};
+
+    HORAS_PADRAO.forEach((hora) => {
+      map[hora] = {
+        hora,
+        perdas: 0,
+        ganhos: 0,
+        perdaReal: 0,
+      };
+    });
+
+    lossCells.forEach((record) => {
+      const hora = record.hora;
+
+      if (!map[hora]) {
+        map[hora] = {
+          hora,
+          perdas: 0,
+          ganhos: 0,
+          perdaReal: 0,
+        };
+      }
+
+      if (record.motivo_perda === "ganho") {
+        map[hora].ganhos += safeNumber(record.carros_perdidos);
+      } else {
+        map[hora].perdas += safeNumber(record.carros_perdidos);
+      }
+    });
+
+    Object.values(map).forEach((item) => {
+      item.perdaReal = Math.max(0, item.perdas - item.ganhos);
+    });
+
+    return Object.values(map).filter((item) => {
+      return item.perdas > 0 || item.ganhos > 0 || item.perdaReal > 0;
+    });
+  }, [lossCells]);
+
   const productionByTestor = useMemo(() => {
     const map = {};
 
@@ -287,7 +460,9 @@ export default function Reports() {
       map[id].total += safeNumber(record.carros_produzidos);
     });
 
-    return Object.values(map).sort((a, b) => b.total - a.total);
+    return Object.values(map)
+      .filter((item) => item.total > 0)
+      .sort((a, b) => b.total - a.total);
   }, [productionCells, testores]);
 
   const lossesByItem = useMemo(() => {
@@ -332,9 +507,33 @@ export default function Reports() {
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [lossCells]);
 
+  const biggestLoss = lossesByItem[0] || null;
+  const bestTestor = productionByTestor[0] || null;
+
+  const handleExportFullCsv = () => {
+    const headers = ["Indicador", "Valor"];
+
+    const rows = [
+      ["Data", selectedDate],
+      ["Filtro", turnoLabel],
+      ["Objetivo", totalObjective],
+      ["Produção", totalProduction],
+      ["Perdas Produção", productionLoss],
+      ["Perdas por Falha", totalGrossLosses],
+      ["Ganhos", totalGains],
+      ["Perda Real", realLoss],
+      ["Perda Operacional", operationalLoss],
+      ["Real Líquido", liquidProduction],
+      ["Eficiência", `${efficiency}%`],
+      ["Células Produção", productionCells.length],
+      ["Células Perdas", lossCells.length],
+    ];
+
+    downloadCsv(`relatorio_geral_${selectedDate}_${selectedTurno}`, headers, rows);
+  };
+
   const handleExportProductionCsv = () => {
     const headers = ["Testor", "Total Produzido"];
-
     const rows = productionByTestor.map((item) => [item.nome, item.total]);
 
     rows.push([]);
@@ -352,7 +551,6 @@ export default function Reports() {
 
   const handleExportLossCsv = () => {
     const headers = ["Item", "Total"];
-
     const rows = lossesByItem.map((item) => [item.item, item.total]);
 
     rows.push([]);
@@ -362,28 +560,6 @@ export default function Reports() {
     rows.push(["Perda Operacional", operationalLoss]);
 
     downloadCsv(`relatorio_perdas_${selectedDate}_${selectedTurno}`, headers, rows);
-  };
-
-  const handleExportFullCsv = () => {
-    const headers = ["Indicador", "Valor"];
-
-    const rows = [
-      ["Data", selectedDate],
-      ["Turno", turnoLabel],
-      ["Objetivo", totalObjective],
-      ["Produção", totalProduction],
-      ["Perdas Produção", productionLoss],
-      ["Perdas por Falha", totalGrossLosses],
-      ["Ganhos", totalGains],
-      ["Perda Real", realLoss],
-      ["Perda Operacional", operationalLoss],
-      ["Real Líquido", liquidProduction],
-      ["Eficiência", `${efficiency}%`],
-      ["Células Produção", productionCells.length],
-      ["Células Perdas", lossCells.length],
-    ];
-
-    downloadCsv(`relatorio_geral_${selectedDate}_${selectedTurno}`, headers, rows);
   };
 
   const handlePrint = () => {
@@ -396,7 +572,7 @@ export default function Reports() {
     {
       title: "Objetivo",
       value: totalObjective || "—",
-      subtitle: "Meta do turno",
+      subtitle: "Meta do período",
       icon: Target,
       color: "text-cyan-400",
       border: "border-cyan-500/20",
@@ -459,7 +635,7 @@ export default function Reports() {
           </h1>
 
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Relatórios por data e turno, com produção, perdas, ganhos e resumo operacional.
+            Resumo diário, gráficos de produção, perdas, ganhos e relatório operacional.
           </p>
         </div>
 
@@ -479,7 +655,7 @@ export default function Reports() {
             <Clock className="w-4 h-4 text-green-400" />
 
             <Select value={selectedTurno} onValueChange={setSelectedTurno}>
-              <SelectTrigger className="border-0 bg-transparent h-6 w-32 p-0 text-xs focus:ring-0">
+              <SelectTrigger className="border-0 bg-transparent h-6 w-36 p-0 text-xs focus:ring-0">
                 <SelectValue />
               </SelectTrigger>
 
@@ -555,45 +731,79 @@ export default function Reports() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <Card className="border-blue-500/20 bg-blue-500/5">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-400" />
+            Resumo Diário
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-muted-foreground text-xs">Data</p>
+              <p className="font-black">{selectedDate}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Filtro</p>
+              <p className="font-black">{turnoLabel}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Melhor testor</p>
+              <p className="font-black text-blue-400">
+                {bestTestor ? `${bestTestor.nome} (${bestTestor.total})` : "—"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Maior perda</p>
+              <p className="font-black text-red-400">
+                {biggestLoss ? `${biggestLoss.item} (${biggestLoss.total})` : "—"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Produção líquida</p>
+              <p className="font-black text-green-400">{liquidProduction}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Eficiência</p>
+              <p className="font-black text-cyan-400">{efficiency}%</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Células produção</p>
+              <p className="font-black text-blue-400">{productionCells.length}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground text-xs">Células perdas</p>
+              <p className="font-black text-red-400">{lossCells.length}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
-              <Factory className="w-4 h-4 text-blue-400" />
-              Resumo de Produção
+              <BarChart3 className="w-4 h-4 text-blue-400" />
+              Gráfico — Produção por Hora
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Data</span>
-              <span className="font-bold">{selectedDate}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Turno</span>
-              <span className="font-bold">{turnoLabel}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Objetivo</span>
-              <span className="font-black text-cyan-400">{totalObjective || "—"}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Produção</span>
-              <span className="font-black text-blue-400">{totalProduction}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Perdas Produção</span>
-              <span className="font-black text-orange-400">{productionLoss}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Eficiência</span>
-              <span className="font-black text-green-400">{efficiency}%</span>
-            </div>
+          <CardContent>
+            <MiniColumnChart
+              data={productionByHour}
+              valueKey="producao"
+              labelKey="hora"
+              colorClass="bg-blue-500"
+            />
           </CardContent>
         </Card>
 
@@ -601,71 +811,22 @@ export default function Reports() {
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <TrendingDown className="w-4 h-4 text-red-400" />
-              Resumo de Perdas
+              Gráfico — Perdas por Hora
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Perdas por Falha</span>
-              <span className="font-black text-red-400">{totalGrossLosses}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Ganhos</span>
-              <span className="font-black text-green-400">{totalGains}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Perda Real</span>
-              <span className="font-black text-orange-400">{realLoss}</span>
-            </div>
-
-            <div className="flex justify-between border-t border-border pt-2">
-              <span className="text-muted-foreground">Perda Operacional</span>
-              <span className="font-black text-purple-400">{operationalLoss}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Real Líquido</span>
-              <span className="font-black text-emerald-400">{liquidProduction}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border">
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-purple-400" />
-              Conferência
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Registros Produção</span>
-              <span className="font-black text-blue-400">{productionRecords.length}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Células Produção</span>
-              <span className="font-black text-blue-400">{productionCells.length}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Registros Perdas</span>
-              <span className="font-black text-red-400">{lossRecords.length}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Células Perdas</span>
-              <span className="font-black text-red-400">{lossCells.length}</span>
-            </div>
+          <CardContent>
+            <MiniColumnChart
+              data={lossesByHour}
+              valueKey="perdaReal"
+              labelKey="hora"
+              colorClass="bg-red-500"
+            />
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -674,23 +835,21 @@ export default function Reports() {
             </CardTitle>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="space-y-3">
             {productionByTestor.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-6">
-                Nenhuma produção encontrada para o filtro selecionado.
+                Nenhuma produção encontrada.
               </p>
             ) : (
-              <div className="space-y-2">
-                {productionByTestor.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/20"
-                  >
-                    <span className="text-xs font-semibold truncate">{item.nome}</span>
-                    <span className="text-sm font-black text-blue-400">{item.total}</span>
-                  </div>
-                ))}
-              </div>
+              productionByTestor.map((item) => (
+                <BarLine
+                  key={item.id}
+                  label={item.nome}
+                  value={item.total}
+                  max={productionByTestor[0]?.total || 0}
+                  colorClass="bg-blue-500"
+                />
+              ))
             )}
           </CardContent>
         </Card>
@@ -698,35 +857,31 @@ export default function Reports() {
         <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-red-400" />
+              <PieChart className="w-4 h-4 text-red-400" />
               Perdas por Item
             </CardTitle>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="space-y-3">
             {lossesByItem.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-6">
-                Nenhuma perda encontrada para o filtro selecionado.
+                Nenhuma perda encontrada.
               </p>
             ) : (
-              <div className="space-y-2">
-                {lossesByItem.map((item) => (
-                  <div
-                    key={item.item}
-                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/20"
-                  >
-                    <span className="text-xs font-semibold truncate">{item.item}</span>
-                    <span className="text-sm font-black text-red-400">{item.total}</span>
-                  </div>
-                ))}
-              </div>
+              lossesByItem.map((item) => (
+                <BarLine
+                  key={item.item}
+                  label={item.item}
+                  value={item.total}
+                  max={lossesByItem[0]?.total || 0}
+                  colorClass="bg-red-500"
+                />
+              ))
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {gainsByItem.length > 0 && (
-        <Card className="border-green-500/20 bg-green-500/5">
+        <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-green-400" />
@@ -734,21 +889,25 @@ export default function Reports() {
             </CardTitle>
           </CardHeader>
 
-          <CardContent>
-            <div className="space-y-2">
-              {gainsByItem.map((item) => (
-                <div
+          <CardContent className="space-y-3">
+            {gainsByItem.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                Nenhum ganho encontrado.
+              </p>
+            ) : (
+              gainsByItem.map((item) => (
+                <BarLine
                   key={item.item}
-                  className="flex items-center justify-between p-2 rounded-lg border border-green-500/20 bg-green-500/5"
-                >
-                  <span className="text-xs font-semibold truncate">{item.item}</span>
-                  <span className="text-sm font-black text-green-400">{item.total}</span>
-                </div>
-              ))}
-            </div>
+                  label={item.item}
+                  value={item.total}
+                  max={gainsByItem[0]?.total || 0}
+                  colorClass="bg-green-500"
+                />
+              ))
+            )}
           </CardContent>
         </Card>
-      )}
+      </div>
     </div>
   );
 }
