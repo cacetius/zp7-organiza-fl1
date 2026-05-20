@@ -1,8 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   Factory,
   TrendingDown,
@@ -19,6 +21,21 @@ import {
 } from "lucide-react";
 import { getTodayShiftData } from "@/lib/shiftDetector";
 
+const TURNOS = [
+  {
+    key: "primeiro",
+    label: "1º Turno",
+  },
+  {
+    key: "segundo",
+    label: "2º Turno",
+  },
+  {
+    key: "terceiro",
+    label: "3º Turno",
+  },
+];
+
 function safeNumber(value) {
   return Number(value || 0);
 }
@@ -27,22 +44,50 @@ function goTo(path) {
   window.location.href = path;
 }
 
+function normalizeDate(record) {
+  if (record.data) return record.data;
+  if (record.date) return record.date;
+  if (record.created_date) return String(record.created_date).slice(0, 10);
+  return "";
+}
+
+function normalizeTurno(record) {
+  return record.turno || record.shift || record.turno_key || "";
+}
+
+function getRecordTime(record) {
+  return record.updated_date || record.created_date || record.id || "";
+}
+
+function pickLatestRecord(existing, current) {
+  if (!existing) return current;
+
+  const existingTime = getRecordTime(existing);
+  const currentTime = getRecordTime(current);
+
+  if (String(currentTime) >= String(existingTime)) {
+    return current;
+  }
+
+  return existing;
+}
+
 export default function Dashboard() {
   const todayShift = getTodayShiftData();
 
-  const today = todayShift.data || todayShift.date;
-  const currentTurno = todayShift.key || todayShift.turno;
-  const turnoLabel = todayShift.label || "Turno Atual";
+  const defaultDate = todayShift.data || todayShift.date;
+  const defaultTurno = todayShift.key || todayShift.turno || "segundo";
 
-  const { data: productionRecords = [], isLoading: loadingProduction } = useQuery({
-    queryKey: ["dashboard-production", today, currentTurno],
+  const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const [selectedTurno, setSelectedTurno] = useState(defaultTurno);
+
+  const turnoLabel = TURNOS.find((turno) => turno.key === selectedTurno)?.label || "Turno";
+
+  const { data: rawProductionRecords = [], isLoading: loadingProduction } = useQuery({
+    queryKey: ["dashboard-production-raw"],
     queryFn: async () => {
       try {
-        const allRecords = await base44.entities.ProductionControl.list();
-
-        return allRecords.filter((record) => {
-          return record.data === today && record.turno === currentTurno;
-        });
+        return await base44.entities.ProductionControl.list();
       } catch (error) {
         console.error("Erro ao carregar ProductionControl no Dashboard:", error);
         return [];
@@ -53,15 +98,11 @@ export default function Dashboard() {
     refetchOnWindowFocus: false,
   });
 
-  const { data: lossRecords = [], isLoading: loadingLosses } = useQuery({
-    queryKey: ["dashboard-losses", today, currentTurno],
+  const { data: rawLossRecords = [], isLoading: loadingLosses } = useQuery({
+    queryKey: ["dashboard-losses-raw"],
     queryFn: async () => {
       try {
-        const allRecords = await base44.entities.LossControl.list();
-
-        return allRecords.filter((record) => {
-          return record.data === today && record.turno === currentTurno;
-        });
+        return await base44.entities.LossControl.list();
       } catch (error) {
         console.error("Erro ao carregar LossControl no Dashboard:", error);
         return [];
@@ -88,17 +129,10 @@ export default function Dashboard() {
   });
 
   const { data: occurrences = [] } = useQuery({
-    queryKey: ["dashboard-occurrences", today, currentTurno],
+    queryKey: ["dashboard-occurrences"],
     queryFn: async () => {
       try {
-        const allRecords = await base44.entities.Occurrence.list();
-
-        return allRecords.filter((record) => {
-          const sameDate = record.data === today || record.created_date?.startsWith?.(today);
-          const sameTurno = !record.turno || record.turno === currentTurno;
-
-          return sameDate && sameTurno;
-        });
+        return await base44.entities.Occurrence.list();
       } catch (error) {
         console.error("Erro ao carregar Occurrence no Dashboard:", error);
         return [];
@@ -113,8 +147,8 @@ export default function Dashboard() {
     queryKey: ["dashboard-maintenance"],
     queryFn: async () => {
       try {
-        const allRecords = await base44.entities.MaintenanceRequest.list();
-        return allRecords.slice(0, 50);
+        const records = await base44.entities.MaintenanceRequest.list();
+        return records.slice(0, 100);
       } catch (error) {
         console.error("Erro ao carregar MaintenanceRequest no Dashboard:", error);
         return [];
@@ -129,8 +163,8 @@ export default function Dashboard() {
     queryKey: ["dashboard-tasks"],
     queryFn: async () => {
       try {
-        const allRecords = await base44.entities.Task.list();
-        return allRecords.slice(0, 50);
+        const records = await base44.entities.Task.list();
+        return records.slice(0, 100);
       } catch (error) {
         console.error("Erro ao carregar Task no Dashboard:", error);
         return [];
@@ -141,33 +175,80 @@ export default function Dashboard() {
     refetchOnWindowFocus: false,
   });
 
+  const productionRecords = useMemo(() => {
+    return rawProductionRecords.filter((record) => {
+      return normalizeDate(record) === selectedDate && normalizeTurno(record) === selectedTurno;
+    });
+  }, [rawProductionRecords, selectedDate, selectedTurno]);
+
+  const lossRecords = useMemo(() => {
+    return rawLossRecords.filter((record) => {
+      return normalizeDate(record) === selectedDate && normalizeTurno(record) === selectedTurno;
+    });
+  }, [rawLossRecords, selectedDate, selectedTurno]);
+
+  const productionCellMap = useMemo(() => {
+    const map = {};
+
+    productionRecords.forEach((record) => {
+      if (!record.testor_id || !record.hora) return;
+
+      const key = `${record.testor_id}-${record.hora}`;
+      map[key] = pickLatestRecord(map[key], record);
+    });
+
+    return map;
+  }, [productionRecords]);
+
+  const productionCells = useMemo(() => {
+    return Object.values(productionCellMap);
+  }, [productionCellMap]);
+
+  const lossCellMap = useMemo(() => {
+    const map = {};
+
+    lossRecords.forEach((record) => {
+      if (!record.item_perda || !record.hora) return;
+
+      const tipo = record.motivo_perda === "ganho" ? "ganho" : "perda";
+      const key = `${tipo}-${record.item_perda}-${record.hora}`;
+      map[key] = pickLatestRecord(map[key], record);
+    });
+
+    return map;
+  }, [lossRecords]);
+
+  const lossCells = useMemo(() => {
+    return Object.values(lossCellMap);
+  }, [lossCellMap]);
+
   const totalProduction = useMemo(() => {
-    return productionRecords.reduce((sum, record) => {
+    return productionCells.reduce((sum, record) => {
       return sum + safeNumber(record.carros_produzidos);
     }, 0);
-  }, [productionRecords]);
+  }, [productionCells]);
 
   const totalObjective = useMemo(() => {
-    return productionRecords.reduce((sum, record) => {
+    return productionCells.reduce((sum, record) => {
       return sum + safeNumber(record.objetivo);
     }, 0);
-  }, [productionRecords]);
+  }, [productionCells]);
 
   const totalGrossLosses = useMemo(() => {
-    return lossRecords
+    return lossCells
       .filter((record) => record.motivo_perda !== "ganho")
       .reduce((sum, record) => {
         return sum + safeNumber(record.carros_perdidos);
       }, 0);
-  }, [lossRecords]);
+  }, [lossCells]);
 
   const totalGains = useMemo(() => {
-    return lossRecords
+    return lossCells
       .filter((record) => record.motivo_perda === "ganho")
       .reduce((sum, record) => {
         return sum + safeNumber(record.carros_perdidos);
       }, 0);
-  }, [lossRecords]);
+  }, [lossCells]);
 
   const realLoss = useMemo(() => {
     return Math.max(0, totalGrossLosses - totalGains);
@@ -186,6 +267,15 @@ export default function Dashboard() {
     return Math.round((totalProduction / totalObjective) * 100);
   }, [totalProduction, totalObjective]);
 
+  const filteredOccurrences = useMemo(() => {
+    return occurrences.filter((record) => {
+      const sameDate = normalizeDate(record) === selectedDate;
+      const recordTurno = normalizeTurno(record);
+      const sameTurno = !recordTurno || recordTurno === selectedTurno;
+      return sameDate && sameTurno;
+    });
+  }, [occurrences, selectedDate, selectedTurno]);
+
   const activeTestores = useMemo(() => {
     return testores.filter((testor) => {
       return testor.status === "rodando" || testor.status === "atencao";
@@ -199,10 +289,10 @@ export default function Dashboard() {
   }, [testores]);
 
   const criticalOccurrences = useMemo(() => {
-    return occurrences.filter((item) => {
+    return filteredOccurrences.filter((item) => {
       return item.gravidade === "alta" || item.gravidade === "critica";
     });
-  }, [occurrences]);
+  }, [filteredOccurrences]);
 
   const openMaintenance = useMemo(() => {
     return maintenance.filter((item) => {
@@ -220,9 +310,9 @@ export default function Dashboard() {
 
   const mainCards = [
     {
-      title: "Produção do Turno",
+      title: "Produção",
       value: totalProduction,
-      subtitle: "Somente hoje e turno atual",
+      subtitle: `${productionCells.length} células lançadas`,
       icon: Factory,
       color: "text-blue-400",
       border: "border-blue-500/20",
@@ -231,7 +321,7 @@ export default function Dashboard() {
     {
       title: "Objetivo",
       value: totalObjective || "—",
-      subtitle: totalObjective > 0 ? `${efficiency}% de eficiência` : "Sem objetivo lançado",
+      subtitle: totalObjective > 0 ? `${efficiency}% de eficiência` : "Sem objetivo",
       icon: Target,
       color: "text-cyan-400",
       border: "border-cyan-500/20",
@@ -240,7 +330,7 @@ export default function Dashboard() {
     {
       title: "Perdas Brutas",
       value: totalGrossLosses,
-      subtitle: "Sem contar ganhos",
+      subtitle: "Somente perdas",
       icon: TrendingDown,
       color: "text-red-400",
       border: "border-red-500/20",
@@ -249,7 +339,7 @@ export default function Dashboard() {
     {
       title: "Carros Ganhos",
       value: totalGains,
-      subtitle: "Recuperados no turno",
+      subtitle: "Registros como ganho",
       icon: TrendingUp,
       color: "text-green-400",
       border: "border-green-500/20",
@@ -258,7 +348,7 @@ export default function Dashboard() {
     {
       title: "Perda Real",
       value: realLoss,
-      subtitle: "Perdas - ganhos",
+      subtitle: "Perdas brutas - ganhos",
       icon: AlertTriangle,
       color: "text-orange-400",
       border: "border-orange-500/20",
@@ -285,19 +375,36 @@ export default function Dashboard() {
           </h1>
 
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Página inicial filtrada por data e turno atual. Não soma registros antigos.
+            Agora filtrado por data e turno selecionado, sem somar registros duplicados.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <div className="px-3 py-2 rounded-lg border border-border bg-muted/30 text-xs font-semibold flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-blue-400" />
-            {today}
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border-0 bg-transparent h-6 w-32 text-xs p-0 focus-visible:ring-0"
+            />
           </div>
 
-          <div className="px-3 py-2 rounded-lg border border-border bg-muted/30 text-xs font-semibold flex items-center gap-2">
+          <div className="rounded-lg border border-border bg-muted/30 text-xs font-semibold flex items-center gap-2 px-3 py-2">
             <Clock className="w-4 h-4 text-green-400" />
-            {turnoLabel}
+            <Select value={selectedTurno} onValueChange={setSelectedTurno}>
+              <SelectTrigger className="border-0 bg-transparent h-6 w-32 p-0 text-xs focus:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                {TURNOS.map((turno) => (
+                  <SelectItem key={turno.key} value={turno.key}>
+                    {turno.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -353,7 +460,7 @@ export default function Dashboard() {
                 </h2>
 
                 <p className="text-xs text-muted-foreground">
-                  Lançamentos do turno atual
+                  {selectedDate} · {turnoLabel}
                 </p>
               </div>
 
@@ -375,7 +482,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Perda de produção</span>
+                <span className="text-muted-foreground">Perda produção</span>
                 <span className="font-black text-orange-400">{productionLoss}</span>
               </div>
 
@@ -397,7 +504,7 @@ export default function Dashboard() {
                 </h2>
 
                 <p className="text-xs text-muted-foreground">
-                  Perdas filtradas por turno
+                  {selectedDate} · {turnoLabel}
                 </p>
               </div>
 
@@ -424,8 +531,8 @@ export default function Dashboard() {
               </div>
 
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Real líquido</span>
-                <span className="font-black text-emerald-400">{liquidProduction}</span>
+                <span className="text-muted-foreground">Células de perda</span>
+                <span className="font-black text-muted-foreground">{lossCells.length}</span>
               </div>
             </div>
           </CardContent>
@@ -483,11 +590,11 @@ export default function Dashboard() {
               <div>
                 <h2 className="text-sm font-bold flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-orange-400" />
-                  Ocorrências do Turno
+                  Ocorrências
                 </h2>
 
                 <p className="text-xs text-muted-foreground">
-                  Somente hoje e turno atual
+                  {selectedDate} · {turnoLabel}
                 </p>
               </div>
 
@@ -496,13 +603,13 @@ export default function Dashboard() {
               </Button>
             </div>
 
-            {occurrences.length === 0 ? (
+            {filteredOccurrences.length === 0 ? (
               <p className="text-xs text-muted-foreground py-6 text-center">
-                Nenhuma ocorrência encontrada para o turno atual.
+                Nenhuma ocorrência encontrada para este filtro.
               </p>
             ) : (
               <div className="space-y-2">
-                {occurrences.slice(0, 5).map((item) => (
+                {filteredOccurrences.slice(0, 5).map((item) => (
                   <div key={item.id} className="p-2 rounded-lg border border-border bg-muted/20">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-bold truncate">
@@ -599,12 +706,34 @@ export default function Dashboard() {
       <Card className="border-blue-500/20 bg-blue-500/5">
         <CardContent className="p-4">
           <h2 className="text-sm font-black mb-2 text-blue-400">
-            Correção aplicada no Dashboard
+            Conferência dos cálculos
           </h2>
 
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Os números da página inicial agora são calculados apenas com registros de <strong>hoje</strong> e do <strong>turno atual</strong>.
-            A produção não soma mais registros antigos. As perdas ignoram os registros marcados como <strong>ganho</strong>, e a perda real é calculada como perdas brutas menos ganhos.
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <p className="text-muted-foreground">Registros produção filtrados</p>
+              <p className="font-black text-blue-400">{productionRecords.length}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground">Células produção únicas</p>
+              <p className="font-black text-blue-400">{productionCells.length}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground">Registros perdas filtrados</p>
+              <p className="font-black text-red-400">{lossRecords.length}</p>
+            </div>
+
+            <div>
+              <p className="text-muted-foreground">Células perdas únicas</p>
+              <p className="font-black text-red-400">{lossCells.length}</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground leading-relaxed mt-3">
+            Se a produção aparecer zerada, selecione manualmente o turno correto acima, principalmente o 2º turno. 
+            O painel não soma mais todos os turnos automaticamente.
           </p>
         </CardContent>
       </Card>
