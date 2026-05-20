@@ -3,7 +3,8 @@
  * Turnos: 1º (06-15h), 2º (16-23:45h), 3º (22h-06h cruza meia-noite)
  */
 export function detectCurrentShift() {
-  const now = new Date();
+  // Usa horário de Brasília (UTC-3) explicitamente
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   const hours = now.getHours();
   const minutes = now.getMinutes();
   const totalMinutes = hours * 60 + minutes;
@@ -47,7 +48,8 @@ export function filterByShift(activities, shiftKey) {
  * Retorna dados resumidos do turno atual
  */
 export function getTodayShiftData(allData, shiftKey) {
-  const today = new Date().toISOString().slice(0, 10);
+  const brt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const today = brt.toISOString().slice(0, 10);
   return filterByShift(
     allData.filter(item => item.data === today),
     shiftKey

@@ -43,7 +43,8 @@ const CAMPO_LABELS = {
 
 export default function ProductionControl() {
   const qc = useQueryClient();
-  const today = format(new Date(), "yyyy-MM-dd");
+  // Data de hoje no fuso de Brasília
+  const today = format(new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
   const [editingCell, setEditingCell] = useState(null); // { testor, hora, field, value }
