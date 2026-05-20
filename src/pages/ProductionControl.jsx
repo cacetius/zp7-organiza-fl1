@@ -88,10 +88,7 @@ export default function ProductionControl() {
   const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
-    queryFn: async () => {
-      const allRecords = await base44.entities.LossControl.list();
-      return allRecords.filter(r => r.data === selectedDate && r.turno === selectedTurno);
-    },
+    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
     staleTime: 0,
     gcTime: 0,
   });
@@ -315,6 +312,20 @@ export default function ProductionControl() {
     });
     return map;
   }, [perdasBrutasPorHora, ganhosCompPorHora, turnoAtual.horas]);
+
+  // Detalhamento de perdas por hora (para tooltip)
+  const detalhePerdasPorHora = useMemo(() => {
+    const map = {};
+    turnoAtual.horas.forEach(h => { map[h] = []; });
+    lossRecords
+      .filter(r => r.motivo_perda !== "ganho" && r.hora && r.item_perda)
+      .forEach(r => {
+        if (map[r.hora] !== undefined) {
+          map[r.hora].push({ item: r.item_perda, val: r.carros_perdidos || 0 });
+        }
+      });
+    return map;
+  }, [lossRecords, turnoAtual.horas]);
 
 
 
@@ -694,13 +705,35 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-orange-600 py-1.5 text-xs sm:text-sm">{totalPerdasProd > 0 ? totalPerdasProd : "—"}</td>
               </tr>
 
-              {/* PERDAS POR FALHA — vem do Controle de Perdas */}
+              {/* PERDA REAL — vem do Controle de Perdas (brutas − ganhos) */}
               <tr className="bg-red-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDA<br/>REAL</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasFalhaPorHora[h] || 0;
+                  const detalhes = detalhePerdasPorHora[h] || [];
                   return (
-                    <td key={h} className="border border-border text-center font-bold text-red-400 py-1.5 text-xs sm:text-sm">{val > 0 ? val : "—"}</td>
+                    <td key={h} className="border border-border text-center font-bold text-red-400 py-1.5 text-xs sm:text-sm relative group/cell">
+                      {val > 0 ? val : "—"}
+                      {detalhes.length > 0 && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover/cell:block pointer-events-none">
+                          <div className="bg-popover border border-border rounded-lg shadow-xl p-2 text-left min-w-[140px] max-w-[200px]">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Perdas {h}</p>
+                            {detalhes.map((d, i) => (
+                              <div key={i} className="flex justify-between gap-2 text-[10px]">
+                                <span className="text-foreground truncate">{d.item}</span>
+                                <span className="font-black text-red-400 shrink-0">{d.val}</span>
+                              </div>
+                            ))}
+                            {ganhosCompPorHora[h] > 0 && (
+                              <div className="flex justify-between gap-2 text-[10px] mt-1 border-t border-border pt-1">
+                                <span className="text-green-400">Ganhos</span>
+                                <span className="font-black text-green-400 shrink-0">-{ganhosCompPorHora[h]}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </td>
                   );
                 })}
                 <td className="border border-border text-center font-black text-white bg-red-600 py-1.5 text-xs sm:text-sm">{totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td>
