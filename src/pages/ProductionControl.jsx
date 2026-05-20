@@ -117,6 +117,9 @@ export default function ProductionControl() {
 
   const longPressTimers = useRef({});
   const longPressTriggered = useRef({});
+  const pendingCreates = useRef({}); // lock para evitar duplicatas durante criação
+  const localOverrides = useRef({}); // sobrescreve valor local durante cliques rápidos
+  const [overrideVersion, setOverrideVersion] = useState(0);
 
   const sabado = isSabado(selectedDate);
   const listaTurnos = sabado ? TURNOS_SABADO : TURNOS;
@@ -225,16 +228,27 @@ export default function ProductionControl() {
   const createRec = useMutation({
     mutationFn: (data) => base44.entities.ProductionControl.create(data),
     onMutate: (data) => {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const cellKey = `${data.testor_id}-${data.hora}`;
+      // Guarda o tempId para o lock
+      pendingCreates.current[cellKey] = tempId;
       optimisticUpdate((old) => [
         ...old,
-        {
-          ...data,
-          id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        },
+        { ...data, id: tempId },
       ]);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onSuccess: (result, data) => {
+      const cellKey = `${data.testor_id}-${data.hora}`;
+      delete pendingCreates.current[cellKey];
+      delete localOverrides.current[cellKey];
+      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+    },
+    onError: (err, data) => {
+      const cellKey = `${data.testor_id}-${data.hora}`;
+      delete pendingCreates.current[cellKey];
+      delete localOverrides.current[cellKey];
+      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+    },
   });
 
   const updateRec = useMutation({
@@ -242,7 +256,9 @@ export default function ProductionControl() {
     onMutate: ({ id, ...fields }) => {
       optimisticUpdate((old) => old.map((record) => (record.id === id ? { ...record, ...fields } : record)));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+    },
     onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
   });
 
@@ -293,18 +309,34 @@ export default function ProductionControl() {
 
   useEffect(() => {
     cellMapRef.current = cellMap;
+    // Limpa overrides cujos valores já foram confirmados pelo servidor
+    Object.keys(localOverrides.current).forEach((key) => {
+      const [tid, hora] = key.split(/-(?=\d{2}:)/);
+      const serverVal = cellMap[tid]?.[hora]?.producao;
+      const overrideVal = localOverrides.current[key];
+      if (serverVal !== undefined && serverVal >= overrideVal) {
+        delete localOverrides.current[key];
+      }
+    });
   }, [cellMap]);
 
+
+
   const getCell = (testorId, hora) => {
-    return (
-      cellMapRef.current[testorId]?.[hora] || {
-        producao: 0,
-        perdas_producao: 0,
-        perdas_defeito: 0,
-        objetivo: 0,
-        justificativa: "",
-      }
-    );
+    const base = cellMapRef.current[testorId]?.[hora] || {
+      producao: 0,
+      perdas_producao: 0,
+      perdas_defeito: 0,
+      objetivo: 0,
+      justificativa: "",
+    };
+    // key é composto como `${testorId}-${hora}` onde hora é do tipo "07:00"
+    const key = `${testorId}-${hora}`;
+    const override = localOverrides.current[key];
+    if (override !== undefined) {
+      return { ...base, producao: override };
+    }
+    return base;
   };
 
   const saveField = (testor, hora, field, newVal) => {
@@ -332,7 +364,17 @@ export default function ProductionControl() {
     };
 
     if (!cell || !cell.id || isTempId(cell.id)) {
-      // Sem registro real ainda: cria novo
+      // Evita criar duplicata se já há uma criação em andamento para essa célula
+      const cellKey = `${testor.id}-${hora}`;
+      if (pendingCreates.current[cellKey]) {
+        // Já está criando — atualiza o registro temporário localmente
+        const tempId = pendingCreates.current[cellKey];
+        const fieldName2 = field === "producao" ? "carros_produzidos" : field;
+        optimisticUpdate((old) =>
+          old.map((r) => (r.id === tempId ? { ...r, [fieldName2]: newVal } : r))
+        );
+        return;
+      }
       createRec.mutate(payload);
       return;
     }
@@ -403,10 +445,16 @@ export default function ProductionControl() {
       return;
     }
 
-    // Usa cellMap direto (estado atual) para garantir valor correto
-    const cell = cellMap[testor.id]?.[hora];
-    const currentVal = safeNumber(cell?.producao);
-    saveField(testor, hora, "producao", currentVal + 1);
+    // Lê override local primeiro para garantir valor correto em cliques rápidos
+    const overrideKey = `${testor.id}-${hora}`;
+    const cellBase = cellMapRef.current[testor.id]?.[hora];
+    const override = localOverrides.current[overrideKey];
+    const currentVal = override !== undefined ? override : safeNumber(cellBase?.producao);
+    const newVal = currentVal + 1;
+    // Salva override imediatamente e força re-render
+    localOverrides.current[overrideKey] = newVal;
+    setOverrideVersion((v) => v + 1);
+    saveField(testor, hora, "producao", newVal);
   };
 
   const confirmEditCell = () => {
@@ -449,11 +497,11 @@ export default function ProductionControl() {
 
     turnoAtual.horas.forEach((hora) => {
       prod[hora] = testores.reduce((acc, testor) => {
-        return acc + safeNumber(cellMap[testor.id]?.[hora]?.producao);
+        return acc + safeNumber(getCell(testor.id, hora).producao);
       }, 0);
 
       obj[hora] = testores.reduce((acc, testor) => {
-        return acc + safeNumber(cellMap[testor.id]?.[hora]?.objetivo);
+        return acc + safeNumber(getCell(testor.id, hora).objetivo);
       }, 0);
 
       perdProd[hora] = Math.max(0, safeNumber(obj[hora]) - safeNumber(prod[hora]));
@@ -464,7 +512,9 @@ export default function ProductionControl() {
       objetivoPorHora: obj,
       perdasProdPorHora: perdProd,
     };
-  }, [cellMap, testores, turnoAtual.horas]);
+  // overrideVersion garante re-cálculo quando há override local
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellMap, testores, turnoAtual.horas, overrideVersion]);
 
   const perdasFalhaPorHora = useMemo(() => {
     const map = {};
@@ -496,12 +546,13 @@ export default function ProductionControl() {
 
     testores.forEach((testor) => {
       map[testor.id] = turnoAtual.horas.reduce((acc, hora) => {
-        return acc + safeNumber(cellMap[testor.id]?.[hora]?.producao);
+        return acc + safeNumber(getCell(testor.id, hora).producao);
       }, 0);
     });
 
     return map;
-  }, [cellMap, testores, turnoAtual.horas]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellMap, testores, turnoAtual.horas, overrideVersion]);
 
   const totalPorTestor = (testor) => totalPorTestorMap[testor.id] || 0;
 
@@ -524,10 +575,6 @@ export default function ProductionControl() {
   const producaoLiquida = useMemo(() => {
     return Math.max(0, totalGeral - totalPerdasFalha);
   }, [totalGeral, totalPerdasFalha]);
-
-  const efic = useMemo(() => {
-    return totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
-  }, [totalGeral, totalObjetivo]);
 
   const handleExportCsv = () => {
     const headers = ["Testor", ...turnoAtual.horas, "Total"];
@@ -804,7 +851,7 @@ export default function ProductionControl() {
                       </td>
 
                       {turnoAtual.horas.map((hora) => {
-                        const cell = cellMap[testor.id]?.[hora] || {};
+                        const cell = getCell(testor.id, hora);
                         const val = safeNumber(cell.producao);
 
                         return (
