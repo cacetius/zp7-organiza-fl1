@@ -331,18 +331,9 @@ export default function ProductionControl() {
       justificativa: field === "justificativa" ? newVal : cell?.justificativa || "",
     };
 
-    if (!cell || !cell.id) {
+    if (!cell || !cell.id || isTempId(cell.id)) {
+      // Sem registro real ainda: cria novo
       createRec.mutate(payload);
-      return;
-    }
-
-    if (isTempId(cell.id)) {
-      // Registro ainda temporário: atualiza otimisticamente pelo ID temp
-      optimisticUpdate((old) =>
-        old.map((r) =>
-          r.id === cell.id ? { ...r, [fieldName]: newVal } : r
-        )
-      );
       return;
     }
 
@@ -388,7 +379,7 @@ export default function ProductionControl() {
     longPressTimers.current[key] = setTimeout(() => {
       longPressTriggered.current[key] = true;
 
-      const cell = getCell(testor.id, hora);
+      const cell = cellMap[testor.id]?.[hora] || {};
 
       setEditingCell({
         testor,
@@ -406,7 +397,11 @@ export default function ProductionControl() {
   const handleIncrementProducao = (testor, hora) => {
     const key = `${testor.id}-${hora}-producao`;
 
-    if (longPressTriggered.current[key]) return;
+    if (longPressTriggered.current[key]) {
+      // Reset para permitir próximos cliques
+      longPressTriggered.current[key] = false;
+      return;
+    }
 
     // Usa cellMap direto (estado atual) para garantir valor correto
     const cell = cellMap[testor.id]?.[hora];
