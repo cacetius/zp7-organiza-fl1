@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { format, subDays, parseISO, eachDayOfInterval } from "date-fns";
 import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
+import ShiftMetaChart from "@/components/dashboard/ShiftMetaChart";
 import { ptBR } from "date-fns/locale";
 import html2canvas from "html2canvas";
 
@@ -1047,6 +1048,9 @@ export default function Reports() {
 
           {/* Gráfico comparativo por turno */}
           <ShiftProductionChart prodData={prodCtrlAll} lossData={lossRecords} date={resumoDate} />
+
+          {/* Gráfico Meta vs Produção Líquida */}
+          <ShiftMetaChart prodData={prodCtrlAll} lossData={lossRecords} date={resumoDate} />
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>

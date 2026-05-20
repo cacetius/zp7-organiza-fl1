@@ -283,8 +283,8 @@ export default function ProductionControl() {
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
   }, [cellMap, testores, turnoAtual.horas]);
 
-  // Perda por Falha = total de perdas do Controle de Perdas (por hora, excluindo ganhos)
-  const perdasFalhaPorHora = useMemo(() => {
+  // Perda por Controle = perdas brutas do LossControl (excluindo ganhos), por hora
+  const perdasBrutasPorHora = useMemo(() => {
     const map = {};
     turnoAtual.horas.forEach(h => { map[h] = 0; });
     lossRecords
@@ -295,8 +295,8 @@ export default function ProductionControl() {
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
-  // Ganhos por hora do Controle de Perdas
-  const ganhosPorHora = useMemo(() => {
+  // Ganhos que compensam perdas brutas, por hora
+  const ganhosCompPorHora = useMemo(() => {
     const map = {};
     turnoAtual.horas.forEach(h => { map[h] = 0; });
     lossRecords
@@ -306,6 +306,17 @@ export default function ProductionControl() {
       });
     return map;
   }, [lossRecords, turnoAtual.horas]);
+
+  // Perda real por hora = brutas - ganhos (mínimo 0)
+  const perdasFalhaPorHora = useMemo(() => {
+    const map = {};
+    turnoAtual.horas.forEach(h => {
+      map[h] = Math.max(0, (perdasBrutasPorHora[h] || 0) - (ganhosCompPorHora[h] || 0));
+    });
+    return map;
+  }, [perdasBrutasPorHora, ganhosCompPorHora, turnoAtual.horas]);
+
+
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[t.id]?.[h]?.producao || 0), 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -324,7 +335,7 @@ export default function ProductionControl() {
     rows.push(["OBJETIVO", ...turnoAtual.horas.map(h => objetivoPorHora[h] || 0), totalObjetivo]);
     rows.push(["PRODUÇÃO", ...turnoAtual.horas.map(h => totalPorHora[h] || 0), totalGeral]);
     rows.push(["PERDAS PRODUÇÃO", ...turnoAtual.horas.map(h => perdasProdPorHora[h] || 0), totalPerdasProd]);
-    rows.push(["PERDAS FALHA", ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
+    rows.push(["PERDA REAL", ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
     rows.push(["REAL LÍQUIDO", ...turnoAtual.horas.map(h => Math.max(0, (totalPorHora[h]||0) - (perdasFalhaPorHora[h]||0))), producaoLiquida]);
     exportCsv(`producao_${selectedDate}_${selectedTurno}`, headers, rows);
   };
@@ -413,7 +424,7 @@ export default function ProductionControl() {
       <div class="kpi"><div class="kpi-val" style="color:#0369a1">${totalObjetivo || "—"}</div><div class="kpi-lbl">Objetivo</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#1d4ed8">${totalGeral}</div><div class="kpi-lbl">Produção</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#ea580c">${totalPerdasProd}</div><div class="kpi-lbl">Perdas Produção</div></div>
-      <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasFalha}</div><div class="kpi-lbl">Perdas Falha</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasFalha}</div><div class="kpi-lbl">Perda Real</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#16a34a">${producaoLiquida}</div><div class="kpi-lbl">Real Líquido</div></div>
     </div>
     <div class="efic-bar">
@@ -550,7 +561,7 @@ export default function ProductionControl() {
             { label: "Objetivo", value: totalObjetivo || "—", color: "text-cyan-400", border: "border-cyan-500/20" },
             { label: "Produção", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
             { label: "Perdas Produção", value: totalPerdasProd, color: "text-orange-400", border: "border-orange-500/20" },
-            { label: "Perdas Falha", value: totalPerdasFalha, color: "text-red-400", border: "border-red-500/20" },
+            { label: "Perda Real", value: totalPerdasFalha, color: "text-red-400", border: "border-red-500/20" },
             { label: "Real Líquido", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
           ].map(k => (
             <Card key={k.label} className={`border ${k.border}`}>
@@ -685,7 +696,7 @@ export default function ProductionControl() {
 
               {/* PERDAS POR FALHA — vem do Controle de Perdas */}
               <tr className="bg-red-500/10">
-                <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>FALHA</td>
+                <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDA<br/>REAL</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasFalhaPorHora[h] || 0;
                   return (
