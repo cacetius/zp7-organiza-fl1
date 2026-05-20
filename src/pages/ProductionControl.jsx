@@ -46,11 +46,6 @@ const TURNOS_SABADO = [
   },
 ];
 
-function isSabado(dateStr) {
-  const d = parseISO(dateStr);
-  return d.getDay() === 6;
-}
-
 const CAMPO_LABELS = {
   producao: "Produção",
   perdas_producao: "Perdas de Produção",
@@ -58,6 +53,47 @@ const CAMPO_LABELS = {
   objetivo: "Objetivo",
   justificativa: "Justificativa",
 };
+
+function isSabado(dateStr) {
+  try {
+    const d = parseISO(dateStr);
+    return d.getDay() === 6;
+  } catch {
+    return false;
+  }
+}
+
+function safeNumber(value) {
+  return Number(value || 0);
+}
+
+function isTempId(id) {
+  return String(id || "").startsWith("temp-");
+}
+
+function getRecordTime(record) {
+  return record.updated_date || record.created_date || record.id || "";
+}
+
+function pickLatestRecord(existing, current) {
+  if (!existing) return current;
+
+  const existingIsTemp = isTempId(existing.id);
+  const currentIsReal = current.id && !isTempId(current.id);
+
+  if (existingIsTemp && currentIsReal) {
+    return current;
+  }
+
+  const existingTime = String(getRecordTime(existing));
+  const currentTime = String(getRecordTime(current));
+
+  if (currentTime && existingTime && currentTime > existingTime) {
+    return current;
+  }
+
+  return existing;
+}
 
 export default function ProductionControl() {
   const qc = useQueryClient();
@@ -80,8 +116,6 @@ export default function ProductionControl() {
   const [editingJustificativa, setEditingJustificativa] = useState(null);
 
   const longPressTimers = useRef({});
-  const clickCounters = useRef({});
-  const clickTimers = useRef({});
   const longPressTriggered = useRef({});
 
   const sabado = isSabado(selectedDate);
@@ -99,7 +133,14 @@ export default function ProductionControl() {
 
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
-    queryFn: () => base44.entities.Testor.list(),
+    queryFn: async () => {
+      try {
+        return await base44.entities.Testor.list();
+      } catch (error) {
+        console.error("Erro ao carregar testores:", error);
+        return [];
+      }
+    },
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
@@ -108,8 +149,16 @@ export default function ProductionControl() {
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: async () => {
-      const allRecords = await base44.entities.ProductionControl.list();
-      return allRecords.filter((r) => r.data === selectedDate && r.turno === selectedTurno);
+      try {
+        const allRecords = await base44.entities.ProductionControl.list();
+
+        return allRecords.filter((record) => {
+          return record.data === selectedDate && record.turno === selectedTurno;
+        });
+      } catch (error) {
+        console.error("Erro ao carregar produção:", error);
+        return [];
+      }
     },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
@@ -119,8 +168,16 @@ export default function ProductionControl() {
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
     queryFn: async () => {
-      const allRecords = await base44.entities.LossControl.list();
-      return allRecords.filter((r) => r.data === selectedDate && r.turno === selectedTurno);
+      try {
+        const allRecords = await base44.entities.LossControl.list();
+
+        return allRecords.filter((record) => {
+          return record.data === selectedDate && record.turno === selectedTurno;
+        });
+      } catch (error) {
+        console.error("Erro ao carregar perdas:", error);
+        return [];
+      }
     },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
@@ -140,14 +197,18 @@ export default function ProductionControl() {
     let unsubLoss;
 
     const timeout = setTimeout(() => {
-      unsubProduction = base44.entities.ProductionControl.subscribe(() => {
-        qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
-        qc.invalidateQueries({ queryKey: ["testores"] });
-      });
+      if (base44.entities.ProductionControl.subscribe) {
+        unsubProduction = base44.entities.ProductionControl.subscribe(() => {
+          qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+          qc.invalidateQueries({ queryKey: ["testores"] });
+        });
+      }
 
-      unsubLoss = base44.entities.LossControl.subscribe(() => {
-        qc.invalidateQueries({ queryKey: [lossKeyRef.current] });
-      });
+      if (base44.entities.LossControl.subscribe) {
+        unsubLoss = base44.entities.LossControl.subscribe(() => {
+          qc.invalidateQueries({ queryKey: [lossKeyRef.current] });
+        });
+      }
     }, 0);
 
     return () => {
@@ -164,7 +225,13 @@ export default function ProductionControl() {
   const createRec = useMutation({
     mutationFn: (data) => base44.entities.ProductionControl.create(data),
     onMutate: (data) => {
-      optimisticUpdate((old) => [...old, { ...data, id: `temp-${Date.now()}` }]);
+      optimisticUpdate((old) => [
+        ...old,
+        {
+          ...data,
+          id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        },
+      ]);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
     onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
@@ -173,7 +240,7 @@ export default function ProductionControl() {
   const updateRec = useMutation({
     mutationFn: ({ id, ...fields }) => base44.entities.ProductionControl.update(id, fields),
     onMutate: ({ id, ...fields }) => {
-      optimisticUpdate((old) => old.map((r) => (r.id === id ? { ...r, ...fields } : r)));
+      optimisticUpdate((old) => old.map((record) => (record.id === id ? { ...record, ...fields } : record)));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
     onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
@@ -182,7 +249,7 @@ export default function ProductionControl() {
   const deleteRec = useMutation({
     mutationFn: (id) => base44.entities.ProductionControl.delete(id),
     onMutate: (id) => {
-      optimisticUpdate((old) => old.filter((r) => r.id !== id));
+      optimisticUpdate((old) => old.filter((record) => record.id !== id));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
     onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
@@ -191,24 +258,31 @@ export default function ProductionControl() {
   const cellMap = useMemo(() => {
     const map = {};
 
-    records.forEach((r) => {
-      if (!r.testor_id || !r.hora) return;
+    records.forEach((record) => {
+      if (!record.testor_id || !record.hora) return;
 
-      if (!map[r.testor_id]) map[r.testor_id] = {};
+      if (!map[record.testor_id]) map[record.testor_id] = {};
 
-      const existing = map[r.testor_id][r.hora];
-      const isReal = r.id && !r.id.startsWith("temp-");
-      const existingIsTemp = existing?.id?.startsWith?.("temp-");
+      const current = {
+        id: record.id,
+        producao: safeNumber(record.carros_produzidos),
+        perdas_producao: safeNumber(record.perdas_producao),
+        perdas_defeito: safeNumber(record.perdas_defeito),
+        objetivo: safeNumber(record.objetivo),
+        justificativa: record.justificativa || "",
+        raw: record,
+      };
 
-      if (!existing || (existingIsTemp && isReal)) {
-        map[r.testor_id][r.hora] = {
-          id: r.id,
-          producao: Number(r.carros_produzidos || 0),
-          perdas_producao: Number(r.perdas_producao || 0),
-          perdas_defeito: Number(r.perdas_defeito || 0),
-          objetivo: Number(r.objetivo || 0),
-          justificativa: r.justificativa || "",
-        };
+      const existing = map[record.testor_id][record.hora];
+
+      if (!existing) {
+        map[record.testor_id][record.hora] = current;
+      } else {
+        const latest = pickLatestRecord(existing.raw, record);
+
+        if (latest === record) {
+          map[record.testor_id][record.hora] = current;
+        }
       }
     });
 
@@ -221,76 +295,77 @@ export default function ProductionControl() {
     cellMapRef.current = cellMap;
   }, [cellMap]);
 
-  const justificativasMap = useMemo(() => {
-    const map = {};
-
-    records.forEach((r) => {
-      if (r.testor_id && r.hora && r.justificativa) {
-        const key = `${r.testor_id}-${r.hora}`;
-        if (!map[key]) map[key] = r.justificativa;
-      }
-    });
-
-    return map;
-  }, [records]);
-
   const getCell = (testorId, hora) => {
-    return cellMapRef.current[testorId]?.[hora] || {
-      producao: 0,
-      perdas_producao: 0,
-      perdas_defeito: 0,
-      objetivo: 0,
-      justificativa: "",
-    };
+    return (
+      cellMapRef.current[testorId]?.[hora] || {
+        producao: 0,
+        perdas_producao: 0,
+        perdas_defeito: 0,
+        objetivo: 0,
+        justificativa: "",
+      }
+    );
   };
 
   const saveField = (testor, hora, field, newVal) => {
-    if (!testor?.id) return;
+    if (!testor?.id || !hora || !field) return;
 
     const cell = cellMapRef.current[testor.id]?.[hora];
+
+    const fieldName = field === "producao" ? "carros_produzidos" : field;
+
     const update = {
-      [field === "producao" ? "carros_produzidos" : field]: newVal,
+      [fieldName]: newVal,
     };
 
-    if (!cell || cell.id?.startsWith?.("temp-")) {
-      createRec.mutate({
-        testor_id: testor.id,
-        testor_nome: testor.nome,
-        data: selectedDate,
-        turno: selectedTurno,
-        hora,
-        carros_produzidos: field === "producao" ? newVal : 0,
-        perdas_producao: field === "perdas_producao" ? newVal : 0,
-        perdas_defeito: field === "perdas_defeito" ? newVal : 0,
-        objetivo: field === "objetivo" ? newVal : 0,
-        justificativa: field === "justificativa" ? newVal : "",
-      });
+    const payload = {
+      testor_id: testor.id,
+      testor_nome: testor.nome || "",
+      data: selectedDate,
+      turno: selectedTurno,
+      hora,
+      carros_produzidos: field === "producao" ? newVal : safeNumber(cell?.producao),
+      perdas_producao: field === "perdas_producao" ? newVal : safeNumber(cell?.perdas_producao),
+      perdas_defeito: field === "perdas_defeito" ? newVal : safeNumber(cell?.perdas_defeito),
+      objetivo: field === "objetivo" ? newVal : safeNumber(cell?.objetivo),
+      justificativa: field === "justificativa" ? newVal : cell?.justificativa || "",
+    };
+
+    if (!cell || !cell.id || isTempId(cell.id)) {
+      createRec.mutate(payload);
       return;
     }
 
-    updateRec.mutate({ id: cell.id, ...update });
+    updateRec.mutate({
+      id: cell.id,
+      ...update,
+    });
   };
 
   const saveJustificativaTestor = (testor, hora, texto) => {
-    if (!testor?.id) return;
+    if (!testor?.id || !hora) return;
 
     const cell = cellMapRef.current[testor.id]?.[hora];
 
-    if (cell && !cell.id?.startsWith?.("temp-")) {
-      updateRec.mutate({ id: cell.id, justificativa: texto });
+    if (cell && cell.id && !isTempId(cell.id)) {
+      updateRec.mutate({
+        id: cell.id,
+        justificativa: texto,
+      });
+
       return;
     }
 
     createRec.mutate({
       testor_id: testor.id,
-      testor_nome: testor.nome,
+      testor_nome: testor.nome || "",
       data: selectedDate,
       turno: selectedTurno,
       hora,
-      carros_produzidos: 0,
-      perdas_producao: 0,
-      perdas_defeito: 0,
-      objetivo: 0,
+      carros_produzidos: safeNumber(cell?.producao),
+      perdas_producao: safeNumber(cell?.perdas_producao),
+      perdas_defeito: safeNumber(cell?.perdas_defeito),
+      objetivo: safeNumber(cell?.objetivo),
       justificativa: texto,
     });
   };
@@ -323,28 +398,8 @@ export default function ProductionControl() {
 
     if (longPressTriggered.current[key]) return;
 
-    clickCounters.current[key] = (clickCounters.current[key] || 0) + 1;
-
-    clearTimeout(clickTimers.current[key]);
-
-    if (clickCounters.current[key] >= 4) {
-      clickCounters.current[key] = 0;
-
-      const cell = cellMapRef.current[testor.id]?.[hora];
-
-      if (cell && !cell.id?.startsWith?.("temp-")) {
-        deleteRec.mutate(cell.id);
-      }
-
-      return;
-    }
-
-    clickTimers.current[key] = setTimeout(() => {
-      clickCounters.current[key] = 0;
-    }, 600);
-
     const cell = getCell(testor.id, hora);
-    saveField(testor, hora, "producao", Number(cell.producao || 0) + 1);
+    saveField(testor, hora, "producao", safeNumber(cell.producao) + 1);
   };
 
   const confirmEditCell = () => {
@@ -367,15 +422,34 @@ export default function ProductionControl() {
     setEditingCell(null);
   };
 
+  const justificativasMap = useMemo(() => {
+    const map = {};
+
+    records.forEach((record) => {
+      if (record.testor_id && record.hora && record.justificativa) {
+        const key = `${record.testor_id}-${record.hora}`;
+        if (!map[key]) map[key] = record.justificativa;
+      }
+    });
+
+    return map;
+  }, [records]);
+
   const { totalPorHora, objetivoPorHora, perdasProdPorHora } = useMemo(() => {
     const prod = {};
     const obj = {};
     const perdProd = {};
 
     turnoAtual.horas.forEach((hora) => {
-      prod[hora] = testores.reduce((acc, testor) => acc + Number(cellMap[testor.id]?.[hora]?.producao || 0), 0);
-      obj[hora] = testores.reduce((acc, testor) => acc + Number(cellMap[testor.id]?.[hora]?.objetivo || 0), 0);
-      perdProd[hora] = Math.max(0, Number(obj[hora] || 0) - Number(prod[hora] || 0));
+      prod[hora] = testores.reduce((acc, testor) => {
+        return acc + safeNumber(cellMap[testor.id]?.[hora]?.producao);
+      }, 0);
+
+      obj[hora] = testores.reduce((acc, testor) => {
+        return acc + safeNumber(cellMap[testor.id]?.[hora]?.objetivo);
+      }, 0);
+
+      perdProd[hora] = Math.max(0, safeNumber(obj[hora]) - safeNumber(prod[hora]));
     });
 
     return {
@@ -392,13 +466,20 @@ export default function ProductionControl() {
       map[hora] = 0;
     });
 
+    const uniqueMap = {};
+
     lossRecords
-      .filter((r) => r.motivo_perda !== "ganho" && r.hora)
-      .forEach((r) => {
-        if (map[r.hora] !== undefined) {
-          map[r.hora] += Number(r.carros_perdidos || 0);
-        }
+      .filter((record) => record.motivo_perda !== "ganho" && record.hora && record.item_perda)
+      .forEach((record) => {
+        const key = `${record.item_perda}-${record.hora}`;
+        uniqueMap[key] = pickLatestRecord(uniqueMap[key], record);
       });
+
+    Object.values(uniqueMap).forEach((record) => {
+      if (map[record.hora] !== undefined) {
+        map[record.hora] += safeNumber(record.carros_perdidos);
+      }
+    });
 
     return map;
   }, [lossRecords, turnoAtual.horas]);
@@ -408,7 +489,7 @@ export default function ProductionControl() {
 
     testores.forEach((testor) => {
       map[testor.id] = turnoAtual.horas.reduce((acc, hora) => {
-        return acc + Number(cellMap[testor.id]?.[hora]?.producao || 0);
+        return acc + safeNumber(cellMap[testor.id]?.[hora]?.producao);
       }, 0);
     });
 
@@ -418,19 +499,19 @@ export default function ProductionControl() {
   const totalPorTestor = (testor) => totalPorTestorMap[testor.id] || 0;
 
   const totalGeral = useMemo(() => {
-    return Object.values(totalPorTestorMap).reduce((acc, value) => acc + Number(value || 0), 0);
+    return Object.values(totalPorTestorMap).reduce((acc, value) => acc + safeNumber(value), 0);
   }, [totalPorTestorMap]);
 
   const totalObjetivo = useMemo(() => {
-    return Object.values(objetivoPorHora).reduce((acc, value) => acc + Number(value || 0), 0);
+    return Object.values(objetivoPorHora).reduce((acc, value) => acc + safeNumber(value), 0);
   }, [objetivoPorHora]);
 
   const totalPerdasProd = useMemo(() => {
-    return Object.values(perdasProdPorHora).reduce((acc, value) => acc + Number(value || 0), 0);
+    return Object.values(perdasProdPorHora).reduce((acc, value) => acc + safeNumber(value), 0);
   }, [perdasProdPorHora]);
 
   const totalPerdasFalha = useMemo(() => {
-    return Object.values(perdasFalhaPorHora).reduce((acc, value) => acc + Number(value || 0), 0);
+    return Object.values(perdasFalhaPorHora).reduce((acc, value) => acc + safeNumber(value), 0);
   }, [perdasFalhaPorHora]);
 
   const producaoLiquida = useMemo(() => {
@@ -446,7 +527,7 @@ export default function ProductionControl() {
 
     const rows = testores.map((testor) => [
       testor.nome,
-      ...turnoAtual.horas.map((hora) => cellMap[testor.id]?.[hora]?.producao || 0),
+      ...turnoAtual.horas.map((hora) => safeNumber(cellMap[testor.id]?.[hora]?.producao)),
       totalPorTestor(testor),
     ]);
 
@@ -456,7 +537,7 @@ export default function ProductionControl() {
     rows.push(["PERDAS FALHA", ...turnoAtual.horas.map((hora) => perdasFalhaPorHora[hora] || 0), totalPerdasFalha]);
     rows.push([
       "REAL LÍQUIDO",
-      ...turnoAtual.horas.map((hora) => Math.max(0, Number(totalPorHora[hora] || 0) - Number(perdasFalhaPorHora[hora] || 0))),
+      ...turnoAtual.horas.map((hora) => Math.max(0, safeNumber(totalPorHora[hora]) - safeNumber(perdasFalhaPorHora[hora]))),
       producaoLiquida,
     ]);
 
@@ -569,7 +650,7 @@ export default function ProductionControl() {
           </h1>
 
           <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-snug">
-            Toque para +1 · 4× zera · Segure para digitar · Botão − diminui
+            Toque para +1 · Segure para digitar · Botão − diminui · Para zerar, segure e digite 0
           </p>
         </div>
 
@@ -717,7 +798,7 @@ export default function ProductionControl() {
 
                       {turnoAtual.horas.map((hora) => {
                         const cell = cellMap[testor.id]?.[hora] || {};
-                        const val = cell.producao || 0;
+                        const val = safeNumber(cell.producao);
 
                         return (
                           <td key={hora} className="border border-border p-0.5 sm:p-1">
@@ -793,19 +874,22 @@ export default function ProductionControl() {
                 </td>
 
                 {turnoAtual.horas.map((hora) => {
-                  const val = objetivoPorHora[hora] || 0;
+                  const val = safeNumber(objetivoPorHora[hora]);
 
                   return (
                     <td key={hora} className="border border-border p-0.5">
                       <button
                         type="button"
                         onClick={() => {
-                          const primeiroTestor = testores[0];
+                          const testorBase = testores[0];
 
-                          if (!primeiroTestor) return;
+                          if (!testorBase) {
+                            alert("Cadastre pelo menos um testor antes de lançar objetivo.");
+                            return;
+                          }
 
                           setEditingCell({
-                            testor: primeiroTestor,
+                            testor: testorBase,
                             hora,
                             field: "objetivo",
                             value: String(val),
@@ -888,7 +972,7 @@ export default function ProductionControl() {
                 </td>
 
                 {turnoAtual.horas.map((hora) => {
-                  const liq = Math.max(0, Number(totalPorHora[hora] || 0) - Number(perdasFalhaPorHora[hora] || 0));
+                  const liq = Math.max(0, safeNumber(totalPorHora[hora]) - safeNumber(perdasFalhaPorHora[hora]));
 
                   return (
                     <td key={hora} className="border border-border text-center font-bold text-green-400 py-1.5 text-xs sm:text-sm">
@@ -907,7 +991,7 @@ export default function ProductionControl() {
       )}
 
       <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-        Toque +1 · 4× rápido zera · Segure digitar · Clique no Objetivo para editar · 💬 para justificativa · Perdas calculadas automaticamente
+        Toque +1 · Segure digitar · Clique no Objetivo para editar · 💬 para justificativa · Para zerar, segure e digite 0
       </p>
     </div>
   );
