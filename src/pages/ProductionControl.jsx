@@ -81,35 +81,35 @@ export default function ProductionControl() {
     staleTime: 0,
     gcTime: 0,
   });
-  // Busca os registros do Controle de Perdas para calcular Perda por Defeito
+  // Busca os registros do Controle de Perdas para calcular Perda Real
   const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
     staleTime: 0,
-    gcTime: 0,
+    gcTime: 30_000,
+    select: (data) => data.filter(r => r.data === selectedDate && r.turno === selectedTurno),
   });
 
   const sheetKeyRef = useRef(sheetKey);
   useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
 
+  const lossKeyRef = useRef(lossKey);
+  useEffect(() => { lossKeyRef.current = lossKey; }, [lossKey]);
+
   useEffect(() => {
-    const unsubProduction = base44.entities.ProductionControl.subscribe((event) => {
-      if (event.type === 'create' || event.type === 'update' || event.type === 'delete') {
-        qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
-        qc.invalidateQueries({ queryKey: ['testores'] });
-      }
+    const unsubProduction = base44.entities.ProductionControl.subscribe(() => {
+      qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
+      qc.invalidateQueries({ queryKey: ['testores'] });
     });
-    const unsubLoss = base44.entities.LossControl.subscribe((event) => {
-      if (event.type === 'create' || event.type === 'update' || event.type === 'delete') {
-        qc.invalidateQueries({ queryKey: [lossKey] });
-      }
+    const unsubLoss = base44.entities.LossControl.subscribe(() => {
+      qc.invalidateQueries({ queryKey: [lossKeyRef.current] });
     });
     return () => {
       unsubProduction();
       unsubLoss();
     };
-  }, [qc, lossKey]);
+  }, [qc]);
 
   const optimisticUpdate = (updater) => qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
 
