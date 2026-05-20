@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadsheet } from "lucide-react";
+import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadsheet, ClipboardList } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { detectCurrentShift } from "@/lib/shiftDetector";
@@ -545,6 +545,21 @@ export default function ProductionControl() {
         <div className="flex gap-1.5 shrink-0">
           <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handleExportCsv}><FileSpreadsheet className="w-4 h-4" /><span className="hidden sm:inline text-xs">CSV</span></Button>
           <Button variant="outline" size="sm" className="gap-1 px-2 sm:px-3" onClick={handlePrint}><Printer className="w-4 h-4" /><span className="hidden sm:inline text-xs">PDF</span></Button>
+          <Button
+            variant="outline" size="sm"
+            className="gap-1 px-2 sm:px-3 text-green-400 border-green-500/30 hover:bg-green-500/10"
+            onClick={async () => {
+              const res = await base44.functions.invoke("gerarRelatorioTurno", { turno: selectedTurno, data: selectedDate });
+              const html = res.data;
+              const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 15000);
+            }}
+          >
+            <ClipboardList className="w-4 h-4" /><span className="hidden sm:inline text-xs">Fechamento</span>
+          </Button>
         </div>
       </div>
 
