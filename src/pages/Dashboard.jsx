@@ -758,7 +758,7 @@ export default function Dashboard() {
             </div>
 
             <div className="flex gap-1">
-              <Button size="sm" variant="outline" onClick={() => goTo("/tasks")}>
+              <Button size="sm" variant="outline" onClick={() => goTo("/tarefas")}>
                 Tarefas
               </Button>
 

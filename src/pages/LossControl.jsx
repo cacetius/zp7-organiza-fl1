@@ -22,7 +22,7 @@ const TURNOS = [
   {
     label: "1º Turno (06h–15h)",
     key: "primeiro",
-    horas: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"],
+    horas: ["07:00", "08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00"],
   },
   {
     label: "2º Turno (15h–23h45)",
@@ -32,7 +32,7 @@ const TURNOS = [
   {
     label: "3º Turno (23h45–06h)",
     key: "terceiro",
-    horas: ["23:45", "00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00"],
+    horas: ["23:45", "00:00", "01:00", "02:00", "03:00", "04:00", "05:00"],
   },
 ];
 
@@ -252,50 +252,36 @@ export default function LossControl() {
     if (pendingOps.current[opKey]) return;
 
     const cell = cellMapRef.current[item]?.[hora];
-
-    if (newVal <= 0) {
-      if (cell && !cell.id?.startsWith?.("temp-")) {
-        pendingOps.current[opKey] = true;
-        deleteCell.mutate(cell.id, {
-          onSettled: () => {
-            delete pendingOps.current[opKey];
-          },
-        });
-      }
-
-      return;
-    }
+    const safeVal = Math.max(0, newVal);
 
     if (cell && !cell.id?.startsWith?.("temp-")) {
+      if (safeVal <= 0) {
+        // Deleta se zerou
+        pendingOps.current[opKey] = true;
+        deleteCell.mutate(cell.id, {
+          onSettled: () => { delete pendingOps.current[opKey]; },
+        });
+      } else {
+        pendingOps.current[opKey] = true;
+        updateCell.mutate(
+          { id: cell.id, carros_perdidos: safeVal },
+          { onSettled: () => { delete pendingOps.current[opKey]; } }
+        );
+      }
+    } else if (!cell && safeVal > 0) {
       pendingOps.current[opKey] = true;
-
-      updateCell.mutate(
-        { id: cell.id, carros_perdidos: newVal },
-        {
-          onSettled: () => {
-            delete pendingOps.current[opKey];
-          },
-        }
-      );
-    } else if (!cell) {
-      pendingOps.current[opKey] = true;
-
       createCell.mutate(
         {
           item_perda: item,
           hora,
           turno: selectedTurno,
           data: selectedDate,
-          carros_perdidos: newVal,
+          carros_perdidos: safeVal,
           carros_planejados: 0,
           carros_produzidos: 0,
           motivo_perda: "outro",
         },
-        {
-          onSettled: () => {
-            delete pendingOps.current[opKey];
-          },
-        }
+        { onSettled: () => { delete pendingOps.current[opKey]; } }
       );
     }
   };
@@ -306,50 +292,35 @@ export default function LossControl() {
     if (pendingOps.current[opKey]) return;
 
     const cell = cellMapGanhoRef.current[item]?.[hora];
-
-    if (newVal <= 0) {
-      if (cell && !cell.id?.startsWith?.("temp-")) {
-        pendingOps.current[opKey] = true;
-        deleteCell.mutate(cell.id, {
-          onSettled: () => {
-            delete pendingOps.current[opKey];
-          },
-        });
-      }
-
-      return;
-    }
+    const safeVal = Math.max(0, newVal);
 
     if (cell && !cell.id?.startsWith?.("temp-")) {
+      if (safeVal <= 0) {
+        pendingOps.current[opKey] = true;
+        deleteCell.mutate(cell.id, {
+          onSettled: () => { delete pendingOps.current[opKey]; },
+        });
+      } else {
+        pendingOps.current[opKey] = true;
+        updateCell.mutate(
+          { id: cell.id, carros_perdidos: safeVal },
+          { onSettled: () => { delete pendingOps.current[opKey]; } }
+        );
+      }
+    } else if (!cell && safeVal > 0) {
       pendingOps.current[opKey] = true;
-
-      updateCell.mutate(
-        { id: cell.id, carros_perdidos: newVal },
-        {
-          onSettled: () => {
-            delete pendingOps.current[opKey];
-          },
-        }
-      );
-    } else if (!cell) {
-      pendingOps.current[opKey] = true;
-
       createCell.mutate(
         {
           item_perda: item,
           hora,
           turno: selectedTurno,
           data: selectedDate,
-          carros_perdidos: newVal,
+          carros_perdidos: safeVal,
           carros_planejados: 0,
           carros_produzidos: 0,
           motivo_perda: "ganho",
         },
-        {
-          onSettled: () => {
-            delete pendingOps.current[opKey];
-          },
-        }
+        { onSettled: () => { delete pendingOps.current[opKey]; } }
       );
     }
   };
