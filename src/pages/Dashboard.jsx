@@ -26,21 +26,20 @@ import {
   Clock,
 } from "lucide-react";
 import { getTodayShiftData } from "@/lib/shiftDetector";
+import DailySummaryCard from "@/components/dashboard/DailySummaryCard";
+import ProductionVsObjectiveChart from "@/components/dashboard/ProductionVsObjectiveChart";
 
 const TURNOS = [
-  {
-    key: "primeiro",
-    label: "1º Turno",
-  },
-  {
-    key: "segundo",
-    label: "2º Turno",
-  },
-  {
-    key: "terceiro",
-    label: "3º Turno",
-  },
+  { key: "primeiro", label: "1º Turno" },
+  { key: "segundo", label: "2º Turno" },
+  { key: "terceiro", label: "3º Turno" },
 ];
+
+const TURNOS_HORAS = {
+  primeiro: ["07:00", "08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00"],
+  segundo: ["15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00", "23:45"],
+  terceiro: ["23:45", "00:00", "01:00", "02:00", "03:00", "04:00", "05:00"],
+};
 
 function safeNumber(value) {
   return Number(value || 0);
@@ -509,6 +508,18 @@ export default function Dashboard() {
           })}
         </div>
       )}
+
+      <DailySummaryCard
+        today={selectedDate}
+        rawProductionRecords={rawProductionRecords}
+        rawLossRecords={rawLossRecords}
+      />
+
+      <ProductionVsObjectiveChart
+        productionRecords={productionRecords}
+        horas={TURNOS_HORAS[selectedTurno] || TURNOS_HORAS.segundo}
+        turnoLabel={turnoLabel}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="border-border">
