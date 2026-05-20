@@ -309,12 +309,12 @@ export default function ProductionControl() {
 
   useEffect(() => {
     cellMapRef.current = cellMap;
-    // Limpa overrides cujos valores já foram confirmados pelo servidor
+    // Limpa override apenas quando o servidor confirmou exatamente o mesmo valor
     Object.keys(localOverrides.current).forEach((key) => {
       const [tid, hora] = key.split(/-(?=\d{2}:)/);
       const serverVal = cellMap[tid]?.[hora]?.producao;
       const overrideVal = localOverrides.current[key];
-      if (serverVal !== undefined && serverVal >= overrideVal) {
+      if (serverVal !== undefined && serverVal === overrideVal) {
         delete localOverrides.current[key];
       }
     });
@@ -344,12 +344,6 @@ export default function ProductionControl() {
 
     const cell = cellMapRef.current[testor.id]?.[hora];
 
-    const fieldName = field === "producao" ? "carros_produzidos" : field;
-
-    const update = {
-      [fieldName]: newVal,
-    };
-
     const payload = {
       testor_id: testor.id,
       testor_nome: testor.nome || "",
@@ -360,18 +354,17 @@ export default function ProductionControl() {
       perdas_producao: field === "perdas_producao" ? newVal : safeNumber(cell?.perdas_producao),
       perdas_defeito: field === "perdas_defeito" ? newVal : safeNumber(cell?.perdas_defeito),
       objetivo: field === "objetivo" ? newVal : safeNumber(cell?.objetivo),
-      justificativa: field === "justificativa" ? newVal : cell?.justificativa || "",
+      justificativa: field === "justificativa" ? newVal : (cell?.justificativa || ""),
     };
 
     if (!cell || !cell.id || isTempId(cell.id)) {
-      // Evita criar duplicata se já há uma criação em andamento para essa célula
       const cellKey = `${testor.id}-${hora}`;
       if (pendingCreates.current[cellKey]) {
-        // Já está criando — atualiza o registro temporário localmente
+        // Já está criando — atualiza o tempId otimisticamente
         const tempId = pendingCreates.current[cellKey];
-        const fieldName2 = field === "producao" ? "carros_produzidos" : field;
+        const dbField = field === "producao" ? "carros_produzidos" : field;
         optimisticUpdate((old) =>
-          old.map((r) => (r.id === tempId ? { ...r, [fieldName2]: newVal } : r))
+          old.map((r) => (r.id === tempId ? { ...r, [dbField]: newVal } : r))
         );
         return;
       }
@@ -379,10 +372,8 @@ export default function ProductionControl() {
       return;
     }
 
-    updateRec.mutate({
-      id: cell.id,
-      ...update,
-    });
+    // Envia payload completo para garantir consistência no banco
+    updateRec.mutate({ id: cell.id, ...payload });
   };
 
   const saveJustificativaTestor = (testor, hora, texto) => {
@@ -471,7 +462,12 @@ export default function ProductionControl() {
     const num = parseInt(value, 10);
 
     if (!Number.isNaN(num) && num >= 0) {
-      saveField(testor, hora, field, num);
+      if (testor.id === "__objetivo__") {
+        // Salva objetivo em todos os testores da hora
+        testores.forEach((t) => saveField(t, hora, "objetivo", num));
+      } else {
+        saveField(testor, hora, field, num);
+      }
     }
 
     setEditingCell(null);
@@ -608,7 +604,7 @@ export default function ProductionControl() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingCell(null)}>
           <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-80 mx-4" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-semibold mb-1 text-foreground">
-              {editingCell.testor?.nome} · {editingCell.hora}
+              {editingCell.testor?.id === "__objetivo__" ? "Objetivo" : editingCell.testor?.nome} · {editingCell.hora}
             </p>
 
             <p className="text-xs text-muted-foreground mb-3">
@@ -842,10 +838,11 @@ export default function ProductionControl() {
             <tbody>
               {testores.map((testor, idx) => {
                 const total = totalPorTestor(testor);
+                const rowBg = idx % 2 === 0 ? "bg-card" : "bg-muted/10";
 
                 return (
                   <React.Fragment key={testor.id}>
-                    <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                    <tr className={rowBg}>
                       <td className="border border-border px-2 py-1 font-semibold whitespace-nowrap text-[11px] sm:text-sm">
                         {testor.nome}
                       </td>
@@ -891,7 +888,7 @@ export default function ProductionControl() {
                       </td>
                     </tr>
 
-                    <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                    <tr className={rowBg}>
                       <td className="border border-border px-2 py-1 text-yellow-400/70 text-[9px] font-semibold whitespace-nowrap">
                         💬 justif.
                       </td>
@@ -935,15 +932,12 @@ export default function ProductionControl() {
                       <button
                         type="button"
                         onClick={() => {
-                          const testorBase = testores[0];
-
-                          if (!testorBase) {
+                          if (!testores.length) {
                             alert("Cadastre pelo menos um testor antes de lançar objetivo.");
                             return;
                           }
-
                           setEditingCell({
-                            testor: testorBase,
+                            testor: { id: "__objetivo__", nome: "Objetivo" },
                             hora,
                             field: "objetivo",
                             value: String(val),
