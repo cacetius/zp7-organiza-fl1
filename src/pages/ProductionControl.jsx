@@ -186,8 +186,8 @@ export default function ProductionControl() {
     const cell = getCellRef(testor.id, hora);
     const update = { [field === "producao" ? "carros_produzidos" : field]: newVal };
 
-    if (!cell) {
-      // Criar novo registro
+    if (!cell?.id) {
+      // Criar novo registro — célula ainda não existe no banco
       createRec.mutate({
         testor_id: testor.id, testor_nome: testor.nome,
         data: selectedDate, turno: selectedTurno, hora,
@@ -198,20 +198,14 @@ export default function ProductionControl() {
         justificativa: field === "justificativa" ? newVal : "",
       });
     } else {
-      // Atualizar registro existente (inclui temp-id)
-      if (cell.id?.startsWith?.("temp-")) {
-        // Se for temp, atualiza otimista e força refresh
-        updateRec.mutate({ id: cell.id, ...update });
-      } else {
-        updateRec.mutate({ id: cell.id, ...update });
-      }
+      updateRec.mutate({ id: cell.id, ...update });
     }
   };
 
   // Salvar justificativa para UM testor específico nessa hora
   const saveJustificativaTestor = (testor, hora, texto) => {
     const cell = getCellRef(testor.id, hora);
-    if (cell && !cell.id?.startsWith?.("temp-")) {
+    if (cell?.id && !cell.id.startsWith("temp-")) {
       updateRec.mutate({ id: cell.id, justificativa: texto });
     } else {
       // Criar registro só para justificativa
