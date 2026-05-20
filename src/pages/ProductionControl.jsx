@@ -17,7 +17,7 @@ const HORAS_EXTRAS_SABADO_2 = ["19:00","20:00","21:00","22:00","23:00"];
 // 06:00 e 12:00 removidos conforme solicitado
 const TURNOS = [
   { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00"] },
-  { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"] },
+  { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
   { label: "3º Turno (21h–06h)", key: "terceiro", horas: ["22:00","23:00","00:00","01:00","02:00","03:00","04:00","05:00"] },
 ];
 
@@ -185,10 +185,11 @@ export default function ProductionControl() {
     return map;
   }, [records]);
 
-  const getCell = (testorId, hora) => cellMapRef.current[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
+  const getCell = (testorId, hora) => cellMap[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
+  const getCellRef = (testorId, hora) => cellMapRef.current[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
 
   const saveField = (testor, hora, field, newVal) => {
-    const cell = cellMapRef.current[testor.id]?.[hora];
+    const cell = getCellRef(testor.id, hora);
     const update = { [field === "producao" ? "carros_produzidos" : field]: newVal };
 
     if (!cell) {
@@ -215,7 +216,7 @@ export default function ProductionControl() {
 
   // Salvar justificativa para UM testor específico nessa hora
   const saveJustificativaTestor = (testor, hora, texto) => {
-    const cell = cellMapRef.current[testor.id]?.[hora];
+    const cell = getCellRef(testor.id, hora);
     if (cell && !cell.id?.startsWith?.("temp-")) {
       updateRec.mutate({ id: cell.id, justificativa: texto });
     } else {
@@ -235,7 +236,7 @@ export default function ProductionControl() {
     longPressTriggered.current[key] = false;
     longPressTimers.current[key] = setTimeout(() => {
       longPressTriggered.current[key] = true;
-      const cell = getCell(testor.id, hora);
+      const cell = getCellRef(testor.id, hora);
       setEditingCell({ testor, hora, field, value: String(field === "justificativa" ? (cell.justificativa || "") : (cell[field] || "")) });
     }, 600);
   };
@@ -249,12 +250,12 @@ export default function ProductionControl() {
     clearTimeout(clickTimers.current[key]);
     if (clickCounters.current[key] >= 4) {
       clickCounters.current[key] = 0;
-      const cell = cellMapRef.current[testor.id]?.[hora];
+      const cell = getCellRef(testor.id, hora);
       if (cell && !cell.id?.startsWith?.("temp-")) deleteRec.mutate(cell.id);
       return;
     }
     clickTimers.current[key] = setTimeout(() => { clickCounters.current[key] = 0; }, 600);
-    const cell = getCell(testor.id, hora);
+    const cell = getCellRef(testor.id, hora);
     saveField(testor, hora, "producao", (cell.producao || 0) + 1);
   };
 
@@ -306,11 +307,11 @@ export default function ProductionControl() {
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
-  const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (getCell(t.id, h).producao || 0), 0);
-  const totalGeral = testores.reduce((acc, t) => acc + totalPorTestor(t), 0);
-  const totalObjetivo = Object.values(objetivoPorHora).reduce((a, v) => a + v, 0);
-  const totalPerdasProd = Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0);
-  const totalPerdasFalha = Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0);
+  const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[t.id]?.[h]?.producao || 0), 0);
+  const totalGeral = useMemo(() => testores.reduce((acc, t) => acc + totalPorTestor(t), 0), [cellMap, testores, turnoAtual.horas]);
+  const totalObjetivo = useMemo(() => Object.values(objetivoPorHora).reduce((a, v) => a + v, 0), [objetivoPorHora]);
+  const totalPerdasProd = useMemo(() => Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0), [perdasProdPorHora]);
+  const totalPerdasFalha = useMemo(() => Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0), [perdasFalhaPorHora]);
 
   // Produção líquida = Produção - Perda Falha
   const producaoLiquida = Math.max(0, totalGeral - totalPerdasFalha);
