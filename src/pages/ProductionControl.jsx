@@ -331,8 +331,18 @@ export default function ProductionControl() {
       justificativa: field === "justificativa" ? newVal : cell?.justificativa || "",
     };
 
-    if (!cell || !cell.id || isTempId(cell.id)) {
+    if (!cell || !cell.id) {
       createRec.mutate(payload);
+      return;
+    }
+
+    if (isTempId(cell.id)) {
+      // Registro ainda temporário: atualiza otimisticamente pelo ID temp
+      optimisticUpdate((old) =>
+        old.map((r) =>
+          r.id === cell.id ? { ...r, [fieldName]: newVal } : r
+        )
+      );
       return;
     }
 
@@ -398,8 +408,10 @@ export default function ProductionControl() {
 
     if (longPressTriggered.current[key]) return;
 
-    const cell = getCell(testor.id, hora);
-    saveField(testor, hora, "producao", safeNumber(cell.producao) + 1);
+    // Usa cellMap direto (estado atual) para garantir valor correto
+    const cell = cellMap[testor.id]?.[hora];
+    const currentVal = safeNumber(cell?.producao);
+    saveField(testor, hora, "producao", currentVal + 1);
   };
 
   const confirmEditCell = () => {
