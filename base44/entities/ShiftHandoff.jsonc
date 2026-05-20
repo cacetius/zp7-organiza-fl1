@@ -60,42 +60,70 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": {
-          "$in": [
-            "admin",
-            "lider"
-          ]
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
         }
-      }
+      ]
     },
     "read": {
-      "user_condition": {
-        "role": {
-          "$in": [
-            "admin",
-            "lider",
-            "monitor"
-          ]
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
         }
-      }
+      ]
     },
     "update": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
+          "user_condition": {
+            "role": "admin"
+          }
         },
+        {
+          "user_condition": {
+            "funcao": "lider"
+          }
+        },
+        {
+          "user_condition": {
+            "funcao": "monitor"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
         {
           "user_condition": {
             "role": "admin"
           }
         }
       ]
-    },
-    "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
     }
   }
 }
