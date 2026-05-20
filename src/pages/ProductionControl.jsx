@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { detectCurrentShift } from "@/lib/shiftDetector";
 
-// Horas extras disponíveis para sábado
 const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
 const HORAS_EXTRAS_SABADO_2 = ["19:00","20:00","21:00","22:00","23:00"];
 
@@ -25,69 +24,71 @@ const TURNOS_SABADO = [
   { label: "2º Turno Sáb (12h–18h)", key: "segundo",  horas: ["13:00","14:00","15:00","16:00","17:00","18:00"], horasExtras: HORAS_EXTRAS_SABADO_2 },
 ];
 
+// Testor virtual para o OBJETIVO (não vinculado a nenhum testor real)
+const OBJETIVO_TESTOR_ID = "__objetivo__";
+
 function isSabado(dateStr) {
-  const d = parseISO(dateStr);
-  return d.getDay() === 6;
+  return parseISO(dateStr).getDay() === 6;
 }
 
-// Modo de edição de célula
-// field: "producao" | "perdas_producao" | "perdas_defeito" | "objetivo" | "justificativa"
 const CAMPO_LABELS = {
   producao: "Produção",
-  perdas_producao: "Perdas de Produção",
-  perdas_defeito: "Perdas por Defeito",
   objetivo: "Objetivo",
   justificativa: "Justificativa",
 };
 
 export default function ProductionControl() {
   const qc = useQueryClient();
-  // Data de hoje no fuso de Brasília
+
   const today = format(new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })), "yyyy-MM-dd");
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
-  const [editingCell, setEditingCell] = useState(null); // { testor, hora, field, value }
+  const [editingCell, setEditingCell] = useState(null); // { testorId, testorNome, hora, field, value }
+  const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value }
   const [mostrarExtras, setMostrarExtras] = useState(false);
 
-  // Para justificativas por testor (uma por testor, não por hora)
-  const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value }
-
-  const longPressTimers = useRef({});
-  const clickCounters = useRef({});
-  const clickTimers = useRef({});
-  const longPressTriggered = useRef({});
-
-  const sabado = isSabado(selectedDate);
-  const listaTurnos = sabado ? TURNOS_SABADO : TURNOS;
-
-  const turnoAtualBase = listaTurnos.find(t => t.key === selectedTurno) || listaTurnos[0];
-  const horasBase = turnoAtualBase.horas;
-  const horasExtras = turnoAtualBase.horasExtras || [];
-  const horasVisiveis = sabado && mostrarExtras ? [...horasBase, ...horasExtras] : horasBase;
-  const turnoAtual = { ...turnoAtualBase, horas: horasVisiveis };
-  const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}`;
-  const dateLabel = format(parseISO(selectedDate), "dd/MM");
-
+  // Refs para evitar stale closures nos callbacks assíncronos
   const selectedDateRef = useRef(selectedDate);
   const selectedTurnoRef = useRef(selectedTurno);
   useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
   useEffect(() => { selectedTurnoRef.current = selectedTurno; }, [selectedTurno]);
 
-  // Carregamento otimizado com cache e paginação
+  const longPressTimers = useRef({});
+  const longPressTriggered = useRef({});
+  const clickCounters = useRef({});
+  const clickTimers = useRef({});
+
+  const sabado = isSabado(selectedDate);
+  const listaTurnos = sabado ? TURNOS_SABADO : TURNOS;
+  const turnoBase = listaTurnos.find(t => t.key === selectedTurno) || listaTurnos[0];
+  const horasExtras = turnoBase.horasExtras || [];
+  const horasVisiveis = sabado && mostrarExtras ? [...turnoBase.horas, ...horasExtras] : turnoBase.horas;
+  const turnoAtual = { ...turnoBase, horas: horasVisiveis };
+
+  const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}`;
+  const lossKey  = `loss-sheet-${selectedDate}-${selectedTurno}`;
+  const dateLabel = format(parseISO(selectedDate), "dd/MM");
+
+  const sheetKeyRef = useRef(sheetKey);
+  const lossKeyRef  = useRef(lossKey);
+  useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
+  useEffect(() => { lossKeyRef.current  = lossKey;  }, [lossKey]);
+
+  // ─── Queries ──────────────────────────────────────────────────────────────
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
     queryFn: () => base44.entities.Testor.list(),
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
   });
+
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
     queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
     staleTime: 0,
     gcTime: 0,
   });
-  // Busca os registros do Controle de Perdas para calcular Perda Real
-  const lossKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
+
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
     queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
@@ -96,294 +97,270 @@ export default function ProductionControl() {
     select: (data) => data.filter(r => r.data === selectedDate && r.turno === selectedTurno),
   });
 
-  const sheetKeyRef = useRef(sheetKey);
-  useEffect(() => { sheetKeyRef.current = sheetKey; }, [sheetKey]);
-
-  const lossKeyRef = useRef(lossKey);
-  useEffect(() => { lossKeyRef.current = lossKey; }, [lossKey]);
-
+  // Subscrições em tempo real
   useEffect(() => {
-    const unsubProduction = base44.entities.ProductionControl.subscribe(() => {
+    const unsubProd = base44.entities.ProductionControl.subscribe(() => {
       qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
-      qc.invalidateQueries({ queryKey: ['testores'] });
     });
     const unsubLoss = base44.entities.LossControl.subscribe(() => {
       qc.invalidateQueries({ queryKey: [lossKeyRef.current] });
     });
-    return () => {
-      unsubProduction();
-      unsubLoss();
-    };
+    return () => { unsubProd(); unsubLoss(); };
   }, [qc]);
 
-  const optimisticUpdate = (updater) => qc.setQueryData([sheetKeyRef.current], (old = []) => updater(old));
+  // ─── Mutations ────────────────────────────────────────────────────────────
+  const invalidateSheet = () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] });
 
   const createRec = useMutation({
     mutationFn: (data) => base44.entities.ProductionControl.create(data),
-    onMutate: (data) => optimisticUpdate(old => [...old, { ...data, id: `temp-${Date.now()}` }]),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onSuccess: invalidateSheet,
+    onError: invalidateSheet,
   });
+
   const updateRec = useMutation({
     mutationFn: ({ id, ...fields }) => base44.entities.ProductionControl.update(id, fields),
-    onMutate: ({ id, ...fields }) => optimisticUpdate(old => old.map(r => r.id === id ? { ...r, ...fields } : r)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onMutate: ({ id, ...fields }) => {
+      qc.setQueryData([sheetKeyRef.current], (old = []) =>
+        old.map(r => r.id === id ? { ...r, ...fields } : r)
+      );
+    },
+    onError: invalidateSheet,
   });
+
   const deleteRec = useMutation({
     mutationFn: (id) => base44.entities.ProductionControl.delete(id),
-    onMutate: (id) => optimisticUpdate(old => old.filter(r => r.id !== id)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
-    onError: () => qc.invalidateQueries({ queryKey: [sheetKeyRef.current] }),
+    onMutate: (id) => {
+      qc.setQueryData([sheetKeyRef.current], (old = []) => old.filter(r => r.id !== id));
+    },
+    onError: invalidateSheet,
   });
 
-  // cellMap: testor_id -> hora -> { id, producao, perdas_producao, perdas_defeito, objetivo, justificativa }
-  const cellMapRef = useRef({});
+  // ─── cellMap: testorId -> hora -> record ──────────────────────────────────
+  // Inclui OBJETIVO_TESTOR_ID para os registros de objetivo
   const cellMap = useMemo(() => {
     const map = {};
-    records.forEach(r => {
-      if (!r.testor_id || !r.hora) return;
-      if (!map[r.testor_id]) map[r.testor_id] = {};
-      // Sempre usa o registro mais recente (prioriza IDs reais sobre temporários)
-      const existing = map[r.testor_id][r.hora];
-      const isReal = r.id && !r.id.startsWith("temp-");
-      const existingIsTemp = existing?.id?.startsWith("temp-");
-      
+    for (const r of records) {
+      const tid = r.testor_id;
+      const hora = r.hora;
+      if (!tid || !hora) continue;
+      if (!map[tid]) map[tid] = {};
+      const existing = map[tid][hora];
+      // Prioriza registros reais sobre temporários
+      const isReal = r.id && !String(r.id).startsWith("temp-");
+      const existingIsTemp = existing && String(existing.id).startsWith("temp-");
       if (!existing || (existingIsTemp && isReal)) {
-        map[r.testor_id][r.hora] = {
-          id: r.id,
-          producao: r.carros_produzidos ?? 0,
-          perdas_producao: r.perdas_producao ?? 0,
-          perdas_defeito: r.perdas_defeito ?? 0,
-          objetivo: r.objetivo ?? 0,
-          justificativa: r.justificativa ?? "",
-        };
-      } else if (existing) {
-        // Atualiza valores mesmo se ID for o mesmo
-        existing.producao = r.carros_produzidos ?? existing.producao;
-        existing.perdas_producao = r.perdas_producao ?? existing.perdas_producao;
-        existing.perdas_defeito = r.perdas_defeito ?? existing.perdas_defeito;
-        existing.objetivo = r.objetivo ?? existing.objetivo;
-        existing.justificativa = r.justificativa ?? existing.justificativa;
+        map[tid][hora] = r;
       }
-    });
+    }
     return map;
   }, [records]);
+
+  const cellMapRef = useRef(cellMap);
   useEffect(() => { cellMapRef.current = cellMap; }, [cellMap]);
-  // Justificativas por testor/hora (uma por testor)
-  const justificativasMap = useMemo(() => {
-    const map = {};
-    records.forEach(r => {
-      if (r.testor_id && r.hora && r.justificativa) {
-        const key = `${r.testor_id}-${r.hora}`;
-        if (!map[key]) {
-          map[key] = r.justificativa;
-        }
-      }
-    });
-    return map;
-  }, [records]);
 
-  const getCell = (testorId, hora) => cellMap[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
-  const getCellRef = (testorId, hora) => cellMapRef.current[testorId]?.[hora] || { producao: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0, justificativa: "" };
+  // Helpers: retorna o record (ou null)
+  const getRecord = useCallback((testorId, hora) => cellMap[testorId]?.[hora] || null, [cellMap]);
+  const getRecordRef = useCallback((testorId, hora) => cellMapRef.current[testorId]?.[hora] || null, []);
 
-  const saveField = (testor, hora, field, newVal) => {
-    const cell = getCellRef(testor.id, hora);
-    const fieldKey = field === "producao" ? "carros_produzidos" : field;
-    const update = { [fieldKey]: newVal };
+  // Helper: valor do campo com fallback 0/""
+  const getVal = useCallback((testorId, hora, field) => {
+    const rec = getRecord(testorId, hora);
+    if (!rec) return field === "justificativa" ? "" : 0;
+    if (field === "producao") return rec.carros_produzidos ?? 0;
+    if (field === "justificativa") return rec.justificativa ?? "";
+    return rec[field] ?? 0;
+  }, [getRecord]);
 
-    if (!cell?.id) {
+  // ─── Salvar campo ─────────────────────────────────────────────────────────
+  const saveField = useCallback((testorId, testorNome, hora, field, newVal) => {
+    const rec = getRecordRef(testorId, hora);
+    const dbField = field === "producao" ? "carros_produzidos" : field;
+
+    if (rec?.id && !String(rec.id).startsWith("temp-")) {
+      updateRec.mutate({ id: rec.id, [dbField]: newVal });
+    } else {
       createRec.mutate({
-        testor_id: testor.id, testor_nome: testor.nome,
-        data: selectedDateRef.current, turno: selectedTurnoRef.current, hora,
+        testor_id: testorId,
+        testor_nome: testorNome,
+        data: selectedDateRef.current,
+        turno: selectedTurnoRef.current,
+        hora,
         carros_produzidos: field === "producao" ? newVal : 0,
-        perdas_producao: field === "perdas_producao" ? newVal : 0,
-        perdas_defeito: field === "perdas_defeito" ? newVal : 0,
+        perdas_producao: 0,
+        perdas_defeito: 0,
         objetivo: field === "objetivo" ? newVal : 0,
         justificativa: field === "justificativa" ? newVal : "",
       });
-    } else {
-      updateRec.mutate({ id: cell.id, ...update });
     }
-  };
+  }, [getRecordRef, createRec, updateRec]);
 
-  // Salvar justificativa para UM testor específico nessa hora
-  const saveJustificativaTestor = (testor, hora, texto) => {
-    const cell = getCellRef(testor.id, hora);
-    if (cell?.id && !cell.id.startsWith("temp-")) {
-      updateRec.mutate({ id: cell.id, justificativa: texto });
-    } else {
-      createRec.mutate({
-        testor_id: testor.id, testor_nome: testor.nome,
-        data: selectedDateRef.current, turno: selectedTurnoRef.current, hora,
-        carros_produzidos: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0,
-        justificativa: texto,
-      });
-    }
-  };
-
-  // Long press para abrir edição
-  const startLongPress = (testor, hora, field = "producao") => {
-    const key = `${testor.id}-${hora}-${field}`;
+  // ─── Interações produção ──────────────────────────────────────────────────
+  const startLongPress = useCallback((testorId, testorNome, hora, field = "producao") => {
+    const key = `${testorId}-${hora}-${field}`;
     longPressTriggered.current[key] = false;
     longPressTimers.current[key] = setTimeout(() => {
       longPressTriggered.current[key] = true;
-      const cell = getCellRef(testor.id, hora);
-      setEditingCell({ testor, hora, field, value: String(field === "justificativa" ? (cell.justificativa || "") : (cell[field] || "")) });
+      const currentVal = cellMapRef.current[testorId]?.[hora];
+      let value = "0";
+      if (field === "producao") value = String(currentVal?.carros_produzidos ?? 0);
+      else if (field === "justificativa") value = currentVal?.justificativa ?? "";
+      else value = String(currentVal?.[field] ?? 0);
+      setEditingCell({ testorId, testorNome, hora, field, value });
     }, 600);
-  };
-  const cancelLongPress = (testor, hora, field = "producao") => clearTimeout(longPressTimers.current[`${testor.id}-${hora}-${field}`]);
+  }, []);
 
-  // Toque rápido: incrementa produção
-  const handleIncrementProducao = (testor, hora) => {
-    const key = `${testor.id}-${hora}-producao`;
+  const cancelLongPress = useCallback((testorId, hora, field = "producao") => {
+    clearTimeout(longPressTimers.current[`${testorId}-${hora}-${field}`]);
+  }, []);
+
+  const handleIncrementProducao = useCallback((testorId, testorNome, hora) => {
+    const key = `${testorId}-${hora}-producao`;
     if (longPressTriggered.current[key]) return;
+
     clickCounters.current[key] = (clickCounters.current[key] || 0) + 1;
     clearTimeout(clickTimers.current[key]);
+
     if (clickCounters.current[key] >= 4) {
       clickCounters.current[key] = 0;
-      const cell = getCellRef(testor.id, hora);
-      if (cell && !cell.id?.startsWith?.("temp-")) deleteRec.mutate(cell.id);
+      const rec = getRecordRef(testorId, hora);
+      if (rec?.id && !String(rec.id).startsWith("temp-")) deleteRec.mutate(rec.id);
       return;
     }
-    clickTimers.current[key] = setTimeout(() => { clickCounters.current[key] = 0; }, 600);
-    const cell = getCellRef(testor.id, hora);
-    saveField(testor, hora, "producao", (cell.producao || 0) + 1);
-  };
 
-  const confirmEditCell = () => {
+    clickTimers.current[key] = setTimeout(() => { clickCounters.current[key] = 0; }, 600);
+    const currentVal = getRecordRef(testorId, hora)?.carros_produzidos ?? 0;
+    saveField(testorId, testorNome, hora, "producao", currentVal + 1);
+  }, [getRecordRef, saveField, deleteRec]);
+
+  const confirmEditCell = useCallback(() => {
     if (!editingCell) return;
-    const { testor, hora, field, value } = editingCell;
+    const { testorId, testorNome, hora, field, value } = editingCell;
     if (field === "justificativa") {
-      saveJustificativaTestor(testor, hora, value);
+      saveField(testorId, testorNome, hora, "justificativa", value);
     } else {
       const num = parseInt(value, 10);
-      if (!isNaN(num) && num >= 0) saveField(testor, hora, field, num);
+      if (!isNaN(num) && num >= 0) saveField(testorId, testorNome, hora, field, num);
     }
     setEditingCell(null);
-  };
+  }, [editingCell, saveField]);
 
-  // Totais por hora (produção e objetivo)
+  // ─── Totais ───────────────────────────────────────────────────────────────
   const { totalPorHora, objetivoPorHora, perdasProdPorHora } = useMemo(() => {
     const prod = {}, obj = {}, perdProd = {};
-    turnoAtual.horas.forEach(h => {
-      prod[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).producao || 0), 0);
-      obj[h] = testores.reduce((acc, t) => acc + (getCell(t.id, h).objetivo || 0), 0);
-      // Perda de Produção = Objetivo - Produção, só se objetivo foi definido (> 0)
+    for (const h of turnoAtual.horas) {
+      prod[h] = testores.reduce((acc, t) => acc + (getVal(t.id, h, "producao") || 0), 0);
+      // Objetivo: somado dos registros com testor_id = OBJETIVO_TESTOR_ID para essa hora
+      const objRec = cellMap[OBJETIVO_TESTOR_ID]?.[h];
+      obj[h] = objRec?.objetivo ?? 0;
       perdProd[h] = obj[h] > 0 ? Math.max(0, obj[h] - prod[h]) : 0;
-    });
+    }
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
-  }, [cellMap, testores, turnoAtual.horas]);
+  }, [cellMap, testores, turnoAtual.horas, getVal]);
 
-  // Perda por Controle = perdas brutas do LossControl (excluindo ganhos), por hora
   const perdasBrutasPorHora = useMemo(() => {
     const map = {};
-    turnoAtual.horas.forEach(h => { map[h] = 0; });
-    lossRecords
-      .filter(r => r.motivo_perda !== "ganho" && r.hora)
-      .forEach(r => {
-        if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
-      });
+    for (const h of turnoAtual.horas) map[h] = 0;
+    lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora).forEach(r => {
+      if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
+    });
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
-  // Ganhos que compensam perdas brutas, por hora
   const ganhosCompPorHora = useMemo(() => {
     const map = {};
-    turnoAtual.horas.forEach(h => { map[h] = 0; });
-    lossRecords
-      .filter(r => r.motivo_perda === "ganho" && r.hora)
-      .forEach(r => {
-        if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
-      });
+    for (const h of turnoAtual.horas) map[h] = 0;
+    lossRecords.filter(r => r.motivo_perda === "ganho" && r.hora).forEach(r => {
+      if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
+    });
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
-  // Perda real por hora = brutas - ganhos (mínimo 0)
   const perdasFalhaPorHora = useMemo(() => {
     const map = {};
-    turnoAtual.horas.forEach(h => {
+    for (const h of turnoAtual.horas) {
       map[h] = Math.max(0, (perdasBrutasPorHora[h] || 0) - (ganhosCompPorHora[h] || 0));
-    });
+    }
     return map;
   }, [perdasBrutasPorHora, ganhosCompPorHora, turnoAtual.horas]);
 
-  // Detalhamento de perdas por hora (para tooltip)
   const detalhePerdasPorHora = useMemo(() => {
     const map = {};
-    turnoAtual.horas.forEach(h => { map[h] = []; });
-    lossRecords
-      .filter(r => r.motivo_perda !== "ganho" && r.hora && r.item_perda)
-      .forEach(r => {
-        if (map[r.hora] !== undefined) {
-          map[r.hora].push({ item: r.item_perda, val: r.carros_perdidos || 0 });
-        }
-      });
+    for (const h of turnoAtual.horas) map[h] = [];
+    lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora && r.item_perda).forEach(r => {
+      if (map[r.hora] !== undefined) map[r.hora].push({ item: r.item_perda, val: r.carros_perdidos || 0 });
+    });
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
-
-
-  const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[t.id]?.[h]?.producao || 0), 0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const totalGeral = useMemo(() => testores.reduce((acc, t) => acc + turnoAtual.horas.reduce((a2, h) => a2 + (cellMap[t.id]?.[h]?.producao || 0), 0), 0), [cellMap, testores, turnoAtual.horas]);
-  const totalObjetivo = useMemo(() => Object.values(objetivoPorHora).reduce((a, v) => a + v, 0), [objetivoPorHora]);
-  const totalPerdasProd = useMemo(() => Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0), [perdasProdPorHora]);
-  const totalPerdasFalha = useMemo(() => Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0), [perdasFalhaPorHora]);
-
-  // Real Líquido por hora = Produção hora - Perda Real hora (do LossControl)
   const realLiquidoPorHora = useMemo(() => {
     const map = {};
-    turnoAtual.horas.forEach(h => {
+    for (const h of turnoAtual.horas) {
       map[h] = Math.max(0, (totalPorHora[h] || 0) - (perdasFalhaPorHora[h] || 0));
-    });
+    }
     return map;
   }, [totalPorHora, perdasFalhaPorHora, turnoAtual.horas]);
 
-  // Produção Líquida (= Real Líquido) = soma de todos os realLiquidoPorHora
-  const producaoLiquida = useMemo(() => Object.values(realLiquidoPorHora).reduce((a, v) => a + v, 0), [realLiquidoPorHora]);
+  const totalPorTestor = useCallback((t) =>
+    turnoAtual.horas.reduce((acc, h) => acc + (getVal(t.id, h, "producao") || 0), 0),
+  [turnoAtual.horas, getVal]);
+
+  const totalGeral     = useMemo(() => Object.values(totalPorHora).reduce((a, v) => a + v, 0), [totalPorHora]);
+  const totalObjetivo  = useMemo(() => Object.values(objetivoPorHora).reduce((a, v) => a + v, 0), [objetivoPorHora]);
+  const totalPerdasProd  = useMemo(() => Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0), [perdasProdPorHora]);
+  const totalPerdasFalha = useMemo(() => Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0), [perdasFalhaPorHora]);
+  const producaoLiquida  = useMemo(() => Object.values(realLiquidoPorHora).reduce((a, v) => a + v, 0), [realLiquidoPorHora]);
   const efic = totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
 
+  // Justificativas por testor/hora para impressão
+  const justificativasMap = useMemo(() => {
+    const map = {};
+    for (const r of records) {
+      if (r.testor_id && r.hora && r.justificativa) {
+        const key = `${r.testor_id}-${r.hora}`;
+        if (!map[key]) map[key] = r.justificativa;
+      }
+    }
+    return map;
+  }, [records]);
+
+  // ─── Export CSV ───────────────────────────────────────────────────────────
   const handleExportCsv = () => {
     const headers = ["Testor", ...turnoAtual.horas, "Total"];
-    const rows = testores.map(t => [t.nome, ...turnoAtual.horas.map(h => getCell(t.id, h).producao || 0), totalPorTestor(t)]);
-    rows.push(["OBJETIVO", ...turnoAtual.horas.map(h => objetivoPorHora[h] || 0), totalObjetivo]);
-    rows.push(["PRODUÇÃO", ...turnoAtual.horas.map(h => totalPorHora[h] || 0), totalGeral]);
-    rows.push(["PERDAS PRODUÇÃO", ...turnoAtual.horas.map(h => perdasProdPorHora[h] || 0), totalPerdasProd]);
-    rows.push(["PERDA REAL", ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
-    rows.push(["REAL LÍQUIDO", ...turnoAtual.horas.map(h => realLiquidoPorHora[h] || 0), producaoLiquida]);
+    const rows = testores.map(t => [t.nome, ...turnoAtual.horas.map(h => getVal(t.id, h, "producao") || 0), totalPorTestor(t)]);
+    rows.push(["OBJETIVO",         ...turnoAtual.horas.map(h => objetivoPorHora[h] || 0),    totalObjetivo]);
+    rows.push(["PRODUÇÃO",         ...turnoAtual.horas.map(h => totalPorHora[h] || 0),       totalGeral]);
+    rows.push(["PERDAS PRODUÇÃO",  ...turnoAtual.horas.map(h => perdasProdPorHora[h] || 0),  totalPerdasProd]);
+    rows.push(["PERDA REAL",       ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
+    rows.push(["REAL LÍQUIDO",     ...turnoAtual.horas.map(h => realLiquidoPorHora[h] || 0), producaoLiquida]);
     exportCsv(`producao_${selectedDate}_${selectedTurno}`, headers, rows);
   };
 
+  // ─── Print ────────────────────────────────────────────────────────────────
   const handlePrint = () => {
     const now = new Date().toLocaleString("pt-BR");
     const headerCols = turnoAtual.horas.map(h => `<th>${h}</th>`).join("");
-    const rows = testores.map(t => {
+    const rowsHtml = testores.map(t => {
       const total = totalPorTestor(t);
       const cells = turnoAtual.horas.map(h => {
-        const v = getCell(t.id, h).producao || 0;
+        const v = getVal(t.id, h, "producao") || 0;
         return `<td style="${v > 0 ? "color:#1d4ed8;font-weight:700" : "color:#cbd5e1"}">${v > 0 ? v : "—"}</td>`;
       }).join("");
       return `<tr><td class="name">${t.nome}</td>${cells}<td class="total-col">${total > 0 ? total : "—"}</td></tr>`;
     }).join("");
-
-    const objetivoRowCells = turnoAtual.horas.map(h => `<td>${objetivoPorHora[h] > 0 ? objetivoPorHora[h] : "—"}</td>`).join("");
-    const totalRowCells = turnoAtual.horas.map(h => `<td>${totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>`).join("");
+    const objetivoRowCells   = turnoAtual.horas.map(h => `<td>${objetivoPorHora[h] > 0 ? objetivoPorHora[h] : "—"}</td>`).join("");
+    const totalRowCells      = turnoAtual.horas.map(h => `<td>${totalPorHora[h] > 0 ? totalPorHora[h] : "—"}</td>`).join("");
     const perdasProdRowCells = turnoAtual.horas.map(h => `<td>${perdasProdPorHora[h] > 0 ? perdasProdPorHora[h] : "—"}</td>`).join("");
-    const perdasFalhaRowCells = turnoAtual.horas.map(h => `<td>${perdasFalhaPorHora[h] > 0 ? perdasFalhaPorHora[h] : "—"}</td>`).join("");
-    const liquidoRowCells = turnoAtual.horas.map(h => {
+    const perdasFalhaRowCells= turnoAtual.horas.map(h => `<td>${perdasFalhaPorHora[h] > 0 ? perdasFalhaPorHora[h] : "—"}</td>`).join("");
+    const liquidoRowCells    = turnoAtual.horas.map(h => {
       const liq = realLiquidoPorHora[h] || 0;
       return `<td style="color:#16a34a;font-weight:900">${liq > 0 ? liq : "—"}</td>`;
     }).join("");
-
-    // Justificativas por testor/hora
-    const justRows = testores.flatMap(t => {
-      return turnoAtual.horas.map(h => {
-        const key = `${t.id}-${h}`;
-        const just = justificativasMap[key] || "";
+    const justRows = testores.flatMap(t =>
+      turnoAtual.horas.map(h => {
+        const just = justificativasMap[`${t.id}-${h}`] || "";
         return just ? `<tr><td class="just-hora">${t.nome} · ${h}</td><td class="just-texto" colspan="${turnoAtual.horas.length + 1}">${just}</td></tr>` : "";
-      }).filter(Boolean);
-    }).join("");
+      }).filter(Boolean)
+    ).join("");
 
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
     <title>Controle de Produção ZP7 — ${dateLabel}</title>
@@ -450,7 +427,7 @@ export default function ProductionControl() {
     <table>
       <thead><tr><th class="name">TESTOR</th>${headerCols}<th>TOTAL</th></tr></thead>
       <tbody>
-        ${rows}
+        ${rowsHtml}
         <tr class="objetivo-row"><td class="name"><strong>OBJETIVO</strong></td>${objetivoRowCells}<td class="grand-cyan">${totalObjetivo > 0 ? totalObjetivo : "—"}</td></tr>
         <tr class="total-row"><td class="name"><strong>PRODUÇÃO</strong></td>${totalRowCells}<td class="grand-blue">${totalGeral > 0 ? totalGeral : "—"}</td></tr>
         <tr class="perdas-prod-row"><td class="name"><strong>PERDAS DE PRODUÇÃO</strong></td>${perdasProdRowCells}<td class="grand-orange">${totalPerdasProd > 0 ? totalPerdasProd : "—"}</td></tr>
@@ -476,13 +453,14 @@ export default function ProductionControl() {
     a.target = "_blank"; a.click();
   };
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 pb-20 lg:pb-4">
-      {/* Modal edição numérica */}
+      {/* Modal edição numérica / justificativa */}
       {editingCell && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingCell(null)}>
           <div className="bg-card border border-border rounded-xl p-5 shadow-2xl w-80 mx-4" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-semibold mb-1 text-foreground">{editingCell.testor?.nome} · {editingCell.hora}</p>
+            <p className="text-sm font-semibold mb-1 text-foreground">{editingCell.testorNome} · {editingCell.hora}</p>
             <p className="text-xs text-muted-foreground mb-3">{CAMPO_LABELS[editingCell.field] || editingCell.field}</p>
             {editingCell.field === "justificativa" ? (
               <textarea
@@ -526,7 +504,14 @@ export default function ProductionControl() {
             />
             <div className="flex gap-2">
               <button onClick={() => setEditingJustificativa(null)} className="flex-1 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
-              <button onClick={() => { saveJustificativaTestor(editingJustificativa.testor, editingJustificativa.hora, editingJustificativa.value); setEditingJustificativa(null); }} className="flex-1 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90">Salvar</button>
+              <button
+                onClick={() => {
+                  const { testor, hora, value } = editingJustificativa;
+                  saveField(testor.id, testor.nome, hora, "justificativa", value);
+                  setEditingJustificativa(null);
+                }}
+                className="flex-1 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90"
+              >Salvar</button>
             </div>
           </div>
         </div>
@@ -588,11 +573,11 @@ export default function ProductionControl() {
       {(totalGeral > 0 || totalPerdasProd > 0 || totalPerdasFalha > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {[
-            { label: "Objetivo", value: totalObjetivo || "—", color: "text-cyan-400", border: "border-cyan-500/20" },
-            { label: "Produção", value: totalGeral, color: "text-blue-400", border: "border-blue-500/20" },
-            { label: "Perdas Produção", value: totalPerdasProd, color: "text-orange-400", border: "border-orange-500/20" },
-            { label: "Perda Real", value: totalPerdasFalha, color: "text-red-400", border: "border-red-500/20" },
-            { label: "Real Líquido", value: producaoLiquida, color: "text-green-400", border: "border-green-500/20" },
+            { label: "Objetivo",        value: totalObjetivo || "—", color: "text-cyan-400",   border: "border-cyan-500/20" },
+            { label: "Produção",        value: totalGeral,           color: "text-blue-400",   border: "border-blue-500/20" },
+            { label: "Perdas Produção", value: totalPerdasProd,      color: "text-orange-400", border: "border-orange-500/20" },
+            { label: "Perda Real",      value: totalPerdasFalha,     color: "text-red-400",    border: "border-red-500/20" },
+            { label: "Real Líquido",    value: producaoLiquida,      color: "text-green-400",  border: "border-green-500/20" },
           ].map(k => (
             <Card key={k.label} className={`border ${k.border}`}>
               <CardContent className="p-2.5 sm:p-3 text-center">
@@ -604,6 +589,7 @@ export default function ProductionControl() {
         </div>
       )}
 
+      {/* Tabela */}
       {loadingTestores ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted/30 animate-pulse" />)}</div>
       ) : testores.length === 0 ? (
@@ -612,7 +598,7 @@ export default function ProductionControl() {
           <p className="font-medium">Nenhum testor cadastrado.</p>
         </CardContent></Card>
       ) : (
-        <div key={`table-${sheetKey}-${records.length}`} className="overflow-x-auto rounded-xl border border-border shadow-sm -mx-1 sm:mx-0">
+        <div className="overflow-x-auto rounded-xl border border-border shadow-sm -mx-1 sm:mx-0">
           <table className="w-full text-xs border-collapse" style={{ minWidth: `${140 + turnoAtual.horas.length * 64}px` }}>
             <thead>
               <tr>
@@ -627,31 +613,32 @@ export default function ProductionControl() {
               </tr>
             </thead>
             <tbody>
-              {/* Linhas de testores — produção + justificativa logo abaixo */}
               {testores.map((testor, idx) => {
                 const total = totalPorTestor(testor);
                 return (
                   <React.Fragment key={testor.id}>
-                    {/* Linha de produção */}
+                    {/* Linha produção */}
                     <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
                       <td className="border border-border px-2 py-1 font-semibold whitespace-nowrap text-[11px] sm:text-sm">{testor.nome}</td>
                       {turnoAtual.horas.map(hora => {
-                        const cell = getCell(testor.id, hora);
-                        const val = cell.producao || 0;
+                        const val = getVal(testor.id, hora, "producao");
                         return (
                           <td key={hora} className="border border-border p-0.5 sm:p-1">
                             <div className="flex flex-col items-center gap-0">
                               <button
-                                onPointerDown={() => startLongPress(testor, hora, "producao")}
-                                onPointerUp={() => { cancelLongPress(testor, hora, "producao"); handleIncrementProducao(testor, hora); }}
-                                onPointerLeave={() => cancelLongPress(testor, hora, "producao")}
+                                onPointerDown={() => startLongPress(testor.id, testor.nome, hora, "producao")}
+                                onPointerUp={() => { cancelLongPress(testor.id, hora, "producao"); handleIncrementProducao(testor.id, testor.nome, hora); }}
+                                onPointerLeave={() => cancelLongPress(testor.id, hora, "producao")}
                                 className={`w-full min-w-[44px] h-10 sm:h-11 rounded-md font-black text-sm sm:text-base transition-all select-none touch-manipulation
                                   ${val > 0 ? "bg-blue-500/20 text-blue-300 hover:bg-blue-500/35 active:scale-95" : "bg-muted/20 text-muted-foreground/40 hover:bg-muted/40 active:scale-95"}`}
                               >
                                 {val > 0 ? val : <Plus className="w-3 h-3 mx-auto opacity-40" />}
                               </button>
                               {val > 0 && (
-                                <button onClick={() => saveField(testor, hora, "producao", val - 1)} className="text-muted-foreground/40 hover:text-red-400 transition-colors p-1 touch-manipulation">
+                                <button
+                                  onClick={() => saveField(testor.id, testor.nome, hora, "producao", val - 1)}
+                                  className="text-muted-foreground/40 hover:text-red-400 transition-colors p-1 touch-manipulation"
+                                >
                                   <Minus className="w-3.5 h-3.5" />
                                 </button>
                               )}
@@ -661,12 +648,11 @@ export default function ProductionControl() {
                       })}
                       <td className="border border-border px-1 py-2 text-center font-black text-blue-400 bg-blue-500/5 text-sm">{total > 0 ? total : "—"}</td>
                     </tr>
-                    {/* Linha de justificativa — abaixo do testor (uma por testor) */}
+                    {/* Linha justificativa */}
                     <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
                       <td className="border border-border px-2 py-1 text-yellow-400/70 text-[9px] font-semibold whitespace-nowrap">💬 justif.</td>
                       {turnoAtual.horas.map(hora => {
-                        const key = `${testor.id}-${hora}`;
-                        const just = justificativasMap[key] || "";
+                        const just = justificativasMap[`${testor.id}-${hora}`] || "";
                         return (
                           <td key={hora} className="border border-border p-0.5">
                             <button
@@ -694,7 +680,7 @@ export default function ProductionControl() {
                   return (
                     <td key={h} className="border border-border p-0.5">
                       <button
-                       onClick={() => { if (testores.length > 0) setEditingCell({ testor: testores[0], hora: h, field: "objetivo", value: String(val) }); }}
+                        onClick={() => setEditingCell({ testorId: OBJETIVO_TESTOR_ID, testorNome: "Objetivo", hora: h, field: "objetivo", value: String(val) })}
                         className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-cyan-300 bg-cyan-500/15 hover:bg-cyan-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
                       >
                         {val > 0 ? val : <span className="text-[9px] opacity-40">+</span>}
@@ -712,19 +698,18 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-blue-600 py-1.5 text-xs sm:text-sm">{totalGeral > 0 ? totalGeral : "—"}</td>
               </tr>
 
-              {/* PERDAS DE PRODUÇÃO — calculado: objetivo - produção */}
+              {/* PERDAS DE PRODUÇÃO */}
               <tr className="bg-orange-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-orange-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>PRODUÇÃO</td>
-                {turnoAtual.horas.map(h => {
-                  const val = perdasProdPorHora[h] || 0;
-                  return (
-                    <td key={h} className="border border-border text-center font-bold text-orange-400 py-1.5 text-xs sm:text-sm">{val > 0 ? val : "—"}</td>
-                  );
-                })}
+                {turnoAtual.horas.map(h => (
+                  <td key={h} className="border border-border text-center font-bold text-orange-400 py-1.5 text-xs sm:text-sm">
+                    {perdasProdPorHora[h] > 0 ? perdasProdPorHora[h] : "—"}
+                  </td>
+                ))}
                 <td className="border border-border text-center font-black text-white bg-orange-600 py-1.5 text-xs sm:text-sm">{totalPerdasProd > 0 ? totalPerdasProd : "—"}</td>
               </tr>
 
-              {/* PERDA REAL — vem do Controle de Perdas (brutas − ganhos) */}
+              {/* PERDA REAL */}
               <tr className="bg-red-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDA<br/>REAL</td>
                 {turnoAtual.horas.map(h => {
@@ -758,7 +743,7 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-red-600 py-1.5 text-xs sm:text-sm">{totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td>
               </tr>
 
-              {/* REAL LÍQUIDO = Produção − Perda Real (LossControl) */}
+              {/* REAL LÍQUIDO */}
               <tr className="bg-green-500/10">
                 <td className="border border-border px-2 py-1.5 font-black text-green-400 uppercase text-[10px] sm:text-xs leading-tight">REAL<br/>LÍQUIDO</td>
                 {turnoAtual.horas.map(h => {
@@ -767,8 +752,6 @@ export default function ProductionControl() {
                 })}
                 <td className="border border-border text-center font-black text-white bg-green-600 py-1.5 text-xs sm:text-sm">{producaoLiquida > 0 ? producaoLiquida : "—"}</td>
               </tr>
-
-
             </tbody>
           </table>
         </div>
