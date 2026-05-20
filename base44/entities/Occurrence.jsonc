@@ -81,72 +81,55 @@
     "gravidade"
   ],
   "rls": {
-    "create": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "funcionario"
-          }
-        }
-      ]
-    },
+    "create": true,
     "read": {
       "$or": [
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "created_by": "{{user.email}}"
         },
         {
-          "data.turno": "{{user.data.turno}}"
+          "data.responsavel": "{{user.full_name}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "lider",
+                "monitor",
+                "manutencao"
+              ]
+            }
+          }
         }
       ]
     },
     "update": {
       "$or": [
         {
-          "user_condition": {
-            "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "lider"
-          }
-        },
-        {
-          "user_condition": {
-            "funcao": "monitor"
-          }
-        },
-        {
           "created_by": "{{user.email}}"
+        },
+        {
+          "data.responsavel": "{{user.full_name}}"
+        },
+        {
+          "user_condition": {
+            "role": {
+              "$in": [
+                "admin",
+                "lider",
+                "monitor",
+                "manutencao"
+              ]
+            }
+          }
         }
       ]
     },
     "delete": {
-      "$or": [
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
