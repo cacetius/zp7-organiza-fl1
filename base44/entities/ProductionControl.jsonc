@@ -59,5 +59,35 @@
     "turno",
     "hora",
     "carros_produzidos"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "lider",
+            "monitor"
+          ]
+        }
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": {
+          "$in": [
+            "admin",
+            "lider",
+            "monitor"
+          ]
+        }
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
 }
