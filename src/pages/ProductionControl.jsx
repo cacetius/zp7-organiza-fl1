@@ -608,7 +608,11 @@ export default function ProductionControl() {
               </tr>
               <tr className="bg-muted/50">
                 <th className="border border-border px-2 py-2 text-left font-bold text-[10px] sm:text-xs" style={{ minWidth: 90 }}>TESTOR</th>
-                {turnoAtual.horas.map(h => <th key={h} className="border border-border px-0.5 py-2 text-center font-bold text-[10px] sm:text-xs" style={{ minWidth: 56 }}>{h}</th>)}
+                {turnoAtual.horas.map((h, i) => {
+                  const next = turnoAtual.horas[i + 1];
+                  const label = next ? `${h.slice(0,5)}-${next.slice(0,5)}` : h;
+                  return <th key={h} className="border border-border px-0.5 py-2 text-center font-bold text-[10px] sm:text-xs" style={{ minWidth: 64 }}>{label}</th>;
+                })}
                 <th className="border border-border px-1 py-2 text-center font-bold bg-blue-500/10 text-blue-400 text-[10px] sm:text-xs" style={{ minWidth: 48 }}>TOTAL</th>
               </tr>
             </thead>

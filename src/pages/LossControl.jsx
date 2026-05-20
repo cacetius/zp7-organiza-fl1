@@ -579,9 +579,11 @@ export default function LossControl() {
             </tr>
             <tr className="bg-muted/50">
               <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>ITEM DE PERDA</th>
-              {turnoAtual.horas.map(h => (
-                <th key={h} className={`border border-border px-1 py-2 text-center font-bold transition-colors ${h === horaAtual ? "bg-yellow-400/20 text-yellow-300 ring-2 ring-inset ring-yellow-400/60" : ""}`} style={{ minWidth: 54 }}>{h}</th>
-              ))}
+              {turnoAtual.horas.map((h, i) => {
+                const next = turnoAtual.horas[i + 1];
+                const label = next ? `${h.slice(0,5)}-${next.slice(0,5)}` : h;
+                return <th key={h} className={`border border-border px-1 py-2 text-center font-bold transition-colors ${h === horaAtual ? "bg-yellow-400/20 text-yellow-300 ring-2 ring-inset ring-yellow-400/60" : ""}`} style={{ minWidth: 62 }}>{label}</th>;
+              })}
               <th className="border border-border px-2 py-2 text-center font-bold bg-red-500/10 text-red-400" style={{ minWidth: 60 }}>TOTAL</th>
             </tr>
           </thead>
@@ -644,9 +646,11 @@ export default function LossControl() {
             </tr>
             <tr className="bg-muted/50">
               <th className="border border-border px-3 py-2 text-left font-bold" style={{ minWidth: 200 }}>MOTIVO DO GANHO</th>
-              {turnoAtual.horas.map(h => (
-                <th key={h} className={`border border-border px-1 py-2 text-center font-bold transition-colors ${h === horaAtual ? "bg-yellow-400/20 text-yellow-300 ring-2 ring-inset ring-yellow-400/60" : ""}`} style={{ minWidth: 54 }}>{h}</th>
-              ))}
+              {turnoAtual.horas.map((h, i) => {
+                const next = turnoAtual.horas[i + 1];
+                const label = next ? `${h.slice(0,5)}-${next.slice(0,5)}` : h;
+                return <th key={h} className={`border border-border px-1 py-2 text-center font-bold transition-colors ${h === horaAtual ? "bg-yellow-400/20 text-yellow-300 ring-2 ring-inset ring-yellow-400/60" : ""}`} style={{ minWidth: 62 }}>{label}</th>;
+              })}
               <th className="border border-border px-2 py-2 text-center font-bold bg-green-500/10 text-green-400" style={{ minWidth: 60 }}>TOTAL</th>
             </tr>
           </thead>
