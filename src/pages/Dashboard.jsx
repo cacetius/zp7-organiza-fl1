@@ -1,262 +1,613 @@
-import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { Link } from "react-router-dom";
-import {
-  Car, Target, TrendingDown, Gauge, AlertTriangle,
-  ClipboardList, Clock, ArrowRight, CheckCircle2, Factory,
-  Wrench, ArrowRightLeft, BarChart3, CheckSquare
-} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import ShiftOverview from "@/components/dashboard/ShiftOverview";
-import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
-import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
+import {
+  Factory,
+  TrendingDown,
+  TrendingUp,
+  Target,
+  Activity,
+  AlertTriangle,
+  Wrench,
+  ClipboardList,
+  ArrowRight,
+  Gauge,
+  CalendarDays,
+  Clock,
+} from "lucide-react";
+import { getTodayShiftData } from "@/lib/shiftDetector";
 
-const gravBadge = {
-  critica: "bg-red-500/15 text-red-400 border-red-500/40",
-  alta: "bg-orange-500/15 text-orange-400 border-orange-500/40",
-  media: "bg-yellow-500/15 text-yellow-400 border-yellow-500/40",
-  baixa: "bg-blue-500/15 text-blue-400 border-blue-500/40",
-};
+function safeNumber(value) {
+  return Number(value || 0);
+}
 
-const quickActions = [
-  { label: "Ocorrência", icon: AlertTriangle, path: "/ocorrencias", bg: "bg-red-500/10 hover:bg-red-500/20 border-red-500/20", text: "text-red-400" },
-  { label: "Controle Perdas", icon: TrendingDown, path: "/controle-perdas", bg: "bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20", text: "text-rose-400" },
-  { label: "Produção", icon: Factory, path: "/controle-producao", bg: "bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/20", text: "text-blue-400" },
-  { label: "Manutenção", icon: Wrench, path: "/manutencao", bg: "bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/20", text: "text-orange-400" },
-  { label: "Testores", icon: Gauge, path: "/testores", bg: "bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20", text: "text-cyan-400" },
-  { label: "Passagem Turno", icon: ArrowRightLeft, path: "/passagem-turno", bg: "bg-primary/10 hover:bg-primary/20 border-primary/20", text: "text-primary" },
-  { label: "Checklist", icon: CheckSquare, path: "/checklist", bg: "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20", text: "text-emerald-400" },
-  { label: "Relatórios", icon: BarChart3, path: "/relatorios", bg: "bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/20", text: "text-purple-400" },
-];
+function goTo(path) {
+  window.location.href = path;
+}
 
 export default function Dashboard() {
-  const qc = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
-  const now = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
+  const todayShift = getTodayShiftData();
 
-  useEffect(() => {
-    const subs = [
-      base44.entities.Testor.subscribe(() => qc.invalidateQueries({ queryKey: ["testores"] })),
-      base44.entities.Task.subscribe(() => qc.invalidateQueries({ queryKey: ["tasks-open"] })),
-      base44.entities.Occurrence.subscribe(() => qc.invalidateQueries({ queryKey: ["occurrences-open"] })),
-      base44.entities.LossControl.subscribe(() => qc.invalidateQueries({ queryKey: ["losses-today"] })),
-      base44.entities.ProductionControl.subscribe(() => qc.invalidateQueries({ queryKey: ["prod-today"] })),
-    ];
-    return () => subs.forEach(u => u());
-  }, []);
+  const today = todayShift.data || todayShift.date;
+  const currentTurno = todayShift.key || todayShift.turno;
+  const turnoLabel = todayShift.label || "Turno Atual";
 
-  // Dashboard: carrega dados do turno atual com cache otimizado
-  const { data: testores = [] } = useQuery({ queryKey: ["testores"], queryFn: () => base44.entities.Testor.list(), staleTime: 5 * 60_000, gcTime: 10 * 60_000 });
-  const { data: tasks = [] } = useQuery({ queryKey: ["tasks-open"], queryFn: () => base44.entities.Task.filter({ status: "aberta" }), staleTime: 2 * 60_000, gcTime: 5 * 60_000 });
-  const { data: occurrences = [] } = useQuery({ queryKey: ["occurrences-open"], queryFn: () => base44.entities.Occurrence.filter({ status: "aberta" }), staleTime: 2 * 60_000, gcTime: 5 * 60_000 });
-  const { data: allLosses = [] } = useQuery({ queryKey: ["losses-today"], queryFn: () => base44.entities.LossControl.list("-created_date", 500), staleTime: 60_000, gcTime: 5 * 60_000 });
-  const { data: allProd = [] } = useQuery({ queryKey: ["prod-today"], queryFn: () => base44.entities.ProductionControl.list("-created_date", 500), staleTime: 60_000, gcTime: 5 * 60_000 });
-  const { data: maintenanceData = [] } = useQuery({ queryKey: ["maintenance-today"], queryFn: () => base44.entities.MaintenanceRequest.filter({ status: "aberto" }), staleTime: 60_000, gcTime: 5 * 60_000 });
+  const { data: productionRecords = [], isLoading: loadingProduction } = useQuery({
+    queryKey: ["dashboard-production", today, currentTurno],
+    queryFn: async () => {
+      try {
+        const allRecords = await base44.entities.ProductionControl.list();
 
-  const activeDate = today;
-  const currentShift = detectCurrentShift();
+        return allRecords.filter((record) => {
+          return record.data === today && record.turno === currentTurno;
+        });
+      } catch (error) {
+        console.error("Erro ao carregar ProductionControl no Dashboard:", error);
+        return [];
+      }
+    },
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  // Filtra dados do turno atual (segundo turno: 15h-23h, terceiro turno: 21h-06h pode cruzar meia-noite)
-  const prodTurno = allProd.filter(p => p.turno === currentShift.key);
-  const lossesTurno = allLosses.filter(l => l.turno === currentShift.key);
-  const maintenanceTurno = maintenanceData.filter(m => m.turno === currentShift.key || !m.turno);
+  const { data: lossRecords = [], isLoading: loadingLosses } = useQuery({
+    queryKey: ["dashboard-losses", today, currentTurno],
+    queryFn: async () => {
+      try {
+        const allRecords = await base44.entities.LossControl.list();
 
-  const testoresRodando = testores.filter(t => t.status === "rodando").length;
-  const testoresParados = testores.filter(t => ["parado", "manutencao"].includes(t.status)).length;
+        return allRecords.filter((record) => {
+          return record.data === today && record.turno === currentTurno;
+        });
+      } catch (error) {
+        console.error("Erro ao carregar LossControl no Dashboard:", error);
+        return [];
+      }
+    },
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  // Produção bruta do turno
-  const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
+  const { data: testores = [] } = useQuery({
+    queryKey: ["dashboard-testores"],
+    queryFn: async () => {
+      try {
+        return await base44.entities.Testor.list();
+      } catch (error) {
+        console.error("Erro ao carregar Testor no Dashboard:", error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  // Perdas do turno (excluindo ganhos)
-  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const { data: occurrences = [] } = useQuery({
+    queryKey: ["dashboard-occurrences", today, currentTurno],
+    queryFn: async () => {
+      try {
+        const allRecords = await base44.entities.Occurrence.list();
 
-  // Ganhos do turno
-  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+        return allRecords.filter((record) => {
+          const sameDate = record.data === today || record.created_date?.startsWith?.(today);
+          const sameTurno = !record.turno || record.turno === currentTurno;
 
-  // Produção líquida = Produção + Ganhos - Perdas por Falha (memoized)
-  const perdasFalhaTurno = useMemo(() => 
-    lossesTurno.filter(l => l.motivo_perda === "falha_mecanica" || l.motivo_perda === "falha_eletrica")
-      .reduce((s, l) => s + (l.carros_perdidos || 0), 0),
-    [lossesTurno]
-  );
-  const producaoLiquidaTurno = useMemo(() => 
-    Math.max(0, totalProduzidoTurno + ganhosTurno - perdasFalhaTurno),
-    [totalProduzidoTurno, ganhosTurno, perdasFalhaTurno]
-  );
+          return sameDate && sameTurno;
+        });
+      } catch (error) {
+        console.error("Erro ao carregar Occurrence no Dashboard:", error);
+        return [];
+      }
+    },
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  const shiftLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" }[currentShift.key] || "Turno";
+  const { data: maintenance = [] } = useQuery({
+    queryKey: ["dashboard-maintenance"],
+    queryFn: async () => {
+      try {
+        const allRecords = await base44.entities.MaintenanceRequest.list();
+        return allRecords.slice(0, 50);
+      } catch (error) {
+        console.error("Erro ao carregar MaintenanceRequest no Dashboard:", error);
+        return [];
+      }
+    },
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: tasks = [] } = useQuery({
+    queryKey: ["dashboard-tasks"],
+    queryFn: async () => {
+      try {
+        const allRecords = await base44.entities.Task.list();
+        return allRecords.slice(0, 50);
+      } catch (error) {
+        console.error("Erro ao carregar Task no Dashboard:", error);
+        return [];
+      }
+    },
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const totalProduction = useMemo(() => {
+    return productionRecords.reduce((sum, record) => {
+      return sum + safeNumber(record.carros_produzidos);
+    }, 0);
+  }, [productionRecords]);
+
+  const totalObjective = useMemo(() => {
+    return productionRecords.reduce((sum, record) => {
+      return sum + safeNumber(record.objetivo);
+    }, 0);
+  }, [productionRecords]);
+
+  const totalGrossLosses = useMemo(() => {
+    return lossRecords
+      .filter((record) => record.motivo_perda !== "ganho")
+      .reduce((sum, record) => {
+        return sum + safeNumber(record.carros_perdidos);
+      }, 0);
+  }, [lossRecords]);
+
+  const totalGains = useMemo(() => {
+    return lossRecords
+      .filter((record) => record.motivo_perda === "ganho")
+      .reduce((sum, record) => {
+        return sum + safeNumber(record.carros_perdidos);
+      }, 0);
+  }, [lossRecords]);
+
+  const realLoss = useMemo(() => {
+    return Math.max(0, totalGrossLosses - totalGains);
+  }, [totalGrossLosses, totalGains]);
+
+  const liquidProduction = useMemo(() => {
+    return Math.max(0, totalProduction - realLoss);
+  }, [totalProduction, realLoss]);
+
+  const productionLoss = useMemo(() => {
+    return Math.max(0, totalObjective - totalProduction);
+  }, [totalObjective, totalProduction]);
+
+  const efficiency = useMemo(() => {
+    if (totalObjective <= 0) return 0;
+    return Math.round((totalProduction / totalObjective) * 100);
+  }, [totalProduction, totalObjective]);
+
+  const activeTestores = useMemo(() => {
+    return testores.filter((testor) => {
+      return testor.status === "rodando" || testor.status === "atencao";
+    }).length;
+  }, [testores]);
+
+  const stoppedTestores = useMemo(() => {
+    return testores.filter((testor) => {
+      return testor.status === "parado" || testor.status === "manutencao" || testor.status === "bloqueado";
+    }).length;
+  }, [testores]);
+
+  const criticalOccurrences = useMemo(() => {
+    return occurrences.filter((item) => {
+      return item.gravidade === "alta" || item.gravidade === "critica";
+    });
+  }, [occurrences]);
+
+  const openMaintenance = useMemo(() => {
+    return maintenance.filter((item) => {
+      return item.status !== "concluido";
+    });
+  }, [maintenance]);
+
+  const openTasks = useMemo(() => {
+    return tasks.filter((item) => {
+      return item.status !== "concluida";
+    });
+  }, [tasks]);
+
+  const loading = loadingProduction || loadingLosses;
+
+  const mainCards = [
+    {
+      title: "Produção do Turno",
+      value: totalProduction,
+      subtitle: "Somente hoje e turno atual",
+      icon: Factory,
+      color: "text-blue-400",
+      border: "border-blue-500/20",
+      bg: "bg-blue-500/5",
+    },
+    {
+      title: "Objetivo",
+      value: totalObjective || "—",
+      subtitle: totalObjective > 0 ? `${efficiency}% de eficiência` : "Sem objetivo lançado",
+      icon: Target,
+      color: "text-cyan-400",
+      border: "border-cyan-500/20",
+      bg: "bg-cyan-500/5",
+    },
+    {
+      title: "Perdas Brutas",
+      value: totalGrossLosses,
+      subtitle: "Sem contar ganhos",
+      icon: TrendingDown,
+      color: "text-red-400",
+      border: "border-red-500/20",
+      bg: "bg-red-500/5",
+    },
+    {
+      title: "Carros Ganhos",
+      value: totalGains,
+      subtitle: "Recuperados no turno",
+      icon: TrendingUp,
+      color: "text-green-400",
+      border: "border-green-500/20",
+      bg: "bg-green-500/5",
+    },
+    {
+      title: "Perda Real",
+      value: realLoss,
+      subtitle: "Perdas - ganhos",
+      icon: AlertTriangle,
+      color: "text-orange-400",
+      border: "border-orange-500/20",
+      bg: "bg-orange-500/5",
+    },
+    {
+      title: "Real Líquido",
+      value: liquidProduction,
+      subtitle: "Produção - perda real",
+      icon: Gauge,
+      color: "text-emerald-400",
+      border: "border-emerald-500/20",
+      bg: "bg-emerald-500/5",
+    },
+  ];
 
   return (
-    <div className="space-y-4 pb-24 lg:pb-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="space-y-5 pb-20 lg:pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight">Painel ZP7</h1>
-          <p className="text-muted-foreground text-sm capitalize mt-0.5">{now}</p>
+          <h1 className="text-xl sm:text-2xl font-black flex items-center gap-2">
+            <Activity className="w-6 h-6 text-blue-400" />
+            Dashboard ZP7
+          </h1>
+
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            Página inicial filtrada por data e turno atual. Não soma registros antigos.
+          </p>
         </div>
-        <span className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-full font-medium">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /> Ao vivo
-        </span>
+
+        <div className="flex flex-wrap gap-2">
+          <div className="px-3 py-2 rounded-lg border border-border bg-muted/30 text-xs font-semibold flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-blue-400" />
+            {today}
+          </div>
+
+          <div className="px-3 py-2 rounded-lg border border-border bg-muted/30 text-xs font-semibold flex items-center gap-2">
+            <Clock className="w-4 h-4 text-green-400" />
+            {turnoLabel}
+          </div>
+        </div>
       </div>
 
-      {/* Visão do turno atual */}
-       <ShiftOverview prodData={prodTurno} maintenanceData={maintenanceTurno} lossData={lossesTurno} isHistorical={false} />
-
-       {/* KPIs principais */}
-       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-          { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: `Perdas ${shiftLabel}`, value: perdasBrutasTurno, icon: TrendingDown, color: perdasBrutasTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: perdasBrutasTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: perdasBrutasTurno > 0 ? "border-red-500/20" : "border-border" },
-          { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
-        ].map(kpi => (
-          <Card key={kpi.label} className={`border ${kpi.border}`}>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-2.5">
-              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${kpi.bg} flex items-center justify-center shrink-0`}>
-                <kpi.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${kpi.color}`} />
-              </div>
-              <div className="min-w-0">
-                <p className={`text-xl sm:text-2xl font-black ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-[10px] sm:text-[11px] text-muted-foreground leading-tight">{kpi.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Indicador tempo real */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse shrink-0" />
-        Dados em tempo real — atualizações automáticas para todos os usuários
-      </div>
-
-      {/* Pendências rápidas */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className={tasks.length > 0 ? "border-yellow-500/20" : "border-border"}>
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tasks.length > 0 ? "bg-yellow-500/10" : "bg-muted/30"}`}>
-                <ClipboardList className={`w-5 h-5 ${tasks.length > 0 ? "text-yellow-400" : "text-muted-foreground"}`} />
-              </div>
-              <div>
-                <p className={`text-2xl font-black ${tasks.length > 0 ? "text-yellow-400" : "text-foreground"}`}>{tasks.length}</p>
-                <p className="text-[11px] text-muted-foreground">Tarefas abertas</p>
-              </div>
-            </div>
-            <Link to="/tarefas"><ArrowRight className="w-4 h-4 text-muted-foreground" /></Link>
-          </CardContent>
-        </Card>
-        <Card className={occurrences.length > 0 ? "border-orange-500/20" : "border-border"}>
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${occurrences.length > 0 ? "bg-orange-500/10" : "bg-muted/30"}`}>
-                <AlertTriangle className={`w-5 h-5 ${occurrences.length > 0 ? "text-orange-400" : "text-muted-foreground"}`} />
-              </div>
-              <div>
-                <p className={`text-2xl font-black ${occurrences.length > 0 ? "text-orange-400" : "text-foreground"}`}>{occurrences.length}</p>
-                <p className="text-[11px] text-muted-foreground">Ocorrências abertas</p>
-              </div>
-            </div>
-            <Link to="/ocorrencias"><ArrowRight className="w-4 h-4 text-muted-foreground" /></Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Ações Rápidas */}
-      <div>
-        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Acesso Rápido</h2>
-        <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          {quickActions.map(action => (
-            <Link
-              key={action.label}
-              to={action.path}
-              className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all ${action.bg}`}
-            >
-              <action.icon className={`w-6 h-6 ${action.text}`} />
-              <span className={`text-[10px] font-semibold text-center leading-tight ${action.text}`}>{action.label}</span>
-            </Link>
+      {loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {[...Array(6)].map((_, index) => (
+            <div key={index} className="h-28 rounded-xl bg-muted/30 animate-pulse" />
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Gráfico produção & perdas por turno */}
-      <ShiftProductionChart prodData={allProd} lossData={allLosses} date={activeDate} />
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {mainCards.map((card) => {
+            const Icon = card.icon;
 
-      {/* Status Testores + Ocorrências */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <h3 className="font-bold text-sm flex items-center gap-2"><Gauge className="w-4 h-4 text-cyan-400" /> Status dos Testores</h3>
-            <Link to="/testores"><Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground">Ver todos <ArrowRight className="w-3 h-3 ml-1" /></Button></Link>
-          </div>
-          <CardContent className="px-4 pb-4 space-y-2">
-            {testores.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Nenhum testor cadastrado.</p>
-            ) : testores.slice(0, 6).map(t => {
-              const statusColors = {
-                rodando: "bg-green-500/10 text-green-400 border-green-500/30",
-                atencao: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
-                parado: "bg-red-500/10 text-red-400 border-red-500/30",
-                manutencao: "bg-orange-500/10 text-orange-400 border-orange-500/30",
-                bloqueado: "bg-gray-500/10 text-gray-400 border-gray-500/30",
-              };
-              const statusLabel = { rodando: "Rodando", atencao: "Atenção", parado: "Parado", manutencao: "Manutenção", bloqueado: "Bloqueado" };
+            return (
+              <Card key={card.title} className={`border ${card.border} ${card.bg}`}>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold leading-tight">
+                        {card.title}
+                      </p>
 
-              // Última justificativa registrada hoje para este testor
-              const ultimaJust = allProd
-                .filter(p => p.testor_nome === t.nome && p.justificativa)
-                .sort((a, b) => (b.hora || "").localeCompare(a.hora || ""))
-                [0]?.justificativa;
+                      <p className={`text-2xl sm:text-3xl font-black mt-1 ${card.color}`}>
+                        {card.value}
+                      </p>
 
-              return (
-                <div key={t.id} className="p-2.5 rounded-lg bg-muted/30 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">{t.nome}</span>
-                    <Badge className={`text-[10px] border ${statusColors[t.status] || statusColors.parado}`}>
-                      {statusLabel[t.status] || t.status}
-                    </Badge>
+                      <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
+                        {card.subtitle}
+                      </p>
+                    </div>
+
+                    <Icon className={`w-5 h-5 ${card.color} shrink-0`} />
                   </div>
-                  {ultimaJust && (
-                    <p className="text-[11px] text-muted-foreground leading-tight truncate" title={ultimaJust}>
-                      📝 {ultimaJust}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <Factory className="w-4 h-4 text-blue-400" />
+                  Controle de Produção
+                </h2>
+
+                <p className="text-xs text-muted-foreground">
+                  Lançamentos do turno atual
+                </p>
+              </div>
+
+              <Button size="sm" variant="outline" onClick={() => goTo("/controle-producao")}>
+                Abrir
+                <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Produção</span>
+                <span className="font-black text-blue-400">{totalProduction}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Objetivo</span>
+                <span className="font-black text-cyan-400">{totalObjective || "—"}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Perda de produção</span>
+                <span className="font-black text-orange-400">{productionLoss}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Eficiência</span>
+                <span className="font-black text-green-400">{efficiency}%</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <h3 className="font-bold text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-orange-400" /> Ocorrências Recentes</h3>
-            <Link to="/ocorrencias"><Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground">Ver todas <ArrowRight className="w-3 h-3 ml-1" /></Button></Link>
-          </div>
-          <CardContent className="px-4 pb-4 space-y-2">
-            {occurrences.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
-                <CheckCircle2 className="w-8 h-8 text-green-400" />
-                <p className="text-sm">Nenhuma ocorrência aberta.</p>
+        <Card className="border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <TrendingDown className="w-4 h-4 text-red-400" />
+                  Controle de Perdas
+                </h2>
+
+                <p className="text-xs text-muted-foreground">
+                  Perdas filtradas por turno
+                </p>
               </div>
-            ) : occurrences.slice(0, 5).map(occ => (
-              <div key={occ.id} className="p-2.5 rounded-lg bg-muted/30 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate capitalize">{occ.tipo?.replace(/_/g, " ") || "Ocorrência"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{occ.testor || "—"}</p>
-                </div>
-                <Badge className={`text-[10px] border shrink-0 ${gravBadge[occ.gravidade] || gravBadge.media}`}>
-                  {occ.gravidade}
-                </Badge>
+
+              <Button size="sm" variant="outline" onClick={() => goTo("/controle-perdas")}>
+                Abrir
+                <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Perdas brutas</span>
+                <span className="font-black text-red-400">{totalGrossLosses}</span>
               </div>
-            ))}
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Ganhos</span>
+                <span className="font-black text-green-400">{totalGains}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Perda real</span>
+                <span className="font-black text-orange-400">{realLoss}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Real líquido</span>
+                <span className="font-black text-emerald-400">{liquidProduction}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-purple-400" />
+                  Status da Área
+                </h2>
+
+                <p className="text-xs text-muted-foreground">
+                  Resumo operacional
+                </p>
+              </div>
+
+              <Button size="sm" variant="outline" onClick={() => goTo("/testores")}>
+                Testores
+                <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Testores ativos</span>
+                <span className="font-black text-green-400">{activeTestores}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Testores parados</span>
+                <span className="font-black text-red-400">{stoppedTestores}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Ocorrências críticas</span>
+                <span className="font-black text-orange-400">{criticalOccurrences.length}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Manutenções abertas</span>
+                <span className="font-black text-yellow-400">{openMaintenance.length}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-orange-400" />
+                  Ocorrências do Turno
+                </h2>
+
+                <p className="text-xs text-muted-foreground">
+                  Somente hoje e turno atual
+                </p>
+              </div>
+
+              <Button size="sm" variant="outline" onClick={() => goTo("/ocorrencias")}>
+                Ver
+              </Button>
+            </div>
+
+            {occurrences.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-6 text-center">
+                Nenhuma ocorrência encontrada para o turno atual.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {occurrences.slice(0, 5).map((item) => (
+                  <div key={item.id} className="p-2 rounded-lg border border-border bg-muted/20">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold truncate">
+                        {item.tipo || "Ocorrência"}
+                      </p>
+
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400">
+                        {item.gravidade || "normal"}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                      {item.descricao || item.acao_tomada || "Sem descrição"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-blue-400" />
+                  Pendências
+                </h2>
+
+                <p className="text-xs text-muted-foreground">
+                  Tarefas e manutenção abertas
+                </p>
+              </div>
+
+              <div className="flex gap-1">
+                <Button size="sm" variant="outline" onClick={() => goTo("/tasks")}>
+                  Tarefas
+                </Button>
+
+                <Button size="sm" variant="outline" onClick={() => goTo("/manutencao")}>
+                  <Wrench className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+
+            {openTasks.length === 0 && openMaintenance.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-6 text-center">
+                Nenhuma pendência aberta.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {openTasks.slice(0, 3).map((item) => (
+                  <div key={item.id} className="p-2 rounded-lg border border-border bg-muted/20">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold truncate">
+                        {item.titulo || "Tarefa"}
+                      </p>
+
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                        {item.status || "aberta"}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                      {item.descricao || "Sem descrição"}
+                    </p>
+                  </div>
+                ))}
+
+                {openMaintenance.slice(0, 3).map((item) => (
+                  <div key={item.id} className="p-2 rounded-lg border border-border bg-muted/20">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold truncate">
+                        {item.testor_nome || "Manutenção"}
+                      </p>
+
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">
+                        {item.prioridade || item.status || "aberta"}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                      {item.descricao || item.tipo_falha || "Sem descrição"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-blue-500/20 bg-blue-500/5">
+        <CardContent className="p-4">
+          <h2 className="text-sm font-black mb-2 text-blue-400">
+            Correção aplicada no Dashboard
+          </h2>
+
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Os números da página inicial agora são calculados apenas com registros de <strong>hoje</strong> e do <strong>turno atual</strong>.
+            A produção não soma mais registros antigos. As perdas ignoram os registros marcados como <strong>ganho</strong>, e a perda real é calculada como perdas brutas menos ganhos.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
