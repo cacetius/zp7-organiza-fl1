@@ -68,6 +68,11 @@ export default function ProductionControl() {
   const sheetKey = `prod-ctrl-${selectedDate}-${selectedTurno}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
+  const selectedDateRef = useRef(selectedDate);
+  const selectedTurnoRef = useRef(selectedTurno);
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
+  useEffect(() => { selectedTurnoRef.current = selectedTurno; }, [selectedTurno]);
+
   // Carregamento otimizado com cache e paginação
   const { data: testores = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
@@ -184,13 +189,13 @@ export default function ProductionControl() {
 
   const saveField = (testor, hora, field, newVal) => {
     const cell = getCellRef(testor.id, hora);
-    const update = { [field === "producao" ? "carros_produzidos" : field]: newVal };
+    const fieldKey = field === "producao" ? "carros_produzidos" : field;
+    const update = { [fieldKey]: newVal };
 
     if (!cell?.id) {
-      // Criar novo registro — célula ainda não existe no banco
       createRec.mutate({
         testor_id: testor.id, testor_nome: testor.nome,
-        data: selectedDate, turno: selectedTurno, hora,
+        data: selectedDateRef.current, turno: selectedTurnoRef.current, hora,
         carros_produzidos: field === "producao" ? newVal : 0,
         perdas_producao: field === "perdas_producao" ? newVal : 0,
         perdas_defeito: field === "perdas_defeito" ? newVal : 0,
@@ -208,10 +213,9 @@ export default function ProductionControl() {
     if (cell?.id && !cell.id.startsWith("temp-")) {
       updateRec.mutate({ id: cell.id, justificativa: texto });
     } else {
-      // Criar registro só para justificativa
       createRec.mutate({
         testor_id: testor.id, testor_nome: testor.nome,
-        data: selectedDate, turno: selectedTurno, hora,
+        data: selectedDateRef.current, turno: selectedTurnoRef.current, hora,
         carros_produzidos: 0, perdas_producao: 0, perdas_defeito: 0, objetivo: 0,
         justificativa: texto,
       });
@@ -690,7 +694,7 @@ export default function ProductionControl() {
                   return (
                     <td key={h} className="border border-border p-0.5">
                       <button
-                        onClick={() => setEditingCell({ testor: testores[0], hora: h, field: "objetivo", value: String(val) })}
+                       onClick={() => { if (testores.length > 0) setEditingCell({ testor: testores[0], hora: h, field: "objetivo", value: String(val) }); }}
                         className={`w-full h-8 rounded font-bold text-xs transition-all touch-manipulation ${val > 0 ? "text-cyan-300 bg-cyan-500/15 hover:bg-cyan-500/25" : "text-muted-foreground/30 hover:bg-muted/30"}`}
                       >
                         {val > 0 ? val : <span className="text-[9px] opacity-40">+</span>}
