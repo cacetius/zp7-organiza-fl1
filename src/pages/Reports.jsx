@@ -23,23 +23,15 @@ import {
   AlertTriangle,
   Target,
   Gauge,
+  BarChart3,
 } from "lucide-react";
 import { format } from "date-fns";
 import { getTodayShiftData } from "@/lib/shiftDetector";
 
 const TURNOS = [
-  {
-    key: "primeiro",
-    label: "1º Turno",
-  },
-  {
-    key: "segundo",
-    label: "2º Turno",
-  },
-  {
-    key: "terceiro",
-    label: "3º Turno",
-  },
+  { key: "primeiro", label: "1º Turno" },
+  { key: "segundo", label: "2º Turno" },
+  { key: "terceiro", label: "3º Turno" },
 ];
 
 function safeNumber(value) {
@@ -57,12 +49,12 @@ function normalizeTurno(record) {
   return record.turno || record.shift || record.turno_key || "";
 }
 
-function getRecordTime(record) {
-  return record.updated_date || record.created_date || record.id || "";
-}
-
 function isTempId(id) {
   return String(id || "").startsWith("temp-");
+}
+
+function getRecordTime(record) {
+  return record.updated_date || record.created_date || record.id || "";
 }
 
 function pickLatestRecord(existing, current) {
@@ -110,7 +102,8 @@ function downloadCsv(filename, headers, rows) {
 
 export default function Reports() {
   const todayShift = getTodayShiftData();
-  const today = todayShift.data || todayShift.date || format(new Date(), "yyyy-MM-dd");
+  const today =
+    todayShift.data || todayShift.date || format(new Date(), "yyyy-MM-dd");
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState(
@@ -466,7 +459,7 @@ export default function Reports() {
           </h1>
 
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Relatórios filtrados por data e turno, sem import duplicado e sem somar registros antigos.
+            Relatórios por data e turno, com produção, perdas, ganhos e resumo operacional.
           </p>
         </div>
 
@@ -643,7 +636,7 @@ export default function Reports() {
         <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
-              <Gauge className="w-4 h-4 text-purple-400" />
+              <BarChart3 className="w-4 h-4 text-purple-400" />
               Conferência
             </CardTitle>
           </CardHeader>
@@ -689,7 +682,10 @@ export default function Reports() {
             ) : (
               <div className="space-y-2">
                 {productionByTestor.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/20">
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/20"
+                  >
                     <span className="text-xs font-semibold truncate">{item.nome}</span>
                     <span className="text-sm font-black text-blue-400">{item.total}</span>
                   </div>
@@ -715,7 +711,10 @@ export default function Reports() {
             ) : (
               <div className="space-y-2">
                 {lossesByItem.map((item) => (
-                  <div key={item.item} className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/20">
+                  <div
+                    key={item.item}
+                    className="flex items-center justify-between p-2 rounded-lg border border-border bg-muted/20"
+                  >
                     <span className="text-xs font-semibold truncate">{item.item}</span>
                     <span className="text-sm font-black text-red-400">{item.total}</span>
                   </div>
@@ -738,7 +737,10 @@ export default function Reports() {
           <CardContent>
             <div className="space-y-2">
               {gainsByItem.map((item) => (
-                <div key={item.item} className="flex items-center justify-between p-2 rounded-lg border border-green-500/20 bg-green-500/5">
+                <div
+                  key={item.item}
+                  className="flex items-center justify-between p-2 rounded-lg border border-green-500/20 bg-green-500/5"
+                >
                   <span className="text-xs font-semibold truncate">{item.item}</span>
                   <span className="text-sm font-black text-green-400">{item.total}</span>
                 </div>
@@ -747,20 +749,6 @@ export default function Reports() {
           </CardContent>
         </Card>
       )}
-
-      <Card className="border-blue-500/20 bg-blue-500/5">
-        <CardContent className="p-4">
-          <h2 className="text-sm font-black mb-2 text-blue-400">
-            Arquivo Reports.jsx corrigido
-          </h2>
-
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Este arquivo mantém apenas um import do React, evitando o erro de
-            <strong> useState duplicado</strong>. Os relatórios também separam
-            perdas por falha, perdas de produção, ganhos, perda real e perda operacional.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
