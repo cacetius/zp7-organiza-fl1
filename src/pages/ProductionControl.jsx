@@ -107,7 +107,10 @@ export default function ProductionControl() {
 
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],
-    queryFn: () => base44.entities.ProductionControl.filter({ data: selectedDate, turno: selectedTurno }),
+    queryFn: async () => {
+      const allRecords = await base44.entities.ProductionControl.list();
+      return allRecords.filter((r) => r.data === selectedDate && r.turno === selectedTurno);
+    },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -115,7 +118,10 @@ export default function ProductionControl() {
 
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
-    queryFn: () => base44.entities.LossControl.filter({ data: selectedDate, turno: selectedTurno }),
+    queryFn: async () => {
+      const allRecords = await base44.entities.LossControl.list();
+      return allRecords.filter((r) => r.data === selectedDate && r.turno === selectedTurno);
+    },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
@@ -397,24 +403,6 @@ export default function ProductionControl() {
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
-  const ganhosPorHora = useMemo(() => {
-    const map = {};
-
-    turnoAtual.horas.forEach((hora) => {
-      map[hora] = 0;
-    });
-
-    lossRecords
-      .filter((r) => r.motivo_perda === "ganho" && r.hora)
-      .forEach((r) => {
-        if (map[r.hora] !== undefined) {
-          map[r.hora] += Number(r.carros_perdidos || 0);
-        }
-      });
-
-    return map;
-  }, [lossRecords, turnoAtual.horas]);
-
   const totalPorTestorMap = useMemo(() => {
     const map = {};
 
@@ -466,7 +454,6 @@ export default function ProductionControl() {
     rows.push(["PRODUÇÃO", ...turnoAtual.horas.map((hora) => totalPorHora[hora] || 0), totalGeral]);
     rows.push(["PERDAS PRODUÇÃO", ...turnoAtual.horas.map((hora) => perdasProdPorHora[hora] || 0), totalPerdasProd]);
     rows.push(["PERDAS FALHA", ...turnoAtual.horas.map((hora) => perdasFalhaPorHora[hora] || 0), totalPerdasFalha]);
-    rows.push(["GANHOS", ...turnoAtual.horas.map((hora) => ganhosPorHora[hora] || 0), Object.values(ganhosPorHora).reduce((a, v) => a + Number(v || 0), 0)]);
     rows.push([
       "REAL LÍQUIDO",
       ...turnoAtual.horas.map((hora) => Math.max(0, Number(totalPorHora[hora] || 0) - Number(perdasFalhaPorHora[hora] || 0))),
@@ -477,151 +464,7 @@ export default function ProductionControl() {
   };
 
   const handlePrint = () => {
-    const now = new Date().toLocaleString("pt-BR");
-    const headerCols = turnoAtual.horas.map((hora) => `<th>${hora}</th>`).join("");
-
-    const rows = testores
-      .map((testor) => {
-        const total = totalPorTestor(testor);
-
-        const cells = turnoAtual.horas
-          .map((hora) => {
-            const value = cellMap[testor.id]?.[hora]?.producao || 0;
-
-            return `<td style="${value > 0 ? "color:#1d4ed8;font-weight:700" : "color:#cbd5e1"}">${value > 0 ? value : "—"}</td>`;
-          })
-          .join("");
-
-        return `<tr><td class="name">${testor.nome}</td>${cells}<td class="total-col">${total > 0 ? total : "—"}</td></tr>`;
-      })
-      .join("");
-
-    const objetivoRowCells = turnoAtual.horas.map((hora) => `<td>${objetivoPorHora[hora] > 0 ? objetivoPorHora[hora] : "—"}</td>`).join("");
-    const totalRowCells = turnoAtual.horas.map((hora) => `<td>${totalPorHora[hora] > 0 ? totalPorHora[hora] : "—"}</td>`).join("");
-    const perdasProdRowCells = turnoAtual.horas.map((hora) => `<td>${perdasProdPorHora[hora] > 0 ? perdasProdPorHora[hora] : "—"}</td>`).join("");
-    const perdasFalhaRowCells = turnoAtual.horas.map((hora) => `<td>${perdasFalhaPorHora[hora] > 0 ? perdasFalhaPorHora[hora] : "—"}</td>`).join("");
-
-    const liquidoRowCells = turnoAtual.horas
-      .map((hora) => {
-        const liq = Math.max(0, Number(totalPorHora[hora] || 0) - Number(perdasFalhaPorHora[hora] || 0));
-        return `<td style="color:#16a34a;font-weight:900">${liq > 0 ? liq : "—"}</td>`;
-      })
-      .join("");
-
-    const justRows = testores
-      .flatMap((testor) => {
-        return turnoAtual.horas
-          .map((hora) => {
-            const key = `${testor.id}-${hora}`;
-            const just = justificativasMap[key] || "";
-
-            return just ? `<tr><td class="just-hora">${testor.nome} · ${hora}</td><td class="just-texto">${just}</td></tr>` : "";
-          })
-          .filter(Boolean);
-      })
-      .join("");
-
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
-<title>Controle de Produção ZP7 — ${dateLabel}</title>
-<style>
-@page { size: A4 landscape; margin: 10mm 12mm; }
-@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; color: #1e293b; background: #fff; }
-.header { background: linear-gradient(135deg, #1d4ed8 0%, #0f172a 70%, #1e1b4b 100%); color: white; padding: 14px 20px; border-radius: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-.header-title { font-size: 18px; font-weight: 900; letter-spacing: 1px; }
-.header-sub { font-size: 8px; opacity: 0.7; margin-top: 3px; }
-.header-badge { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 6px 14px; font-size: 10px; font-weight: 700; text-align: center; }
-.kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
-.kpi { border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; text-align: center; }
-.kpi-val { font-size: 20px; font-weight: 900; line-height: 1; margin-bottom: 3px; }
-.kpi-lbl { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-.efic-bar { margin: 0 0 14px; padding: 10px 14px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; }
-.efic-label { display: flex; justify-content: space-between; font-size: 9px; font-weight: 700; color: #0369a1; margin-bottom: 5px; }
-.efic-track { background: #e0f2fe; border-radius: 6px; height: 10px; overflow: hidden; }
-.efic-fill { height: 10px; border-radius: 6px; background: linear-gradient(90deg, #2563eb, #16a34a); }
-table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
-.section-hdr { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(90deg,#1d4ed8,#2563eb); color: white; padding: 7px 12px; border-radius: 6px 6px 0 0; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
-th { background: #1e40af; color: white; padding: 5px 6px; text-align: center; font-size: 8px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); }
-th.name { text-align: left; }
-td { padding: 4px 5px; border: 1px solid #e2e8f0; font-size: 8.5px; text-align: center; }
-td.name { text-align: left; font-weight: 600; min-width: 100px; }
-td.total-col { background: #eff6ff; color: #1d4ed8; font-weight: 900; border-left: 2px solid #bfdbfe; }
-tr:nth-child(even) td { background: #f8fafc; }
-.objetivo-row td { background: #e0f2fe; font-weight: 900; color: #0369a1; border-top: 2px solid #7dd3fc; }
-.total-row td { background: #dbeafe; font-weight: 900; color: #1e40af; }
-.perdas-prod-row td { background: #fff7ed; font-weight: 900; color: #c2410c; }
-.perdas-def-row td { background: #fee2e2; font-weight: 900; color: #991b1b; }
-.liquido-row td { background: #dcfce7; font-weight: 900; color: #166534; border-top: 2px solid #86efac; }
-.grand-cyan { background: #0369a1 !important; color: white !important; }
-.grand-blue { background: #1d4ed8 !important; color: white !important; }
-.grand-orange { background: #ea580c !important; color: white !important; }
-.grand-red { background: #dc2626 !important; color: white !important; }
-.grand-green { background: #16a34a !important; color: white !important; }
-.just-section { margin-top: 10px; }
-.just-hora { font-weight: 800; color: #1d4ed8; min-width: 50px; text-align: left; }
-.just-texto { color: #334155; font-style: italic; text-align: left; }
-.footer { margin-top: 12px; display: flex; justify-content: space-between; font-size: 7.5px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-.footer-brand { font-weight: 700; color: #64748b; }
-</style></head><body>
-<div class="header">
-  <div>
-    <div class="header-title">🏭 Controle de Produção — ZP7</div>
-    <div class="header-sub">Volkswagen Taubaté · Zona de Produção 7 · Gerado em ${now}</div>
-  </div>
-  <div class="header-badge">⏱ ${turnoAtual.label}<br/><span style="font-size:8px;opacity:0.8">📅 ${dateLabel}</span></div>
-</div>
-<div class="kpi-row">
-  <div class="kpi"><div class="kpi-val" style="color:#0369a1">${totalObjetivo || "—"}</div><div class="kpi-lbl">Objetivo</div></div>
-  <div class="kpi"><div class="kpi-val" style="color:#1d4ed8">${totalGeral}</div><div class="kpi-lbl">Produção</div></div>
-  <div class="kpi"><div class="kpi-val" style="color:#ea580c">${totalPerdasProd}</div><div class="kpi-lbl">Perdas Produção</div></div>
-  <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasFalha}</div><div class="kpi-lbl">Perdas Falha</div></div>
-  <div class="kpi"><div class="kpi-val" style="color:#16a34a">${producaoLiquida}</div><div class="kpi-lbl">Real Líquido</div></div>
-</div>
-<div class="efic-bar">
-  <div class="efic-label"><span>📈 Eficiência do Turno</span><span>${efic}%</span></div>
-  <div class="efic-track"><div class="efic-fill" style="width:${efic}%"></div></div>
-</div>
-<div class="section-hdr"><span>📋 Produção por Testor / Hora</span><span style="font-weight:400;font-size:9px">${dateLabel} · Total: ${totalGeral} carros</span></div>
-<table>
-  <thead><tr><th class="name">TESTOR</th>${headerCols}<th>TOTAL</th></tr></thead>
-  <tbody>
-    ${rows}
-    <tr class="objetivo-row"><td class="name"><strong>OBJETIVO</strong></td>${objetivoRowCells}<td class="grand-cyan">${totalObjetivo > 0 ? totalObjetivo : "—"}</td></tr>
-    <tr class="total-row"><td class="name"><strong>PRODUÇÃO</strong></td>${totalRowCells}<td class="grand-blue">${totalGeral > 0 ? totalGeral : "—"}</td></tr>
-    <tr class="perdas-prod-row"><td class="name"><strong>PERDAS DE PRODUÇÃO</strong></td>${perdasProdRowCells}<td class="grand-orange">${totalPerdasProd > 0 ? totalPerdasProd : "—"}</td></tr>
-    <tr class="perdas-def-row"><td class="name"><strong>PERDAS POR FALHA</strong></td>${perdasFalhaRowCells}<td class="grand-red">${totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td></tr>
-    <tr class="liquido-row"><td class="name"><strong>REAL LÍQUIDO</strong></td>${liquidoRowCells}<td class="grand-green">${producaoLiquida > 0 ? producaoLiquida : "—"}</td></tr>
-  </tbody>
-</table>
-${
-  justRows
-    ? `<div class="section-hdr" style="margin-top:8px">💬 Justificativas por Hora</div>
-<table class="just-section">
-  <thead><tr><th style="text-align:left;min-width:120px">TESTOR / HORA</th><th style="text-align:left">JUSTIFICATIVA</th></tr></thead>
-  <tbody>${justRows}</tbody>
-</table>`
-    : ""
-}
-<div class="footer">
-  <span class="footer-brand">ZP7 — Volkswagen Taubaté</span>
-  <span>Sistema de Controle de Produção</span>
-  <span>${now}</span>
-</div>
-<script>window.onload=function(){window.print()}</script>
-</body></html>`;
-
-    const printWindow = window.open("", "_blank");
-
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-    } else {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-      a.target = "_blank";
-      a.click();
-    }
+    window.print();
   };
 
   return (
