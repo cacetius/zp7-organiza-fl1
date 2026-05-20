@@ -1,23 +1,25 @@
 /**
  * Detecta o turno atual baseado na hora do dia
- * Turnos: 1º (06-15), 2º (15-23:45), 3º (21-06)
+ * Turnos: 1º (06-15h), 2º (16-23:45h), 3º (22h-06h cruza meia-noite)
  */
 export function detectCurrentShift() {
   const now = new Date();
   const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
 
   // 1º Turno: 06:00 - 15:59
-  if (hours >= 6 && hours < 16) {
-    return { key: "primeiro", label: "1º Turno (06h–15h)", start: 360, end: 900 };
+  if (totalMinutes >= 360 && totalMinutes < 960) {
+    return { key: "primeiro", label: "1º Turno (06h–15h)", start: 360, end: 960 };
   }
 
   // 2º Turno: 16:00 - 23:59
-  if (hours >= 16) {
-    return { key: "segundo", label: "2º Turno (15h–23h)", start: 900, end: 1380 };
+  if (totalMinutes >= 960) {
+    return { key: "segundo", label: "2º Turno (15h–23h)", start: 960, end: 1440 };
   }
 
   // 3º Turno: 00:00 - 05:59
-  return { key: "terceiro", label: "3º Turno (01h–05h)", start: 60, end: 360 };
+  return { key: "terceiro", label: "3º Turno (22h–06h)", start: 1320, end: 360 };
 }
 
 /**

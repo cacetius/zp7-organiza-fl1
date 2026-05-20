@@ -308,7 +308,8 @@ export default function ProductionControl() {
   }, [lossRecords, turnoAtual.horas]);
 
   const totalPorTestor = (t) => turnoAtual.horas.reduce((acc, h) => acc + (cellMap[t.id]?.[h]?.producao || 0), 0);
-  const totalGeral = useMemo(() => testores.reduce((acc, t) => acc + totalPorTestor(t), 0), [cellMap, testores, turnoAtual.horas]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const totalGeral = useMemo(() => testores.reduce((acc, t) => acc + turnoAtual.horas.reduce((a2, h) => a2 + (cellMap[t.id]?.[h]?.producao || 0), 0), 0), [cellMap, testores, turnoAtual.horas]);
   const totalObjetivo = useMemo(() => Object.values(objetivoPorHora).reduce((a, v) => a + v, 0), [objetivoPorHora]);
   const totalPerdasProd = useMemo(() => Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0), [perdasProdPorHora]);
   const totalPerdasFalha = useMemo(() => Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0), [perdasFalhaPorHora]);

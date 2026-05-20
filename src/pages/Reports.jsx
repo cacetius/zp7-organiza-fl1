@@ -46,9 +46,9 @@ const TABS = [
 ];
 
 const RESUMO_TURNOS = [
-  { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"] },
-  { label: "3º Turno (01h–05h)", key: "terceiro", horas: ["01:00","02:00","03:00","04:00","05:00"] },
-  { label: "1º Turno (06h–14h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
+  { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00"] },
+  { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
+  { label: "3º Turno (21h–06h)", key: "terceiro", horas: ["22:00","23:00","00:00","01:00","02:00","03:00","04:00","05:00"] },
 ];
 
 export default function Reports() {
@@ -287,7 +287,7 @@ export default function Reports() {
 
   // Timeline comparação entre duas datas
   const compareTimeline = useMemo(() => {
-    const hours = ["01:00","02:00","03:00","04:00","05:00","06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"];
+    const hours = ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45","00:00","01:00","02:00","03:00","04:00","05:00"];
     const d1Records = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho");
     const d2Records = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho");
     return hours.map(h => ({

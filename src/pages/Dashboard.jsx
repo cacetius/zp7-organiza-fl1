@@ -61,9 +61,14 @@ export default function Dashboard() {
   const activeDate = today;
   const currentShift = detectCurrentShift();
 
-  // Filtra dados do turno atual (segundo turno: 15h-23h, terceiro turno: 21h-06h pode cruzar meia-noite)
-  const prodTurno = allProd.filter(p => p.turno === currentShift.key);
-  const lossesTurno = allLosses.filter(l => l.turno === currentShift.key);
+  // Para o 3º turno que cruza meia-noite, também inclui o dia anterior
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const shiftDates = currentShift.key === "terceiro" ? [today, yesterdayStr] : [today];
+
+  // Filtra dados do turno atual (com data correta)
+  const prodTurno = allProd.filter(p => p.turno === currentShift.key && shiftDates.includes(p.data));
+  const lossesTurno = allLosses.filter(l => l.turno === currentShift.key && shiftDates.includes(l.data));
   const maintenanceTurno = maintenanceData.filter(m => m.turno === currentShift.key || !m.turno);
 
   const testoresRodando = testores.filter(t => t.status === "rodando").length;
