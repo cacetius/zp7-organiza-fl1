@@ -36,10 +36,10 @@ export default function ShiftProductionChart({ prodData, lossData, date }) {
         .filter(r => r.turno === key && r.motivo_perda === "ganho" && (!date || r.data === date))
         .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
 
-      const perdaReal = Math.max(0, perdasBrutas - ganhos);
-      const liquida = Math.max(0, prod - perdaReal);
+      const liquida = Math.max(0, prod - perdasBrutas + ganhos);
       const efic = prod > 0 ? Math.round((liquida / prod) * 100) : 0;
 
+      const perdaReal = Math.max(0, perdasBrutas - ganhos);
       return { turno: label, Produção: prod, Perdas: perdaReal, Líquida: liquida, efic };
     });
   }, [prodData, lossData, date]);

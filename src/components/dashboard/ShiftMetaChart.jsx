@@ -41,7 +41,7 @@ export default function ShiftMetaChart({ prodData, lossData, date }) {
       const ganhos   = filteredLoss
         .filter(r => r.motivo_perda === "ganho")
         .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-      const liquida  = Math.max(0, producao - Math.max(0, perdas - ganhos));
+      const liquida  = Math.max(0, producao - perdas + ganhos);
       const atingido = meta > 0 ? Math.round((liquida / meta) * 100) : null;
 
       return { turno: label, Meta: meta, Líquida: liquida, atingido };

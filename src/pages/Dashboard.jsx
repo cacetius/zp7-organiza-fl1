@@ -84,9 +84,9 @@ export default function Dashboard() {
   // Ganhos do turno
   const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho").reduce((s, l) => s + (l.carros_perdidos || 0), 0);
 
-  // Produção líquida = Produção - max(0, PerdasBrutas - Ganhos)
+  // Produção líquida = Produção - Perdas + Ganhos
   const producaoLiquidaTurno = useMemo(() =>
-    Math.max(0, totalProduzidoTurno - Math.max(0, perdasBrutasTurno - ganhosTurno)),
+    Math.max(0, totalProduzidoTurno - perdasBrutasTurno + ganhosTurno),
     [totalProduzidoTurno, perdasBrutasTurno, ganhosTurno]
   );
 
