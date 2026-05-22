@@ -39,8 +39,7 @@ export default function ShiftProductionChart({ prodData, lossData, date }) {
       const liquida = Math.max(0, prod - perdasBrutas + ganhos);
       const efic = prod > 0 ? Math.round((liquida / prod) * 100) : 0;
 
-      const perdaReal = Math.max(0, perdasBrutas - ganhos);
-      return { turno: label, Produção: prod, Perdas: perdaReal, Líquida: liquida, efic };
+      return { turno: label, Produção: prod, Perdas: perdasBrutas, Líquida: liquida, efic };
     });
   }, [prodData, lossData, date]);
 
