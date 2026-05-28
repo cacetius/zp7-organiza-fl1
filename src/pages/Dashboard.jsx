@@ -113,7 +113,7 @@ export default function Dashboard() {
         {[
           { label: `Produção ${shiftLabel}`, value: totalProduzidoTurno, icon: Car, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/20" },
           { label: `Prod. Líquida ${shiftLabel}`, value: producaoLiquidaTurno, icon: Target, color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/20" },
-          { label: `Perdas ${shiftLabel}`, value: perdasBrutasTurno, icon: TrendingDown, color: perdasBrutasTurno > 0 ? "text-red-400" : "text-muted-foreground", bg: perdasBrutasTurno > 0 ? "bg-red-500/10" : "bg-muted/30", border: perdasBrutasTurno > 0 ? "border-red-500/20" : "border-border" },
+          { label: `Perda Real ${shiftLabel}`, value: Math.max(0, perdasBrutasTurno - ganhosTurno), icon: TrendingDown, color: (perdasBrutasTurno - ganhosTurno) > 0 ? "text-red-400" : "text-muted-foreground", bg: (perdasBrutasTurno - ganhosTurno) > 0 ? "bg-red-500/10" : "bg-muted/30", border: (perdasBrutasTurno - ganhosTurno) > 0 ? "border-red-500/20" : "border-border" },
           { label: "Testores Ativos", value: `${testoresRodando}/${testores.length}`, icon: Gauge, color: testoresParados > 0 ? "text-yellow-400" : "text-green-400", bg: testoresParados > 0 ? "bg-yellow-500/10" : "bg-green-500/10", border: testoresParados > 0 ? "border-yellow-500/20" : "border-green-500/20" },
         ].map(kpi => (
           <Card key={kpi.label} className={`border ${kpi.border}`}>
