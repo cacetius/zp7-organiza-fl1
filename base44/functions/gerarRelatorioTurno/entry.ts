@@ -89,6 +89,14 @@ Deno.serve(async (req) => {
   });
   const lossRanking = Object.entries(lossMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
+  // Justificativas com foto
+  const justMap = {};
+  prodRecords.forEach(r => {
+    if (r.testor_nome && r.hora && r.justificativa) {
+      justMap[`${r.testor_nome}-${r.hora}`] = { texto: r.justificativa, fotoUrl: r.justificativa_foto_url || "" };
+    }
+  });
+
   // Produção por testor
   const testorMap = {};
   prodRecords.forEach(r => {
@@ -325,6 +333,22 @@ Deno.serve(async (req) => {
     </table>
   </div>` : `
   <div class="alert-box">✅ Nenhuma ocorrência registrada neste turno.</div>`}
+
+  <!-- JUSTIFICATIVAS -->
+  ${Object.keys(justMap).length > 0 ? `
+  <h2><span class="dot" style="background:#f59e0b"></span> Justificativas por Hora</h2>
+  <div class="section-box">
+    <table>
+      <thead><tr><th>Testor · Hora</th><th>Justificativa</th></tr></thead>
+      <tbody>
+        ${Object.entries(justMap).map(([key, j]) => `
+          <tr>
+            <td style="white-space:nowrap;font-weight:700;color:#1d4ed8">${key.replace("-", " · ")}</td>
+            <td>${j.texto}${j.fotoUrl ? `<br/><img src="${j.fotoUrl}" style="max-height:100px;max-width:180px;border-radius:6px;margin-top:6px;object-fit:cover;border:1px solid #e2e8f0" />` : ""}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>` : ""}
 
   <!-- FOOTER -->
   <div class="footer">

@@ -50,6 +50,10 @@
     "justificativa": {
       "type": "string",
       "description": "Justificativa das perdas nessa hora"
+    },
+    "justificativa_foto_url": {
+      "type": "string",
+      "description": "URL da foto anexada \u00e0 justificativa"
     }
   },
   "required": [

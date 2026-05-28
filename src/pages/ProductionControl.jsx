@@ -44,7 +44,8 @@ export default function ProductionControl() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
   const [editingCell, setEditingCell] = useState(null); // { testorId, testorNome, hora, field, value }
-  const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value }
+  const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value, fotoUrl, uploading }
+
   const [mostrarExtras, setMostrarExtras] = useState(false);
 
   // Refs para evitar stale closures nos callbacks assíncronos
@@ -317,7 +318,7 @@ export default function ProductionControl() {
     for (const r of records) {
       if (r.testor_id && r.hora && r.justificativa) {
         const key = `${r.testor_id}-${r.hora}`;
-        if (!map[key]) map[key] = r.justificativa;
+        if (!map[key]) map[key] = { texto: r.justificativa, fotoUrl: r.justificativa_foto_url || "" };
       }
     }
     return map;
@@ -357,8 +358,10 @@ export default function ProductionControl() {
     }).join("");
     const justRows = testores.flatMap(t =>
       turnoAtual.horas.map(h => {
-        const just = justificativasMap[`${t.id}-${h}`] || "";
-        return just ? `<tr><td class="just-hora">${t.nome} · ${h}</td><td class="just-texto" colspan="${turnoAtual.horas.length + 1}">${just}</td></tr>` : "";
+        const j = justificativasMap[`${t.id}-${h}`];
+        if (!j) return "";
+        const imgHtml = j.fotoUrl ? `<br/><img src="${j.fotoUrl}" style="max-height:80px;max-width:160px;border-radius:4px;margin-top:4px;object-fit:cover" />` : "";
+        return `<tr><td class="just-hora">${t.nome} · ${h}</td><td class="just-texto" colspan="${turnoAtual.horas.length + 1}">${j.texto}${imgHtml}</td></tr>`;
       }).filter(Boolean)
     ).join("");
 
@@ -499,15 +502,61 @@ export default function ProductionControl() {
               value={editingJustificativa.value}
               onChange={e => setEditingJustificativa(prev => ({ ...prev, value: e.target.value }))}
               onKeyDown={e => { if (e.key === "Escape") setEditingJustificativa(null); }}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-4 resize-none"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-3 resize-none"
               placeholder="Ex: Sensor descalibrado, ajuste necessário..."
             />
+
+            {/* Upload de foto */}
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground mb-1.5">📷 Deseja anexar uma foto?</p>
+              {editingJustificativa.fotoUrl ? (
+                <div className="relative">
+                  <img src={editingJustificativa.fotoUrl} alt="Foto justificativa" className="w-full max-h-32 object-cover rounded-md border border-border" />
+                  <button
+                    onClick={() => setEditingJustificativa(prev => ({ ...prev, fotoUrl: "" }))}
+                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
+                  >×</button>
+                </div>
+              ) : (
+                <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-md border border-dashed border-border text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 transition-colors ${editingJustificativa.uploading ? "opacity-50 pointer-events-none" : ""}`}>
+                  {editingJustificativa.uploading ? "Enviando…" : "📁 Toque para escolher uma imagem"}
+                  <input
+                    type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setEditingJustificativa(prev => ({ ...prev, uploading: true }));
+                      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+                      setEditingJustificativa(prev => ({ ...prev, fotoUrl: file_url, uploading: false }));
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button onClick={() => setEditingJustificativa(null)} className="flex-1 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted">Cancelar</button>
               <button
-                onClick={() => {
-                  const { testor, hora, value } = editingJustificativa;
-                  saveField(testor.id, testor.nome, hora, "justificativa", value);
+                onClick={async () => {
+                  const { testor, hora, value, fotoUrl } = editingJustificativa;
+                  const rec = getRecordRef(testor.id, hora);
+                  const dbData = { justificativa: value, justificativa_foto_url: fotoUrl || "" };
+                  if (rec?.id && !String(rec.id).startsWith("temp-")) {
+                    updateRec.mutate({ id: rec.id, ...dbData });
+                  } else {
+                    createRec.mutate({
+                      testor_id: testor.id,
+                      testor_nome: testor.nome,
+                      data: selectedDateRef.current,
+                      turno: selectedTurnoRef.current,
+                      hora,
+                      carros_produzidos: 0,
+                      perdas_producao: 0,
+                      perdas_defeito: 0,
+                      objetivo: 0,
+                      ...dbData,
+                    });
+                  }
                   setEditingJustificativa(null);
                 }}
                 className="flex-1 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90"
@@ -656,16 +705,23 @@ export default function ProductionControl() {
                     <tr className={idx % 2 === 0 ? "bg-card" : "bg-muted/10"}>
                       <td className="border border-border px-2 py-1 text-yellow-400/70 text-[9px] font-semibold whitespace-nowrap">💬 justif.</td>
                       {turnoAtual.horas.map(hora => {
-                        const just = justificativasMap[`${testor.id}-${hora}`] || "";
+                        const j = justificativasMap[`${testor.id}-${hora}`];
+                        const just = j?.texto || "";
+                        const fotoUrl = j?.fotoUrl || "";
                         return (
                           <td key={hora} className="border border-border p-0.5">
                             <button
-                              onClick={() => setEditingJustificativa({ testor, hora, value: just })}
+                              onClick={() => setEditingJustificativa({ testor, hora, value: just, fotoUrl })}
                               className={`w-full min-h-[28px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation break-words
                                 ${just ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/20 hover:bg-muted/20 text-center"}`}
                               title={just || "Clique para adicionar justificativa"}
                             >
-                              {just ? (just.length > 12 ? just.slice(0, 10) + "…" : just) : <span className="block text-center opacity-40">✎</span>}
+                              {just ? (
+                                <span className="flex items-center gap-1">
+                                  {just.length > 12 ? just.slice(0, 10) + "…" : just}
+                                  {fotoUrl && <span className="text-[8px]">📷</span>}
+                                </span>
+                              ) : <span className="block text-center opacity-40">✎</span>}
                             </button>
                           </td>
                         );
