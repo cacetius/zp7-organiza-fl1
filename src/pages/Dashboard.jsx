@@ -37,7 +37,7 @@ const quickActions = [
 
 export default function Dashboard() {
   const qc = useQueryClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = format(new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })), "yyyy-MM-dd");
   const now = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
 
   useEffect(() => {
