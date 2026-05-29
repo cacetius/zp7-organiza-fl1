@@ -4,6 +4,15 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, AlertCircle, Wrench, TrendingDown } from "lucide-react";
 import { detectCurrentShift } from "@/lib/shiftDetector";
 
+const DEFAULT_LOSS_ITEMS = [
+  "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
+  "AGREGADO (Reprov. Testor)", "BOX ZP6", "SISTEMA FIS",
+  "TORQUE LINHA", "TORQUE FAROL", "ELÉTRICA",
+  "DIREÇÃO ELETRICA (Alinh.)", "BZD", "AJUSTE",
+  "FREIO", "GEOMETRIA", "COMANDO AC",
+  "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
+];
+
 export default function ShiftOverview({ prodData, maintenanceData, lossData, isHistorical }) {
   const currentShift = useMemo(() => detectCurrentShift(), []);
 
@@ -17,7 +26,7 @@ export default function ShiftOverview({ prodData, maintenanceData, lossData, isH
 
   const shiftLosses = useMemo(() => {
     const brutas = (lossData || [])
-      .filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0)
+      .filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(l.item_perda))
       .reduce((sum, l) => sum + (l.carros_perdidos || 0), 0);
     const ganhos = (lossData || [])
       .filter(l => l.motivo_perda === "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0)
