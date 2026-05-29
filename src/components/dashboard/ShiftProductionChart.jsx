@@ -29,11 +29,11 @@ export default function ShiftProductionChart({ prodData, lossData, date }) {
         .reduce((s, r) => s + (r.carros_produzidos || 0), 0);
 
       const perdasBrutas = lossData
-        .filter(r => r.turno === key && r.motivo_perda !== "ganho" && r.item_perda && (!date || r.data === date))
+        .filter(r => r.turno === key && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (!date || r.data === date))
         .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
 
       const ganhos = lossData
-        .filter(r => r.turno === key && r.motivo_perda === "ganho" && r.item_perda && (!date || r.data === date))
+        .filter(r => r.turno === key && r.motivo_perda === "ganho" && r.item_perda && r.hora && (!date || r.data === date))
         .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
 
       const liquida = Math.max(0, prod - perdasBrutas + ganhos);

@@ -17,10 +17,10 @@ export default function ShiftOverview({ prodData, maintenanceData, lossData, isH
 
   const shiftLosses = useMemo(() => {
     const brutas = (lossData || [])
-      .filter(l => l.motivo_perda !== "ganho" && l.item_perda)
+      .filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora)
       .reduce((sum, l) => sum + (l.carros_perdidos || 0), 0);
     const ganhos = (lossData || [])
-      .filter(l => l.motivo_perda === "ganho" && l.item_perda)
+      .filter(l => l.motivo_perda === "ganho" && l.item_perda && l.hora)
       .reduce((sum, l) => sum + (l.carros_perdidos || 0), 0);
     return Math.max(0, brutas - ganhos);
   }, [lossData]);
