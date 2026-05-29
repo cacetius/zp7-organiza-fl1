@@ -79,10 +79,10 @@ export default function Dashboard() {
   const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
   // Perdas do turno — mesmo critério do LossControl (cellMap): requer item_perda E hora
-  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
 
   // Ganhos do turno
-  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho" && l.item_perda && l.hora).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
 
   // Perda real = Perdas brutas - Ganhos
   // Produção líquida = Produção - Perda real

@@ -14,6 +14,16 @@ import HourlyNoteModal from "@/components/production/HourlyNoteModal";
 const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
 const HORAS_EXTRAS_SABADO_2 = ["19:00","20:00","21:00","22:00","23:00"];
 
+// Mesmos itens padrão do LossControl — só conta perdas desses itens
+const DEFAULT_LOSS_ITEMS = [
+  "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
+  "AGREGADO (Reprov. Testor)", "BOX ZP6", "SISTEMA FIS",
+  "TORQUE LINHA", "TORQUE FAROL", "ELÉTRICA",
+  "DIREÇÃO ELETRICA (Alinh.)", "BZD", "AJUSTE",
+  "FREIO", "GEOMETRIA", "COMANDO AC",
+  "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
+];
+
 const TURNOS = [
   { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00"] },
   { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
@@ -275,7 +285,7 @@ export default function ProductionControl() {
   // cellMap do LossControl: agrupa por item_perda+hora, 1 registro por célula (igual ao LossControl)
   const lossCellMap = useMemo(() => {
     const map = {}; // { motivo_perda -> { item_perda -> { hora -> carros_perdidos } } }
-    lossRecords.filter(r => r.item_perda && r.hora).forEach(r => {
+    lossRecords.filter(r => r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).forEach(r => {
       const tipo = r.motivo_perda === "ganho" ? "ganho" : "perda";
       if (!map[tipo]) map[tipo] = {};
       if (!map[tipo][r.item_perda]) map[tipo][r.item_perda] = {};
