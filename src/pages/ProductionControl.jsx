@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadsheet, ClipboardList } from "lucide-react";
+import { Factory, Printer, ChevronLeft, ChevronRight, Plus, Minus, FileSpreadsheet, ClipboardList, MessageSquarePlus } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { detectCurrentShift } from "@/lib/shiftDetector";
+import HourlyNoteModal from "@/components/production/HourlyNoteModal";
 
 const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
 const HORAS_EXTRAS_SABADO_2 = ["19:00","20:00","21:00","22:00","23:00"];
@@ -45,6 +46,7 @@ export default function ProductionControl() {
   const [selectedTurno, setSelectedTurno] = useState(() => detectCurrentShift().key);
   const [editingCell, setEditingCell] = useState(null); // { testorId, testorNome, hora, field, value }
   const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value, fotoUrl, uploading }
+  const [hourlyNoteHora, setHourlyNoteHora] = useState(null); // hora da nota geral aberta
 
   const [mostrarExtras, setMostrarExtras] = useState(false);
 
@@ -89,6 +91,18 @@ export default function ProductionControl() {
     staleTime: 0,
     gcTime: 0,
   });
+
+  const hourlyNotesKey = `hourly-notes-producao-${selectedDate}-${selectedTurno}`;
+  const { data: hourlyNotes = [] } = useQuery({
+    queryKey: [hourlyNotesKey],
+    queryFn: () => base44.entities.HourlyNote.filter({ data: selectedDate, turno: selectedTurno, modulo: "producao" }),
+    staleTime: 0,
+  });
+  const hourlyNotesMap = useMemo(() => {
+    const map = {};
+    hourlyNotes.forEach(n => { map[n.hora] = n; });
+    return map;
+  }, [hourlyNotes]);
 
   const { data: lossRecords = [] } = useQuery({
     queryKey: [lossKey],
@@ -521,7 +535,7 @@ export default function ProductionControl() {
                 <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-md border border-dashed border-border text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 transition-colors ${editingJustificativa.uploading ? "opacity-50 pointer-events-none" : ""}`}>
                   {editingJustificativa.uploading ? "Enviando…" : "📁 Toque para escolher uma imagem"}
                   <input
-                    type="file" accept="image/*" capture="environment" className="hidden"
+                  type="file" accept="image/*" className="hidden"
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
@@ -564,6 +578,17 @@ export default function ProductionControl() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal nota geral do horário */}
+      {hourlyNoteHora && (
+        <HourlyNoteModal
+          hora={hourlyNoteHora}
+          data={selectedDate}
+          turno={selectedTurno}
+          modulo="producao"
+          onClose={() => { setHourlyNoteHora(null); qc.invalidateQueries({ queryKey: [hourlyNotesKey] }); }}
+        />
       )}
 
       {/* Header */}
@@ -811,6 +836,31 @@ export default function ProductionControl() {
                   return <td key={h} className="border border-border text-center font-bold text-green-400 py-1.5 text-xs sm:text-sm">{liq > 0 ? liq : "—"}</td>;
                 })}
                 <td className="border border-border text-center font-black text-white bg-green-600 py-1.5 text-xs sm:text-sm">{producaoLiquida > 0 ? producaoLiquida : "—"}</td>
+              </tr>
+
+              {/* NOTA GERAL DO HORÁRIO */}
+              <tr className="bg-yellow-500/5">
+                <td className="border border-border px-2 py-1 font-black text-yellow-400 uppercase text-[10px] sm:text-xs leading-tight whitespace-nowrap">📝 NOTA<br/>GERAL</td>
+                {turnoAtual.horas.map(h => {
+                  const nota = hourlyNotesMap[h];
+                  return (
+                    <td key={h} className="border border-border p-0.5">
+                      <button
+                        onClick={() => setHourlyNoteHora(h)}
+                        className={`w-full min-h-[32px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation
+                          ${nota?.justificativa ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/20 hover:bg-muted/20 text-center"}`}
+                      >
+                        {nota?.justificativa ? (
+                          <span className="flex items-center gap-1">
+                            {nota.justificativa.length > 12 ? nota.justificativa.slice(0, 10) + "…" : nota.justificativa}
+                            {nota.foto_url && <span className="text-[8px]">📷</span>}
+                          </span>
+                        ) : <span className="block text-center opacity-40"><MessageSquarePlus className="w-3 h-3 mx-auto" /></span>}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td className="border border-border" />
               </tr>
             </tbody>
           </table>

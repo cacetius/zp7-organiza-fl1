@@ -1,0 +1,45 @@
+{
+  "name": "HourlyNote",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "string",
+      "format": "date",
+      "description": "Data do registro"
+    },
+    "turno": {
+      "type": "string",
+      "enum": [
+        "primeiro",
+        "segundo",
+        "terceiro"
+      ]
+    },
+    "hora": {
+      "type": "string",
+      "description": "Hora do registro (ex: 15:00)"
+    },
+    "modulo": {
+      "type": "string",
+      "enum": [
+        "producao",
+        "perdas"
+      ],
+      "description": "M\u00f3dulo de origem"
+    },
+    "justificativa": {
+      "type": "string",
+      "description": "Texto da justificativa geral"
+    },
+    "foto_url": {
+      "type": "string",
+      "description": "URL da foto anexada"
+    }
+  },
+  "required": [
+    "data",
+    "turno",
+    "hora",
+    "modulo"
+  ]
+}

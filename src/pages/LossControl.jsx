@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet } from "lucide-react";
+import { TrendingDown, Plus, Minus, ChevronLeft, ChevronRight, Printer, X, FileSpreadsheet, MessageSquarePlus } from "lucide-react";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { detectCurrentShift } from "@/lib/shiftDetector";
+import HourlyNoteModal from "@/components/production/HourlyNoteModal";
 
 const DEFAULT_ITEMS = [
   "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
@@ -52,9 +53,11 @@ export default function LossControl() {
   const longPressTimers = useRef({});
   const longPressTriggered = useRef({});
   const [editingCell, setEditingCell] = useState(null); // { item, hora, isGanho, value }
+  const [hourlyNoteHora, setHourlyNoteHora] = useState(null);
 
   const turnoAtual = TURNOS.find(t => t.key === selectedTurno);
   const sheetKey = `loss-sheet-${selectedDate}-${selectedTurno}`;
+  const hourlyNotesKey = `hourly-notes-perdas-${selectedDate}-${selectedTurno}`;
   const dateLabel = format(parseISO(selectedDate), "dd/MM");
 
   // Hora atual destacada
@@ -73,6 +76,17 @@ export default function LossControl() {
     staleTime: 30_000,
     gcTime: 5 * 60_000,
   });
+
+  const { data: hourlyNotes = [] } = useQuery({
+    queryKey: [hourlyNotesKey],
+    queryFn: () => base44.entities.HourlyNote.filter({ data: selectedDate, turno: selectedTurno, modulo: "perdas" }),
+    staleTime: 0,
+  });
+  const hourlyNotesMap = useMemo(() => {
+    const map = {};
+    hourlyNotes.forEach(n => { map[n.hora] = n; });
+    return map;
+  }, [hourlyNotes]);
 
 
 
@@ -484,6 +498,17 @@ export default function LossControl() {
         </div>
       )}
 
+      {/* Modal nota geral */}
+      {hourlyNoteHora && (
+        <HourlyNoteModal
+          hora={hourlyNoteHora}
+          data={selectedDate}
+          turno={selectedTurno}
+          modulo="perdas"
+          onClose={() => { setHourlyNoteHora(null); qc.invalidateQueries({ queryKey: [hourlyNotesKey] }); }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div>
@@ -708,6 +733,31 @@ export default function LossControl() {
                 <td key={h} className={`border border-border text-center font-bold text-orange-400 py-2 ${h === horaAtual ? "bg-yellow-400/15 ring-1 ring-inset ring-yellow-400/40" : ""}`}>{perdaRealPorHora[h] > 0 ? perdaRealPorHora[h] : "—"}</td>
               ))}
               <td className="border border-border text-center font-black text-white bg-orange-600 py-2 text-sm">{totalPerdaReal > 0 ? totalPerdaReal : "—"}</td>
+            </tr>
+
+            {/* NOTA GERAL DO HORÁRIO */}
+            <tr className="bg-yellow-500/5">
+              <td className="border border-border px-3 py-1 font-black text-yellow-400 uppercase text-[10px] whitespace-nowrap">📝 NOTA GERAL</td>
+              {turnoAtual.horas.map(h => {
+                const nota = hourlyNotesMap[h];
+                return (
+                  <td key={h} className="border border-border p-0.5">
+                    <button
+                      onClick={() => setHourlyNoteHora(h)}
+                      className={`w-full min-h-[32px] rounded text-[9px] leading-tight px-1 py-1 text-left transition-all touch-manipulation
+                        ${nota?.justificativa ? "text-yellow-200 bg-yellow-500/10 hover:bg-yellow-500/20" : "text-muted-foreground/20 hover:bg-muted/20 text-center"}`}
+                    >
+                      {nota?.justificativa ? (
+                        <span className="flex items-center gap-1">
+                          {nota.justificativa.length > 12 ? nota.justificativa.slice(0, 10) + "…" : nota.justificativa}
+                          {nota.foto_url && <span className="text-[8px]">📷</span>}
+                        </span>
+                      ) : <span className="block text-center opacity-40"><MessageSquarePlus className="w-3 h-3 mx-auto" /></span>}
+                    </button>
+                  </td>
+                );
+              })}
+              <td className="border border-border" />
             </tr>
           </tbody>
         </table>
