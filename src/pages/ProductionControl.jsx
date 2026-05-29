@@ -275,7 +275,7 @@ export default function ProductionControl() {
   const perdasBrutasPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) map[h] = 0;
-    lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora).forEach(r => {
+    lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora && r.item_perda).forEach(r => {
       if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
     });
     return map;
@@ -284,7 +284,7 @@ export default function ProductionControl() {
   const ganhosCompPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) map[h] = 0;
-    lossRecords.filter(r => r.motivo_perda === "ganho" && r.hora).forEach(r => {
+    lossRecords.filter(r => r.motivo_perda === "ganho" && r.hora && r.item_perda).forEach(r => {
       if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
     });
     return map;
