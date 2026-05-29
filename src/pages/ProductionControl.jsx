@@ -272,23 +272,47 @@ export default function ProductionControl() {
     return { totalPorHora: prod, objetivoPorHora: obj, perdasProdPorHora: perdProd };
   }, [cellMap, testores, turnoAtual.horas, getVal]);
 
+  // cellMap do LossControl: agrupa por item_perda+hora, 1 registro por célula (igual ao LossControl)
+  const lossCellMap = useMemo(() => {
+    const map = {}; // { motivo_perda -> { item_perda -> { hora -> carros_perdidos } } }
+    lossRecords.filter(r => r.item_perda && r.hora).forEach(r => {
+      const tipo = r.motivo_perda === "ganho" ? "ganho" : "perda";
+      if (!map[tipo]) map[tipo] = {};
+      if (!map[tipo][r.item_perda]) map[tipo][r.item_perda] = {};
+      // Mantém apenas 1 registro por célula (item+hora), priorizando não-temporários
+      const existing = map[tipo][r.item_perda][r.hora];
+      const isReal = r.id && !String(r.id).startsWith("temp-");
+      const existingIsTemp = existing && String(existing.id || "").startsWith("temp-");
+      if (!existing || (existingIsTemp && isReal)) {
+        map[tipo][r.item_perda][r.hora] = r;
+      }
+    });
+    return map;
+  }, [lossRecords]);
+
   const perdasBrutasPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) map[h] = 0;
-    lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora && r.item_perda).forEach(r => {
-      if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
+    const perdaMap = lossCellMap["perda"] || {};
+    Object.values(perdaMap).forEach(horaMap => {
+      Object.entries(horaMap).forEach(([hora, r]) => {
+        if (map[hora] !== undefined) map[hora] += (r.carros_perdidos || 0);
+      });
     });
     return map;
-  }, [lossRecords, turnoAtual.horas]);
+  }, [lossCellMap, turnoAtual.horas]);
 
   const ganhosCompPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) map[h] = 0;
-    lossRecords.filter(r => r.motivo_perda === "ganho" && r.hora && r.item_perda).forEach(r => {
-      if (map[r.hora] !== undefined) map[r.hora] += (r.carros_perdidos || 0);
+    const ganhoMap = lossCellMap["ganho"] || {};
+    Object.values(ganhoMap).forEach(horaMap => {
+      Object.entries(horaMap).forEach(([hora, r]) => {
+        if (map[hora] !== undefined) map[hora] += (r.carros_perdidos || 0);
+      });
     });
     return map;
-  }, [lossRecords, turnoAtual.horas]);
+  }, [lossCellMap, turnoAtual.horas]);
 
   const perdasFalhaPorHora = useMemo(() => {
     const map = {};
@@ -301,11 +325,14 @@ export default function ProductionControl() {
   const detalhePerdasPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) map[h] = [];
-    lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora && r.item_perda).forEach(r => {
-      if (map[r.hora] !== undefined) map[r.hora].push({ item: r.item_perda, val: r.carros_perdidos || 0 });
+    const perdaMap = lossCellMap["perda"] || {};
+    Object.entries(perdaMap).forEach(([item, horaMap]) => {
+      Object.entries(horaMap).forEach(([hora, r]) => {
+        if (map[hora] !== undefined) map[hora].push({ item, val: r.carros_perdidos || 0 });
+      });
     });
     return map;
-  }, [lossRecords, turnoAtual.horas]);
+  }, [lossCellMap, turnoAtual.horas]);
 
   // Real Líquido = Produção − Perdas de Produção − Perdas por Defeito
   const realLiquidoPorHora = useMemo(() => {
