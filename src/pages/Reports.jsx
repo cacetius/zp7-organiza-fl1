@@ -46,6 +46,15 @@ const TABS = [
   { key: "perdas", label: "Perdas", icon: TrendingDown },
 ];
 
+const DEFAULT_LOSS_ITEMS = [
+  "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
+  "AGREGADO (Reprov. Testor)", "BOX ZP6", "SISTEMA FIS",
+  "TORQUE LINHA", "TORQUE FAROL", "ELÉTRICA",
+  "DIREÇÃO ELETRICA (Alinh.)", "BZD", "AJUSTE",
+  "FREIO", "GEOMETRIA", "COMANDO AC",
+  "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
+];
+
 const RESUMO_TURNOS = [
   { label: "1º Turno (06h–15h)", key: "primeiro", horas: ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00"] },
   { label: "2º Turno (15h–23h)", key: "segundo",  horas: ["16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
@@ -136,8 +145,8 @@ export default function Reports() {
 
   // Resumo calculations
   const resumoTotalProd = prodRecords.reduce((acc, r) => acc + (r.carros_produzidos || 0), 0);
-  const lossDayBruto = lossDay.filter(r => r.motivo_perda !== "ganho").reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
-  const lossDayGanho = lossDay.filter(r => r.motivo_perda === "ganho").reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
+  const lossDayBruto = lossDay.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
+  const lossDayGanho = lossDay.filter(r => r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0).reduce((acc, r) => acc + (r.carros_perdidos || 0), 0);
   const perdaReal = Math.max(0, lossDayBruto - lossDayGanho);
   const producaoLiquida = Math.max(0, resumoTotalProd - perdaReal);
 
@@ -147,8 +156,7 @@ export default function Reports() {
   });
 
   const lossByItemMap = {};
-  lossDay.filter(r => r.motivo_perda !== "ganho").forEach(r => {
-    if (!r.item_perda) return;
+  lossDay.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).forEach(r => {
     lossByItemMap[r.item_perda] = (lossByItemMap[r.item_perda] || 0) + (r.carros_perdidos || 0);
   });
   const lossRanking = Object.entries(lossByItemMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
@@ -176,8 +184,8 @@ export default function Reports() {
   }, [prodCtrlAll, turno, dateFrom, dateTo]);
 
   const totalCarros  = filteredProdCtrl.reduce((s, r) => s + (r.carros_produzidos || 0), 0);
-  const totalPerdasCtrl = filteredLoss.filter(r => r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-  const totalGanhosCtrl = filteredLoss.filter(r => r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalPerdasCtrl = filteredLoss.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalGanhosCtrl = filteredLoss.filter(r => r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
   const totalPerdaRealCtrl = Math.max(0, totalPerdasCtrl - totalGanhosCtrl);
   const totalParado  = filteredTestores.reduce((s, t) => s + (t.tempo_total_parado || 0), 0);
   const eficiencia   = totalCarros > 0 ? Math.round(((totalCarros - totalPerdaRealCtrl) / totalCarros) * 100) : 0;
@@ -227,17 +235,16 @@ export default function Reports() {
     const days = eachDayOfInterval({ start: fromDate, end: toDate });
     return days.map(day => {
       const ds = format(day, "yyyy-MM-dd");
-      const total = filteredLoss.filter(r => r.data === ds && r.motivo_perda !== "ganho")
+      const total = filteredLoss.filter(r => r.data === ds && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda))
         .reduce((s, r) => s + (r.carros_perdidos || 0), 0);
       return { label: format(day, "dd/MM", { locale: ptBR }), Perdas: total };
     });
   }, [filteredLoss, dateFrom, dateTo]);
 
   const lossItemRanking = useMemo(() => {
-    const filtered = filteredLoss.filter(r => r.motivo_perda !== "ganho");
+    const filtered = filteredLoss.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda));
     const map = {};
     filtered.forEach(r => {
-      if (!r.item_perda) return;
       map[r.item_perda] = (map[r.item_perda] || 0) + (r.carros_perdidos || 0);
     });
     return Object.entries(map)
@@ -249,7 +256,7 @@ export default function Reports() {
   const lossByTurno = useMemo(() => {
     const map = { primeiro: 0, segundo: 0, terceiro: 0 };
     filteredLoss.forEach(r => {
-      if (!r.turno || r.motivo_perda === "ganho") return;
+      if (!r.turno || r.motivo_perda === "ganho" || !r.item_perda || !r.hora || (r.carros_perdidos || 0) <= 0 || !DEFAULT_LOSS_ITEMS.includes(r.item_perda)) return;
       map[r.turno] = (map[r.turno] || 0) + (r.carros_perdidos || 0);
     });
     return [
@@ -262,7 +269,7 @@ export default function Reports() {
   const lossByHour = useMemo(() => {
     const map = {};
     filteredLoss.forEach(r => {
-      if (!r.hora || r.motivo_perda === "ganho") return;
+      if (!r.hora || r.motivo_perda === "ganho" || !r.item_perda || (r.carros_perdidos || 0) <= 0 || !DEFAULT_LOSS_ITEMS.includes(r.item_perda)) return;
       map[r.hora] = (map[r.hora] || 0) + (r.carros_perdidos || 0);
     });
     return Object.entries(map)
@@ -282,15 +289,15 @@ export default function Reports() {
       .map(([name, Ganhos]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, Ganhos }));
   }, [filteredLoss]);
 
-  const totalPerdasPeriodo = filteredLoss.filter(r => r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-  const totalGanhosPeriodo = filteredLoss.filter(r => r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalPerdasPeriodo = filteredLoss.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const totalGanhosPeriodo = filteredLoss.filter(r => r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
   const perdaRealPeriodo = Math.max(0, totalPerdasPeriodo - totalGanhosPeriodo);
 
   // Timeline comparação entre duas datas
   const compareTimeline = useMemo(() => {
     const hours = ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45","00:00","01:00","02:00","03:00","04:00","05:00"];
-    const d1Records = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho");
-    const d2Records = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho");
+    const d1Records = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda));
+    const d2Records = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda));
     return hours.map(h => ({
       hora: h,
       [compareDate1]: d1Records.filter(r => r.hora === h).reduce((s, r) => s + (r.carros_perdidos || 0), 0),
@@ -299,10 +306,10 @@ export default function Reports() {
   }, [lossRecords, compareDate1, compareDate2]);
 
   const compareTotals = useMemo(() => {
-    const d1 = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-    const d2 = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-    const g1 = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-    const g2 = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const d1 = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const d2 = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const g1 = lossRecords.filter(r => r.data === compareDate1 && r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const g2 = lossRecords.filter(r => r.data === compareDate2 && r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
     return { d1Perdas: d1, d2Perdas: d2, d1Ganhos: g1, d2Ganhos: g2, d1Real: Math.max(0, d1 - g1), d2Real: Math.max(0, d2 - g2) };
   }, [lossRecords, compareDate1, compareDate2]);
 
@@ -311,8 +318,8 @@ export default function Reports() {
     return resumoTurnoObj.horas.map(h => ({
       hora: h,
       Produção: prodPorHora[h] || 0,
-      Perdas: lossDay.filter(r => r.hora === h && r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos||0), 0),
-      Ganhos: lossDay.filter(r => r.hora === h && r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos||0), 0),
+      Perdas: lossDay.filter(r => r.hora === h && r.motivo_perda !== "ganho" && r.item_perda && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos||0), 0),
+      Ganhos: lossDay.filter(r => r.hora === h && r.motivo_perda === "ganho" && r.item_perda && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos||0), 0),
     })).map(r => ({ ...r, Líquida: Math.max(0, r.Produção - Math.max(0, r.Perdas - r.Ganhos)) }));
   }, [prodPorHora, lossDay, resumoTurnoObj]);
 
@@ -629,8 +636,8 @@ export default function Reports() {
             ${["primeiro","segundo","terceiro"].map(tKey => {
               const tLabel = { primeiro:"1º Turno", segundo:"2º Turno", terceiro:"3º Turno" }[tKey];
               const tProd = prodCtrlAll.filter(r => r.turno === tKey && r.data === resumoDate).reduce((s,r) => s+(r.carros_produzidos||0),0);
-              const tPerdBruto = lossRecords.filter(r => r.turno === tKey && r.data === resumoDate && r.motivo_perda !== "ganho").reduce((s,r) => s+(r.carros_perdidos||0),0);
-              const tGanho = lossRecords.filter(r => r.turno === tKey && r.data === resumoDate && r.motivo_perda === "ganho").reduce((s,r) => s+(r.carros_perdidos||0),0);
+              const tPerdBruto = lossRecords.filter(r => r.turno === tKey && r.data === resumoDate && r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos||0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s,r) => s+(r.carros_perdidos||0),0);
+              const tGanho = lossRecords.filter(r => r.turno === tKey && r.data === resumoDate && r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos||0) > 0).reduce((s,r) => s+(r.carros_perdidos||0),0);
               const tPerdReal = Math.max(0, tPerdBruto - tGanho);
               const tLiq = Math.max(0, tProd - tPerdReal);
               const tEfic = tProd > 0 ? Math.round((tLiq/tProd)*100) : null;

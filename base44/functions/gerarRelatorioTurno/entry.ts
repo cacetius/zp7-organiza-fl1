@@ -34,6 +34,15 @@ function getBRTDate() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+const DEFAULT_LOSS_ITEMS = [
+  "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
+  "AGREGADO (Reprov. Testor)", "BOX ZP6", "SISTEMA FIS",
+  "TORQUE LINHA", "TORQUE FAROL", "ELÉTRICA",
+  "DIREÇÃO ELETRICA (Alinh.)", "BZD", "AJUSTE",
+  "FREIO", "GEOMETRIA", "COMANDO AC",
+  "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
+];
+
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
 
@@ -62,8 +71,8 @@ Deno.serve(async (req) => {
 
   // Cálculos
   const totalProd = prodRecords.reduce((s, r) => s + (r.carros_produzidos || 0), 0);
-  const lossBruto = lossRecords.filter(r => r.motivo_perda !== "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-  const lossGanho = lossRecords.filter(r => r.motivo_perda === "ganho").reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const lossBruto = lossRecords.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+  const lossGanho = lossRecords.filter(r => r.motivo_perda === "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
   const perdaReal = Math.max(0, lossBruto - lossGanho);
   const prodLiquida = Math.max(0, totalProd - perdaReal);
   const efic = totalProd > 0 ? Math.round((prodLiquida / totalProd) * 100) : 0;
@@ -77,14 +86,14 @@ Deno.serve(async (req) => {
   // Perdas por hora
   const perdasPorHora = {};
   turno.horas.forEach(h => {
-    const bruto = lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora === h).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
-    const ganho = lossRecords.filter(r => r.motivo_perda === "ganho" && r.hora === h).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const bruto = lossRecords.filter(r => r.motivo_perda !== "ganho" && r.hora === h && r.item_perda && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
+    const ganho = lossRecords.filter(r => r.motivo_perda === "ganho" && r.hora === h && r.item_perda && (r.carros_perdidos || 0) > 0).reduce((s, r) => s + (r.carros_perdidos || 0), 0);
     perdasPorHora[h] = { bruto, ganho, real: Math.max(0, bruto - ganho), liq: Math.max(0, (prodPorHora[h] || 0) - Math.max(0, bruto - ganho)) };
   });
 
   // Ranking de perdas
   const lossMap = {};
-  lossRecords.filter(r => r.motivo_perda !== "ganho" && r.item_perda).forEach(r => {
+  lossRecords.filter(r => r.motivo_perda !== "ganho" && r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).forEach(r => {
     lossMap[r.item_perda] = (lossMap[r.item_perda] || 0) + (r.carros_perdidos || 0);
   });
   const lossRanking = Object.entries(lossMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
