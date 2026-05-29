@@ -273,7 +273,8 @@ export default function ProductionControl() {
   const { totalPorHora, objetivoPorHora, perdasProdPorHora } = useMemo(() => {
     const prod = {}, obj = {}, perdProd = {};
     for (const h of turnoAtual.horas) {
-      prod[h] = testores.reduce((acc, t) => acc + (getVal(t.id, h, "producao") || 0), 0);
+      // Soma apenas testores reais (exclui OBJETIVO_TESTOR_ID)
+      prod[h] = testores.filter(t => t.id !== OBJETIVO_TESTOR_ID).reduce((acc, t) => acc + (getVal(t.id, h, "producao") || 0), 0);
       // Objetivo: somado dos registros com testor_id = OBJETIVO_TESTOR_ID para essa hora
       const objRec = cellMap[OBJETIVO_TESTOR_ID]?.[h];
       obj[h] = objRec?.objetivo ?? 0;
@@ -285,7 +286,12 @@ export default function ProductionControl() {
   // cellMap do LossControl: agrupa por item_perda+hora, 1 registro por célula (igual ao LossControl)
   const lossCellMap = useMemo(() => {
     const map = {}; // { motivo_perda -> { item_perda -> { hora -> carros_perdidos } } }
-    lossRecords.filter(r => r.item_perda && r.hora && (r.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(r.item_perda)).forEach(r => {
+    // Perdas: filtradas por DEFAULT_LOSS_ITEMS. Ganhos: sem filtro de lista (qualquer item_perda vale)
+    lossRecords.filter(r => {
+      if (!r.item_perda || !r.hora || (r.carros_perdidos || 0) <= 0) return false;
+      if (r.motivo_perda === "ganho") return true; // ganhos sempre contam
+      return DEFAULT_LOSS_ITEMS.includes(r.item_perda); // perdas só dos itens padrão
+    }).forEach(r => {
       const tipo = r.motivo_perda === "ganho" ? "ganho" : "perda";
       if (!map[tipo]) map[tipo] = {};
       if (!map[tipo][r.item_perda]) map[tipo][r.item_perda] = {};
