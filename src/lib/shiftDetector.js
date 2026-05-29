@@ -28,20 +28,7 @@ export function detectCurrentShift() {
  */
 export function filterByShift(activities, shiftKey) {
   if (!Array.isArray(activities)) return [];
-  
-  const shiftMap = {
-    primeiro: { start: 6, end: 15 },
-    segundo: { start: 15, end: 24 },
-    terceiro: { start: 21, endNext: 6 }, // cruza meia-noite
-  };
-
-  const shift = shiftMap[shiftKey];
-  if (!shift) return activities;
-
-  return activities.filter(activity => {
-    if (!activity.turno) return false;
-    return activity.turno === shiftKey;
-  });
+  return activities.filter(activity => activity.turno === shiftKey);
 }
 
 /**

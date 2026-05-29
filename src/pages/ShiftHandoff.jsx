@@ -25,6 +25,7 @@ const emptyForm = {
   producao_realizada: "", producao_planejada: "120",
   testores_com_problema: "", ocorrencias_criticas: "",
   acoes_em_andamento: "", alertas_proximo_turno: "",
+  recomendacao_ia: "", observacao: "",
 };
 
 export default function ShiftHandoff() {
@@ -101,6 +102,8 @@ export default function ShiftHandoff() {
       ocorrencias_criticas: h.ocorrencias_criticas || "",
       acoes_em_andamento: h.acoes_em_andamento || "",
       alertas_proximo_turno: h.alertas_proximo_turno || "",
+      recomendacao_ia: h.recomendacao_ia || "",
+      observacao: h.observacao || "",
     });
     setOpen(true);
   };
@@ -306,6 +309,14 @@ export default function ShiftHandoff() {
               <div className="space-y-1.5">
                 <Label className="text-xs">⚠ Alertas para o próximo turno</Label>
                 <Textarea value={form.alertas_proximo_turno} onChange={e => u("alertas_proximo_turno", e.target.value)} rows={2} placeholder="O que o próximo turno precisa saber" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">🤖 Recomendação IA</Label>
+                <Textarea value={form.recomendacao_ia} onChange={e => u("recomendacao_ia", e.target.value)} rows={2} placeholder="Sugestões geradas pela IA (opcional)" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Observação geral</Label>
+                <Textarea value={form.observacao} onChange={e => u("observacao", e.target.value)} rows={2} placeholder="Observações adicionais do turno" />
               </div>
 
               <Button type="submit" size="lg" className="w-full bg-primary" disabled={createMut.isPending || updateMut.isPending}>

@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 const TURNOS = {
-  primeiro: { label: "1º Turno (07h–15h)", horas: ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00"] },
+  primeiro: { label: "1º Turno (06h–15h)", horas: ["06:00","07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00"] },
   segundo:  { label: "2º Turno (16h–23:45)", horas: ["16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","23:45"] },
   terceiro: { label: "3º Turno (22h–05h)", horas: ["22:00","23:00","00:00","01:00","02:00","03:00","04:00","05:00"] },
 };
@@ -16,8 +16,8 @@ function detectTurnoAtual() {
   const m = brtMin % 60;
   const total = h * 60 + m;
 
-  // 1º turno: 07:00 – 15:59
-  if (total >= 7*60 && total < 16*60) return "primeiro";
+  // 1º turno: 06:00 – 15:59
+  if (total >= 6*60 && total < 16*60) return "primeiro";
   // 2º turno: 16:00 – 21:59
   if (total >= 16*60 && total < 22*60) return "segundo";
   // 3º turno: 22:00 – 06:59

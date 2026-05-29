@@ -30,7 +30,9 @@ Deno.serve(async (req) => {
 
     const turnoLabel = { primeiro: "1º Turno", segundo: "2º Turno", terceiro: "3º Turno" };
     const tipo = tipoLabel[data.tipo] || data.tipo || "Ocorrência";
-    const hora = data.hora || new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const hora = data.created_date
+      ? new Date(data.created_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+      : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const dataStr = data.data || new Date().toLocaleDateString("pt-BR");
 
     const mensagem = `🔴 *OCORRÊNCIA CRÍTICA - ZP7*\n\n` +

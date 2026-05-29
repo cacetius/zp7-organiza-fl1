@@ -28,9 +28,14 @@ function AppShell() {
   const [loading, setLoading] = useState(true);
 
   const loadProfile = async () => {
-    const user = await base44.auth.me();
-    const profiles = await base44.entities.UserProfile.filter({ user_email: user.email });
-    if (profiles.length > 0) setProfile(profiles[0]);
+    try {
+      const user = await base44.auth.me();
+      const profiles = await base44.entities.UserProfile.filter({ user_email: user.email });
+      if (profiles.length > 0) setProfile(profiles[0]);
+    } catch (err) {
+      base44.auth.redirectToLogin(window.location.href);
+      return;
+    }
     setLoading(false);
   };
 
