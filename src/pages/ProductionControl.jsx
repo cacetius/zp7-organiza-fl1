@@ -344,14 +344,15 @@ export default function ProductionControl() {
     return map;
   }, [lossCellMap, turnoAtual.horas]);
 
-  // Real Líquido = Produção − Perdas de Produção − Perdas por Defeito
+  // Real Líquido = Produção − Perdas por Defeito (LossControl)
+  // Perdas de Produção = gap do objetivo, não deve subtrair do real líquido novamente
   const realLiquidoPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) {
-      map[h] = Math.max(0, (totalPorHora[h] || 0) - (perdasProdPorHora[h] || 0) - (perdasFalhaPorHora[h] || 0));
+      map[h] = Math.max(0, (totalPorHora[h] || 0) - (perdasFalhaPorHora[h] || 0));
     }
     return map;
-  }, [totalPorHora, perdasProdPorHora, perdasFalhaPorHora, turnoAtual.horas]);
+  }, [totalPorHora, perdasFalhaPorHora, turnoAtual.horas]);
 
   const totalPorTestor = useCallback((t) =>
     turnoAtual.horas.reduce((acc, h) => acc + (getVal(t.id, h, "producao") || 0), 0),

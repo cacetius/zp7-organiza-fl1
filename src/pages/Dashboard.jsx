@@ -78,8 +78,17 @@ export default function Dashboard() {
   // Produção bruta do turno
   const totalProduzidoTurno = prodTurno.reduce((s, p) => s + (p.carros_produzidos || 0), 0);
 
-  // Perdas do turno — mesmo critério do LossControl (cellMap): requer item_perda E hora
-  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
+  const DEFAULT_LOSS_ITEMS = [
+    "COMANDO VALVULA (PRÉ)", "CAMBIO AUT. (PRÉ)", "AR CONDICIONADO",
+    "AGREGADO (Reprov. Testor)", "BOX ZP6", "SISTEMA FIS",
+    "TORQUE LINHA", "TORQUE FAROL", "ELÉTRICA",
+    "DIREÇÃO ELETRICA (Alinh.)", "BZD", "AJUSTE",
+    "FREIO", "GEOMETRIA", "COMANDO AC",
+    "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
+  ];
+
+  // Perdas do turno — mesmo critério do LossControl: requer item_perda, hora, carros_perdidos > 0 e item no DEFAULT
+  const perdasBrutasTurno = lossesTurno.filter(l => l.motivo_perda !== "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0 && DEFAULT_LOSS_ITEMS.includes(l.item_perda)).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
 
   // Ganhos do turno
   const ganhosTurno = lossesTurno.filter(l => l.motivo_perda === "ganho" && l.item_perda && l.hora && (l.carros_perdidos || 0) > 0).reduce((s, l) => s + (l.carros_perdidos || 0), 0);
