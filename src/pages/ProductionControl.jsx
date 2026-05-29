@@ -307,24 +307,26 @@ export default function ProductionControl() {
     return map;
   }, [lossRecords, turnoAtual.horas]);
 
+  // Real Líquido = Produção − Perdas de Produção − Perdas por Defeito
   const realLiquidoPorHora = useMemo(() => {
     const map = {};
     for (const h of turnoAtual.horas) {
-      map[h] = Math.max(0, (totalPorHora[h] || 0) - (perdasFalhaPorHora[h] || 0));
+      map[h] = Math.max(0, (totalPorHora[h] || 0) - (perdasProdPorHora[h] || 0) - (perdasFalhaPorHora[h] || 0));
     }
     return map;
-  }, [totalPorHora, perdasFalhaPorHora, turnoAtual.horas]);
+  }, [totalPorHora, perdasProdPorHora, perdasFalhaPorHora, turnoAtual.horas]);
 
   const totalPorTestor = useCallback((t) =>
     turnoAtual.horas.reduce((acc, h) => acc + (getVal(t.id, h, "producao") || 0), 0),
   [turnoAtual.horas, getVal]);
 
-  const totalGeral     = useMemo(() => Object.values(totalPorHora).reduce((a, v) => a + v, 0), [totalPorHora]);
-  const totalObjetivo  = useMemo(() => Object.values(objetivoPorHora).reduce((a, v) => a + v, 0), [objetivoPorHora]);
+  const totalGeral       = useMemo(() => Object.values(totalPorHora).reduce((a, v) => a + v, 0), [totalPorHora]);
+  const totalObjetivo    = useMemo(() => Object.values(objetivoPorHora).reduce((a, v) => a + v, 0), [objetivoPorHora]);
   const totalPerdasProd  = useMemo(() => Object.values(perdasProdPorHora).reduce((a, v) => a + v, 0), [perdasProdPorHora]);
   const totalPerdasFalha = useMemo(() => Object.values(perdasFalhaPorHora).reduce((a, v) => a + v, 0), [perdasFalhaPorHora]);
   const producaoLiquida  = useMemo(() => Object.values(realLiquidoPorHora).reduce((a, v) => a + v, 0), [realLiquidoPorHora]);
-  const efic = totalObjetivo > 0 ? Math.round((totalGeral / totalObjetivo) * 100) : 0;
+  // Eficiência baseada no Real Líquido / Objetivo
+  const efic = totalObjetivo > 0 ? Math.round((producaoLiquida / totalObjetivo) * 100) : 0;
 
   // Justificativas por testor/hora para impressão
   const justificativasMap = useMemo(() => {
@@ -344,9 +346,9 @@ export default function ProductionControl() {
     const rows = testores.map(t => [t.nome, ...turnoAtual.horas.map(h => getVal(t.id, h, "producao") || 0), totalPorTestor(t)]);
     rows.push(["OBJETIVO",         ...turnoAtual.horas.map(h => objetivoPorHora[h] || 0),    totalObjetivo]);
     rows.push(["PRODUÇÃO",         ...turnoAtual.horas.map(h => totalPorHora[h] || 0),       totalGeral]);
-    rows.push(["PERDAS PRODUÇÃO",  ...turnoAtual.horas.map(h => perdasProdPorHora[h] || 0),  totalPerdasProd]);
-    rows.push(["PERDA REAL",       ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
-    rows.push(["REAL LÍQUIDO",     ...turnoAtual.horas.map(h => realLiquidoPorHora[h] || 0), producaoLiquida]);
+    rows.push(["PERDAS DE PRODUÇÃO",  ...turnoAtual.horas.map(h => perdasProdPorHora[h] || 0),  totalPerdasProd]);
+    rows.push(["PERDAS POR DEFEITO",  ...turnoAtual.horas.map(h => perdasFalhaPorHora[h] || 0), totalPerdasFalha]);
+    rows.push(["REAL LÍQUIDO",        ...turnoAtual.horas.map(h => realLiquidoPorHora[h] || 0), producaoLiquida]);
     exportCsv(`producao_${selectedDate}_${selectedTurno}`, headers, rows);
   };
 
@@ -432,8 +434,8 @@ export default function ProductionControl() {
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-val" style="color:#0369a1">${totalObjetivo || "—"}</div><div class="kpi-lbl">Objetivo</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#1d4ed8">${totalGeral}</div><div class="kpi-lbl">Produção</div></div>
-      <div class="kpi"><div class="kpi-val" style="color:#ea580c">${totalPerdasProd}</div><div class="kpi-lbl">Perdas Produção</div></div>
-      <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasFalha}</div><div class="kpi-lbl">Perda Real</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#ea580c">${totalPerdasProd}</div><div class="kpi-lbl">Perdas de Produção</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#dc2626">${totalPerdasFalha}</div><div class="kpi-lbl">Perdas por Defeito</div></div>
       <div class="kpi"><div class="kpi-val" style="color:#16a34a">${producaoLiquida}</div><div class="kpi-lbl">Real Líquido</div></div>
     </div>
     <div class="efic-bar">
@@ -448,7 +450,7 @@ export default function ProductionControl() {
         <tr class="objetivo-row"><td class="name"><strong>OBJETIVO</strong></td>${objetivoRowCells}<td class="grand-cyan">${totalObjetivo > 0 ? totalObjetivo : "—"}</td></tr>
         <tr class="total-row"><td class="name"><strong>PRODUÇÃO</strong></td>${totalRowCells}<td class="grand-blue">${totalGeral > 0 ? totalGeral : "—"}</td></tr>
         <tr class="perdas-prod-row"><td class="name"><strong>PERDAS DE PRODUÇÃO</strong></td>${perdasProdRowCells}<td class="grand-orange">${totalPerdasProd > 0 ? totalPerdasProd : "—"}</td></tr>
-        <tr class="perdas-def-row"><td class="name"><strong>PERDAS POR FALHA</strong></td>${perdasFalhaRowCells}<td class="grand-red">${totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td></tr>
+        <tr class="perdas-def-row"><td class="name"><strong>PERDAS POR DEFEITO</strong></td>${perdasFalhaRowCells}<td class="grand-red">${totalPerdasFalha > 0 ? totalPerdasFalha : "—"}</td></tr>
         <tr class="liquido-row"><td class="name"><strong>REAL LÍQUIDO</strong></td>${liquidoRowCells}<td class="grand-green">${producaoLiquida > 0 ? producaoLiquida : "—"}</td></tr>
       </tbody>
     </table>
@@ -650,7 +652,7 @@ export default function ProductionControl() {
             { label: "Objetivo",        value: totalObjetivo || "—", color: "text-cyan-400",   border: "border-cyan-500/20" },
             { label: "Produção",        value: totalGeral,           color: "text-blue-400",   border: "border-blue-500/20" },
             { label: "Perdas Produção", value: totalPerdasProd,      color: "text-orange-400", border: "border-orange-500/20" },
-            { label: "Perda Real",      value: totalPerdasFalha,     color: "text-red-400",    border: "border-red-500/20" },
+            { label: "Perdas por Defeito", value: totalPerdasFalha,    color: "text-red-400",    border: "border-red-500/20" },
             { label: "Real Líquido",    value: producaoLiquida,      color: "text-green-400",  border: "border-green-500/20" },
           ].map(k => (
             <Card key={k.label} className={`border ${k.border}`}>
@@ -794,9 +796,9 @@ export default function ProductionControl() {
                 <td className="border border-border text-center font-black text-white bg-orange-600 py-1.5 text-xs sm:text-sm">{totalPerdasProd > 0 ? totalPerdasProd : "—"}</td>
               </tr>
 
-              {/* PERDA REAL */}
+              {/* PERDAS POR DEFEITO */}
               <tr className="bg-red-500/10">
-                <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDA<br/>REAL</td>
+                <td className="border border-border px-2 py-1.5 font-black text-red-400 uppercase text-[10px] sm:text-xs leading-tight">PERDAS<br/>DEFEITO</td>
                 {turnoAtual.horas.map(h => {
                   const val = perdasFalhaPorHora[h] || 0;
                   const detalhes = detalhePerdasPorHora[h] || [];
