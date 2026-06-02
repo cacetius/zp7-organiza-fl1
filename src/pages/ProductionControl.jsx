@@ -88,12 +88,14 @@ export default function ProductionControl() {
   useEffect(() => { lossKeyRef.current  = lossKey;  }, [lossKey]);
 
   // ─── Queries ──────────────────────────────────────────────────────────────
-  const { data: testores = [], isLoading: loadingTestores } = useQuery({
+  const { data: testoresRaw = [], isLoading: loadingTestores } = useQuery({
     queryKey: ["testores"],
     queryFn: () => base44.entities.Testor.list(),
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
   });
+  // Ordena testores por nome para exibição consistente
+  const testores = useMemo(() => [...testoresRaw].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR")), [testoresRaw]);
 
   const { data: records = [] } = useQuery({
     queryKey: [sheetKey],

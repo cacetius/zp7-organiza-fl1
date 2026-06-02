@@ -13,8 +13,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ShiftOverview from "@/components/dashboard/ShiftOverview";
-import ShiftProductionChart from "@/components/dashboard/ShiftProductionChart";
-import ShiftMetaChart from "@/components/dashboard/ShiftMetaChart";
+import ShiftGoalChart from "@/components/dashboard/ShiftGoalChart";
 import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
 
 const gravBadge = {
@@ -196,11 +195,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Gráfico produção & perdas por turno */}
-      <ShiftProductionChart prodData={allProd} lossData={allLosses} date={activeDate} />
-
-      {/* Gráfico Meta vs Produção Líquida por turno */}
-      <ShiftMetaChart prodData={allProd} lossData={allLosses} date={activeDate} />
+      {/* Gráfico Planejado vs Realizado por turno */}
+      <ShiftGoalChart prodData={allProd} lossData={allLosses} date={activeDate} />
 
       {/* Status Testores + Ocorrências */}
       <div className="grid lg:grid-cols-2 gap-4">
