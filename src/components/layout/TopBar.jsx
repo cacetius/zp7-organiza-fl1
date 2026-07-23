@@ -24,7 +24,7 @@ export default function TopBar({ onMenuClick, profile, onProfileSaved }) {
 
   return (
     <>
-      <header className="h-16 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
+      <header className="h-14 border-b border-border bg-card/90 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 shadow-sm">
         {/* Left */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
