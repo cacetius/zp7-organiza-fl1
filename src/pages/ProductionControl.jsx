@@ -10,6 +10,7 @@ import { exportCsv } from "@/lib/exportCsv";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import { detectCurrentShift } from "@/lib/shiftDetector";
 import HourlyNoteModal from "@/components/production/HourlyNoteModal";
+import StepperModal from "@/components/production/StepperModal";
 
 const HORAS_EXTRAS_SABADO_1 = ["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00"];
 const HORAS_EXTRAS_SABADO_2 = ["19:00","20:00","21:00","22:00","23:00"];
@@ -57,6 +58,7 @@ export default function ProductionControl() {
   const [editingCell, setEditingCell] = useState(null); // { testorId, testorNome, hora, field, value }
   const [editingJustificativa, setEditingJustificativa] = useState(null); // { testor, hora, value, fotoUrl, uploading }
   const [hourlyNoteHora, setHourlyNoteHora] = useState(null); // hora da nota geral aberta
+  const [stepperCell, setStepperCell] = useState(null); // { testorId, testorNome, hora, value }
 
   const [mostrarExtras, setMostrarExtras] = useState(false);
 
@@ -227,13 +229,19 @@ export default function ProductionControl() {
     longPressTriggered.current[key] = false;
     longPressTimers.current[key] = setTimeout(() => {
       longPressTriggered.current[key] = true;
-      const currentVal = cellMapRef.current[testorId]?.[hora];
-      let value = "0";
-      if (field === "producao") value = String(currentVal?.carros_produzidos ?? 0);
-      else if (field === "justificativa") value = currentVal?.justificativa ?? "";
-      else value = String(currentVal?.[field] ?? 0);
-      setEditingCell({ testorId, testorNome, hora, field, value });
-    }, 600);
+      if (field === "producao") {
+        // Abre o StepperModal (UX otimizado para uso industrial)
+        const currentVal = cellMapRef.current[testorId]?.[hora]?.carros_produzidos ?? 0;
+        if (navigator.vibrate) navigator.vibrate([30, 20, 30]);
+        setStepperCell({ testorId, testorNome, hora, value: currentVal });
+      } else {
+        const currentVal = cellMapRef.current[testorId]?.[hora];
+        let value = "0";
+        if (field === "justificativa") value = currentVal?.justificativa ?? "";
+        else value = String(currentVal?.[field] ?? 0);
+        setEditingCell({ testorId, testorNome, hora, field, value });
+      }
+    }, 400);
   }, []);
 
   const cancelLongPress = useCallback((testorId, hora, field = "producao") => {
@@ -521,6 +529,20 @@ export default function ProductionControl() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 pb-20 lg:pb-4">
+      {/* Stepper Modal — UX industrial com luvas */}
+      {stepperCell && (
+        <StepperModal
+          testor={stepperCell.testorNome}
+          hora={stepperCell.hora}
+          initialValue={stepperCell.value}
+          onConfirm={(val) => {
+            saveField(stepperCell.testorId, stepperCell.testorNome, stepperCell.hora, "producao", val);
+            setStepperCell(null);
+          }}
+          onClose={() => setStepperCell(null)}
+        />
+      )}
+
       {/* Modal edição numérica / justificativa */}
       {editingCell && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setEditingCell(null)}>

@@ -15,6 +15,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ShiftOverview from "@/components/dashboard/ShiftOverview";
 import ShiftGoalChart from "@/components/dashboard/ShiftGoalChart";
+import TestorRankingCard from "@/components/dashboard/TestorRankingCard";
+import ShiftDeviationForecast from "@/components/dashboard/ShiftDeviationForecast";
 import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
 
 const gravBadge = {
@@ -287,8 +289,18 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Previsão de Desvio IA ── */}
+      <ShiftDeviationForecast
+        prodData={prodTurno}
+        lossData={lossesTurno}
+        currentShiftKey={currentShift.key}
+      />
+
       {/* ── Gráfico Planejado vs Realizado ── */}
       <ShiftGoalChart prodData={allProd} lossData={allLosses} date={activeDate} />
+
+      {/* ── Ranking de Testores (MTBF) ── */}
+      <TestorRankingCard />
 
       {/* ── Status Testores + Ocorrências ── */}
       <div className="grid lg:grid-cols-2 gap-4">

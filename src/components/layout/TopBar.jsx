@@ -15,7 +15,7 @@ const funcaoColors = {
 };
 
 export default function TopBar({ onMenuClick, profile, onProfileSaved }) {
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, isAutoNight } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const now = new Date();
@@ -44,7 +44,7 @@ export default function TopBar({ onMenuClick, profile, onProfileSaved }) {
             size="icon"
             onClick={toggle}
             className="text-muted-foreground hover:text-foreground"
-            title={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+            title={isAutoNight ? "Tema escuro automático (3º turno)" : theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
           >
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
