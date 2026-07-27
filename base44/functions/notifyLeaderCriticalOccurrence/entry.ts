@@ -12,8 +12,12 @@ const tipoLabel = {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const body = await req.json();
 
+    // Autenticação obrigatória — apenas usuários autenticados podem disparar notificações
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
     const { event, data } = body;
 
     // Só processa criação de ocorrências críticas
@@ -67,11 +71,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Retorna apenas contagens — nunca expõe telefones ou links pessoais
     return Response.json({
       success: true,
-      notificados,
+      notificados_count: notificados.length,
+      sem_telefone_count: semTelefone.length,
+      notificados: notificados.map(n => ({ nome: n.nome, whatsapp_link: n.whatsapp_link })),
       semTelefone,
-      mensagem
     });
 
   } catch (error) {

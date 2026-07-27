@@ -43,8 +43,30 @@ const DEFAULT_LOSS_ITEMS = [
   "R2 LINHA", "FALHA IDT", "SIST FIS (PINT)",
 ];
 
+// Sanitiza texto de usuário para inserção em HTML (previne XSS)
+function escHtml(str: unknown): string {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+// Valida que uma URL vem de storage confiável (evita src injetado)
+function safeSrc(url: unknown): string {
+  if (typeof url !== "string") return "";
+  if (/^https?:\/\/(storage|cdn)\.base44\.com\//i.test(url)) return url;
+  return "";
+}
+
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
+
+  // Autenticação obrigatória
+  const user = await base44.auth.me().catch(() => null);
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   // Aceita turno e data via payload (ou detecta automaticamente)
   const body = await req.json().catch(() => ({}));
@@ -133,19 +155,19 @@ Deno.serve(async (req) => {
 
   const rankRows = lossRanking.map(([item, val], i) => `
     <tr>
-      <td><span style="background:${i===0?'#fee2e2':i<=2?'#fff7ed':'#eff6ff'};color:${i===0?'#991b1b':i<=2?'#9a3412':'#1e40af'};padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700">${i+1}°</span>&nbsp;${item}</td>
-      <td style="text-align:center;font-weight:800;color:${i===0?'#dc2626':i<=2?'#ea580c':'#3b82f6'}">${val}</td>
+      <td><span style="background:${i===0?'#fee2e2':i<=2?'#fff7ed':'#eff6ff'};color:${i===0?'#991b1b':i<=2?'#9a3412':'#1e40af'};padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700">${i+1}°</span>&nbsp;${escHtml(item)}</td>
+      <td style="text-align:center;font-weight:800;color:${i===0?'#dc2626':i<=2?'#ea580c':'#3b82f6'}">${Number(val)}</td>
     </tr>`).join("");
 
   const testorRows = Object.entries(testorMap).map(([nome, total]) => `
-    <tr><td>${nome}</td><td style="text-align:center;font-weight:700;color:#1d4ed8">${total}</td></tr>`).join("");
+    <tr><td>${escHtml(nome)}</td><td style="text-align:center;font-weight:700;color:#1d4ed8">${Number(total)}</td></tr>`).join("");
 
   const occRows = occDia.map(o => `
     <tr>
-      <td>${o.tipo?.replace(/_/g," ") || "—"}</td>
-      <td>${o.testor || "—"}</td>
-      <td><span style="background:${o.gravidade==='critica'?'#fee2e2':o.gravidade==='alta'?'#ffedd5':'#fef3c7'};color:${o.gravidade==='critica'?'#991b1b':o.gravidade==='alta'?'#9a3412':'#92400e'};padding:2px 6px;border-radius:999px;font-size:8px;font-weight:700">${o.gravidade?.toUpperCase() || "—"}</span></td>
-      <td>${o.descricao || "—"}</td>
+      <td>${escHtml(o.tipo?.replace(/_/g," "))}</td>
+      <td>${escHtml(o.testor)}</td>
+      <td><span style="background:${o.gravidade==='critica'?'#fee2e2':o.gravidade==='alta'?'#ffedd5':'#fef3c7'};color:${o.gravidade==='critica'?'#991b1b':o.gravidade==='alta'?'#9a3412':'#92400e'};padding:2px 6px;border-radius:999px;font-size:8px;font-weight:700">${escHtml(o.gravidade?.toUpperCase())}</span></td>
+      <td>${escHtml(o.descricao)}</td>
     </tr>`).join("");
 
   const html = `<!DOCTYPE html><html lang="pt-BR"><head>
@@ -350,11 +372,14 @@ Deno.serve(async (req) => {
     <table>
       <thead><tr><th>Testor · Hora</th><th>Justificativa</th></tr></thead>
       <tbody>
-        ${Object.entries(justMap).map(([key, j]) => `
+        ${Object.entries(justMap).map(([key, j]) => {
+          const safeFoto = safeSrc(j.fotoUrl);
+          return `
           <tr>
-            <td style="white-space:nowrap;font-weight:700;color:#1d4ed8">${key.replace("-", " · ")}</td>
-            <td>${j.texto}${j.fotoUrl ? `<br/><img src="${j.fotoUrl}" style="max-height:100px;max-width:180px;border-radius:6px;margin-top:6px;object-fit:cover;border:1px solid #e2e8f0" />` : ""}</td>
-          </tr>`).join("")}
+            <td style="white-space:nowrap;font-weight:700;color:#1d4ed8">${escHtml(key.replace("-", " · "))}</td>
+            <td>${escHtml(j.texto)}${safeFoto ? `<br/><img src="${safeFoto}" style="max-height:100px;max-width:180px;border-radius:6px;margin-top:6px;object-fit:cover;border:1px solid #e2e8f0" />` : ""}</td>
+          </tr>`;
+        }).join("")}
       </tbody>
     </table>
   </div>` : ""}

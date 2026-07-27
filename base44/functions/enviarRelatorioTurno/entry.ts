@@ -28,13 +28,12 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Suporta chamada manual (autenticada) ou automação (service role via payload)
-    let isAutomation = false;
-    let payload = {};
-    try {
-      payload = await req.clone().json();
-      isAutomation = payload._automation === true;
-    } catch (_) {}
+    // Autenticação obrigatória — aceita usuário autenticado OU token de automação via header
+    const automationSecret = req.headers.get("x-automation-secret");
+    const isAutomation = automationSecret !== null && automationSecret === Deno.env.get("AUTOMATION_SECRET");
+
+    let payload: Record<string, unknown> = {};
+    try { payload = await req.clone().json(); } catch (_) {}
 
     if (!isAutomation) {
       const user = await base44.auth.me();
@@ -43,7 +42,7 @@ Deno.serve(async (req) => {
 
     const now = getBrasiliaTime();
     const today = now.toISOString().slice(0, 10);
-    const turno = payload.turno ? { key: payload.turno, label: payload.turnoLabel || payload.turno } : detectTurno();
+    const turno = payload.turno ? { key: payload.turno, label: (payload.turnoLabel || payload.turno) as string } : detectTurno();
 
     // Busca dados do turno
     const [prodRecords, lossRecords, occurrences, maintenance, tasks] = await Promise.all([
