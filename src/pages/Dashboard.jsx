@@ -17,6 +17,7 @@ import ShiftOverview from "@/components/dashboard/ShiftOverview";
 import ShiftGoalChart from "@/components/dashboard/ShiftGoalChart";
 import TestorRankingCard from "@/components/dashboard/TestorRankingCard";
 import ShiftDeviationForecast from "@/components/dashboard/ShiftDeviationForecast";
+import EfficiencyRankingCard from "@/components/dashboard/EfficiencyRankingCard";
 import { detectCurrentShift, getTodayShiftData } from "@/lib/shiftDetector";
 
 const gravBadge = {
@@ -299,8 +300,9 @@ export default function Dashboard() {
       {/* ── Gráfico Planejado vs Realizado ── */}
       <ShiftGoalChart prodData={allProd} lossData={allLosses} date={activeDate} />
 
-      {/* ── Ranking de Testores (MTBF) ── */}
+      {/* ── Ranking de Testores (MTBF) + Eficiência de Equipe ── */}
       <TestorRankingCard />
+      <EfficiencyRankingCard />
 
       {/* ── Status Testores + Ocorrências ── */}
       <div className="grid lg:grid-cols-2 gap-4">

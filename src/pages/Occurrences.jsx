@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, AlertTriangle, CheckCircle2, Clock, Trash2, Printer, FileSpreadsheet } from "lucide-react";
+import { Plus, AlertTriangle, CheckCircle2, Clock, Trash2, Printer, FileSpreadsheet, MessageCircle, X } from "lucide-react";
 import { exportCsv } from "@/lib/exportCsv";
 import { exportOccurrencesPdf } from "@/lib/exportPdf";
 
@@ -39,6 +39,7 @@ export default function Occurrences() {
   const [form, setForm] = useState(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [filter, setFilter] = useState("todas");
+  const [notifyResult, setNotifyResult] = useState(null); // { notificados, semTelefone }
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -68,8 +69,9 @@ export default function Occurrences() {
       if (d.gravidade === "critica") {
         const res = await base44.functions.invoke("notifyLeaderCriticalOccurrence", { event: { type: "create" }, data: occ });
         const notificados = res?.data?.notificados || [];
+        const semTelefone = res?.data?.semTelefone || [];
+        setNotifyResult({ notificados, semTelefone });
         if (notificados.length > 0) {
-          // Abre o WhatsApp para cada líder com telefone cadastrado
           notificados.forEach(n => window.open(n.whatsapp_link, "_blank"));
         }
       }
@@ -103,6 +105,35 @@ export default function Occurrences() {
 
   return (
     <div className="space-y-4 pb-24 lg:pb-6">
+      {/* Banner de notificação WhatsApp */}
+      {notifyResult && (
+        <div className={`flex items-start justify-between gap-3 p-3 rounded-xl border ${
+          notifyResult.notificados.length > 0
+            ? "bg-green-500/10 border-green-500/30 text-green-400"
+            : "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+        }`}>
+          <div className="flex items-start gap-2.5">
+            <MessageCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              {notifyResult.notificados.length > 0 ? (
+                <>
+                  <p className="font-bold">WhatsApp aberto para {notifyResult.notificados.length} líder(es):</p>
+                  <p className="text-green-300/80">{notifyResult.notificados.map(n => n.nome).join(", ")}</p>
+                </>
+              ) : (
+                <p className="font-bold">Nenhum líder com telefone cadastrado encontrado.</p>
+              )}
+              {notifyResult.semTelefone.length > 0 && (
+                <p className="text-yellow-300/70 mt-0.5">Sem telefone: {notifyResult.semTelefone.join(", ")}</p>
+              )}
+            </div>
+          </div>
+          <button onClick={() => setNotifyResult(null)} className="shrink-0 hover:opacity-70">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-orange-400" /> Ocorrências</h1>
