@@ -88,5 +88,10 @@ module.exports = {
   		}
   	}
   },
+  safelist: [
+    "page-section", "page-section-header", "page-section-title",
+    "data-table", "stat-value", "stat-label",
+    "badge-success", "badge-warning", "badge-danger", "badge-neutral", "badge-info",
+  ],
   plugins: [require("tailwindcss-animate")],
 }

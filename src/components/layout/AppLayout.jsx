@@ -18,13 +18,13 @@ export default function AppLayout({ profile, onProfileSaved }) {
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(!collapsed)}
         />
-        <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${collapsed ? 'lg:ml-[72px]' : 'lg:ml-64'}`}>
+        <div className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${collapsed ? 'lg:ml-[52px]' : 'lg:ml-56'}`}>
           <TopBar
             onMenuClick={() => setSidebarOpen(true)}
             profile={profile}
             onProfileSaved={onProfileSaved}
           />
-          <main className="flex-1 p-4 pb-20 lg:p-6 lg:pb-6 overflow-auto">
+          <main className="flex-1 p-4 pb-20 lg:p-5 lg:pb-5 overflow-auto">
             <div className="max-w-screen-2xl mx-auto">
               <Outlet />
             </div>
