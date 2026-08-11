@@ -1,0 +1,86 @@
+{
+  "name": "AvailableApp",
+  "type": "object",
+  "properties": {
+    "nome": {
+      "type": "string",
+      "description": "Nome de exibi\u00e7\u00e3o da aplica\u00e7\u00e3o"
+    },
+    "descricao": {
+      "type": "string",
+      "description": "Descri\u00e7\u00e3o curta exibida no portal"
+    },
+    "sistema_key": {
+      "type": "string",
+      "description": "Identificador \u00fanico do sistema (ex: zp7, chefinho)"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Chave do \u00edcone mapeada no frontend",
+      "default": "factory"
+    },
+    "cor": {
+      "type": "string",
+      "enum": [
+        "blue",
+        "green",
+        "amber",
+        "purple",
+        "cyan",
+        "red",
+        "slate"
+      ],
+      "default": "blue",
+      "description": "Cor de destaque do cart\u00e3o"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "route",
+        "url"
+      ],
+      "description": "route = navega\u00e7\u00e3o interna; url = abre aplica\u00e7\u00e3o externa"
+    },
+    "target": {
+      "type": "string",
+      "description": "Rota interna (ex: /zp7) ou URL externa (https://...)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ativo",
+        "inativo"
+      ],
+      "default": "ativo"
+    },
+    "ordem": {
+      "type": "number",
+      "default": 0,
+      "description": "Ordem de exibi\u00e7\u00e3o (menor primeiro)"
+    }
+  },
+  "required": [
+    "nome",
+    "sistema_key",
+    "tipo",
+    "target"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

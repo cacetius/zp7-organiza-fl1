@@ -2,13 +2,16 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, ClipboardList, Gauge, AlertTriangle, CheckSquare,
-  ArrowRightLeft, Wrench, BarChart3, TrendingDown, Factory, X, PanelLeftClose, PanelLeftOpen
+  ArrowRightLeft, Wrench, BarChart3, TrendingDown, Factory, X, PanelLeftClose, PanelLeftOpen,
+  Grid3x3
 } from "lucide-react";
 
 const navGroups = [
   {
     label: "Principal",
-    items: [{ path: "/", icon: LayoutDashboard, label: "Painel" }],
+    items: [
+      { path: "/zp7", icon: LayoutDashboard, label: "Painel" },
+    ],
   },
   {
     label: "Produção",
@@ -134,6 +137,19 @@ export default function Sidebar({ open, onClose, collapsed, onToggleCollapse }) 
             </div>
           )}
         </nav>
+
+        {/* Voltar à Central de Aplicações */}
+        <div className="px-2 pt-2 border-t border-sidebar-border shrink-0">
+          <Link
+            to="/"
+            onClick={onClose}
+            title="Voltar à Central de Aplicações"
+            className="flex items-center gap-2.5 px-2 py-1.5 rounded text-[12px] font-medium text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent border-l-2 border-transparent pl-[6px] w-full transition-colors"
+          >
+            <Grid3x3 className="w-3.5 h-3.5 shrink-0 opacity-60" />
+            {!collapsed && <span className="truncate">Central de Aplicações</span>}
+          </Link>
+        </div>
 
         {/* Footer collapse */}
         <div className="hidden lg:block p-2 border-t border-sidebar-border shrink-0">

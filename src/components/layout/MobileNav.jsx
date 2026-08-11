@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Gauge, TrendingDown, Factory, BarChart3 } from "lucide-react";
 
 const mobileNav = [
-  { path: "/", icon: LayoutDashboard, label: "Painel" },
+  { path: "/zp7", icon: LayoutDashboard, label: "Painel" },
   { path: "/testores", icon: Gauge, label: "Testores" },
   { path: "/controle-producao", icon: Factory, label: "Produção" },
   { path: "/controle-perdas", icon: TrendingDown, label: "Perdas" },

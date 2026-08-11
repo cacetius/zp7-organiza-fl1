@@ -11,6 +11,8 @@ import { base44 } from "@/api/base44Client";
 import AppLayout from "./components/layout/AppLayout";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
+import CentralApplications from "./pages/CentralApplications";
+import ManageApplications from "./pages/ManageApplications";
 
 // Lazy load de todas as páginas secundárias — carregam só quando o usuário navegar
 const Tasks = React.lazy(() => import("./pages/Tasks"));
@@ -68,8 +70,13 @@ function AppShell() {
 
   return (
     <Routes>
+      {/* Central de Aplicações — portal externo ao núcleo do ZP7 */}
+      <Route path="/central/gerenciar" element={<ManageApplications profile={profile} />} />
+      <Route path="/" element={<CentralApplications profile={profile} />} />
+
+      {/* Núcleo do ZP7 — aplicação independente, abragida pelo portal */}
       <Route element={<AppLayout profile={profile} onProfileSaved={loadProfile} />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/zp7" element={<Dashboard />} />
         <Route path="/tarefas" element={<React.Suspense fallback={<PageLoader />}><Tasks /></React.Suspense>} />
         <Route path="/testores" element={<React.Suspense fallback={<PageLoader />}><Testores /></React.Suspense>} />
         <Route path="/ocorrencias" element={<React.Suspense fallback={<PageLoader />}><Occurrences /></React.Suspense>} />
