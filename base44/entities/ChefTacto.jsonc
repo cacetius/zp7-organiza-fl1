@@ -1,0 +1,65 @@
+{
+  "name": "ChefTacto",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string"
+    },
+    "cell_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "cycle_time": {
+      "type": "number"
+    },
+    "takt_time": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "maintenance"
+      ],
+      "default": "active"
+    },
+    "model_3d_url": {
+      "type": "string"
+    },
+    "position_x": {
+      "type": "number"
+    },
+    "position_y": {
+      "type": "number"
+    },
+    "position_z": {
+      "type": "number"
+    },
+    "rotation_y": {
+      "type": "number"
+    },
+    "thumbnail_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "team_id",
+    "name",
+    "code"
+  ]
+}

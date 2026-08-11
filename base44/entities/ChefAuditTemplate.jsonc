@@ -1,0 +1,140 @@
+{
+  "name": "ChefAuditTemplate",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "methodology": {
+      "type": "string",
+      "enum": [
+        "5S",
+        "LPA",
+        "VDA",
+        "ISO",
+        "custom"
+      ],
+      "default": "custom"
+    },
+    "description": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "frequency": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly",
+        "quarterly",
+        "semiannual",
+        "annual",
+        "on_demand"
+      ]
+    },
+    "approval_threshold": {
+      "type": "number",
+      "default": 80
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "yes_no",
+                    "score",
+                    "text",
+                    "multiple_choice"
+                  ]
+                },
+                "weight": {
+                  "type": "number"
+                },
+                "required_evidence": {
+                  "type": "boolean"
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "criteria": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "requires_photo": {
+      "type": "boolean",
+      "default": true
+    },
+    "requires_comment": {
+      "type": "boolean",
+      "default": false
+    },
+    "auto_create_nc": {
+      "type": "boolean",
+      "default": true
+    },
+    "target_entity": {
+      "type": "string",
+      "enum": [
+        "area",
+        "cell",
+        "team",
+        "tacto",
+        "asset",
+        "tool"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "draft",
+        "archived"
+      ],
+      "default": "draft"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    }
+  },
+  "required": [
+    "name",
+    "methodology"
+  ]
+}

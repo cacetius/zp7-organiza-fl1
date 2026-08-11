@@ -1,0 +1,88 @@
+{
+  "name": "ChefEPI",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do EPI"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "capacete",
+        "luva",
+        "oculos",
+        "protetor_auricular",
+        "mascara",
+        "bota",
+        "cinto_seguranca",
+        "uniforme",
+        "jaleco",
+        "respirador",
+        "outro"
+      ],
+      "description": "Tipo de EPI"
+    },
+    "team": {
+      "type": "string",
+      "description": "Equipe"
+    },
+    "cell": {
+      "type": "string",
+      "description": "C\u00e9lula"
+    },
+    "area": {
+      "type": "string",
+      "description": "\u00c1rea"
+    },
+    "quantity_required": {
+      "type": "number",
+      "default": 1
+    },
+    "quantity_available": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "suficiente",
+        "insuficiente",
+        "pendente",
+        "solicitado"
+      ],
+      "default": "pendente"
+    },
+    "request_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "requested_by_name": {
+      "type": "string"
+    },
+    "responsible_name": {
+      "type": "string"
+    },
+    "received_by_name": {
+      "type": "string"
+    },
+    "delivered_to_name": {
+      "type": "string"
+    },
+    "delivery_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "photo_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "team"
+  ]
+}

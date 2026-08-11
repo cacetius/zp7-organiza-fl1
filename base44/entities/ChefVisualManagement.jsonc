@@ -1,0 +1,91 @@
+{
+  "name": "ChefVisualManagement",
+  "type": "object",
+  "properties": {
+    "factory_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "tacto_id": {
+      "type": "string"
+    },
+    "asset_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "label",
+        "sign",
+        "stripe",
+        "marking",
+        "signaling",
+        "kanban",
+        "andon",
+        "other"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "condition": {
+      "type": "string",
+      "enum": [
+        "good",
+        "degraded",
+        "damaged",
+        "missing"
+      ],
+      "default": "good"
+    },
+    "responsible": {
+      "type": "string"
+    },
+    "last_inspection_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "next_inspection_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "pending_replacement"
+      ],
+      "default": "active"
+    },
+    "standard_url": {
+      "type": "string"
+    },
+    "observations": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "name",
+    "condition",
+    "status"
+  ]
+}

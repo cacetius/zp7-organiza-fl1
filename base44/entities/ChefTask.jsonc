@@ -1,0 +1,73 @@
+{
+  "name": "ChefTask",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome da tarefa"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "diaria",
+        "semanal",
+        "mensal"
+      ],
+      "default": "diaria"
+    },
+    "type": {
+      "type": "string",
+      "description": "Tipo espec\u00edfico da tarefa"
+    },
+    "shift": {
+      "type": "string",
+      "enum": [
+        "1",
+        "2",
+        "3"
+      ],
+      "description": "Turno: 1 (06-15), 2 (15-23:45), 3 (21-06)"
+    },
+    "area": {
+      "type": "string"
+    },
+    "cell": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "responsible_id": {
+      "type": "string"
+    },
+    "responsible_name": {
+      "type": "string"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "em_andamento",
+        "concluida"
+      ],
+      "default": "pendente"
+    },
+    "evidence_url": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "category"
+  ]
+}

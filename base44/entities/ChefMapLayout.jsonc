@@ -1,0 +1,102 @@
+{
+  "name": "ChefMapLayout",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do elemento"
+    },
+    "element_type": {
+      "type": "string",
+      "enum": [
+        "bancada",
+        "faixa",
+        "area",
+        "corredor",
+        "seta",
+        "separador",
+        "limite"
+      ]
+    },
+    "color": {
+      "type": "string",
+      "description": "Cor em hex"
+    },
+    "width": {
+      "type": "number"
+    },
+    "height": {
+      "type": "number"
+    },
+    "thickness": {
+      "type": "number"
+    },
+    "length": {
+      "type": "number"
+    },
+    "orientation": {
+      "type": "string",
+      "enum": [
+        "horizontal",
+        "vertical"
+      ]
+    },
+    "area_type": {
+      "type": "string",
+      "enum": [
+        "producao",
+        "estoque",
+        "qualidade",
+        "retrabalho",
+        "livre"
+      ]
+    },
+    "pos_x": {
+      "type": "number"
+    },
+    "pos_y": {
+      "type": "number"
+    },
+    "rotation": {
+      "type": "number"
+    },
+    "scale": {
+      "type": "number",
+      "default": 1
+    },
+    "cell": {
+      "type": "string"
+    },
+    "area": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "group_name": {
+      "type": "string"
+    },
+    "group_color": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ativo",
+        "inativo",
+        "manutencao"
+      ],
+      "default": "ativo"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "element_type"
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "name": "ChefCell",
+  "type": "object",
+  "properties": {
+    "area_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "responsible": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "model_3d_url": {
+      "type": "string"
+    },
+    "position_x": {
+      "type": "number"
+    },
+    "position_y": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "area_id",
+    "name",
+    "code"
+  ]
+}

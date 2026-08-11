@@ -1,0 +1,139 @@
+{
+  "name": "ChefAsset",
+  "type": "object",
+  "properties": {
+    "tacto_id": {
+      "type": "string"
+    },
+    "team_id": {
+      "type": "string"
+    },
+    "cell_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "patrimony": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "machine",
+        "workbench",
+        "scanner",
+        "torque_wrench",
+        "screwdriver",
+        "tool",
+        "cabinet",
+        "shelf",
+        "fifo",
+        "fefo",
+        "device",
+        "panel",
+        "label",
+        "marking",
+        "other"
+      ]
+    },
+    "manufacturer": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "serial_number": {
+      "type": "string"
+    },
+    "installation_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "useful_life_years": {
+      "type": "number"
+    },
+    "responsible": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "maintenance",
+        "calibration",
+        "scrapped"
+      ],
+      "default": "active"
+    },
+    "criticality": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "qr_code": {
+      "type": "string"
+    },
+    "model_3d_url": {
+      "type": "string"
+    },
+    "position_x": {
+      "type": "number"
+    },
+    "position_y": {
+      "type": "number"
+    },
+    "position_z": {
+      "type": "number"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_maintenance_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "next_calibration_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "status"
+  ]
+}

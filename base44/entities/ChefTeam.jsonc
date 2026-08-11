@@ -1,0 +1,52 @@
+{
+  "name": "ChefTeam",
+  "type": "object",
+  "properties": {
+    "cell_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "shift": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "leader": {
+      "type": "string"
+    },
+    "members_count": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "cell_id",
+    "name",
+    "code"
+  ]
+}

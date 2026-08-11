@@ -1,0 +1,58 @@
+{
+  "name": "ChefNotification",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "audit",
+        "maintenance",
+        "calibration",
+        "nc",
+        "action_plan",
+        "alert",
+        "info"
+      ]
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false
+    },
+    "link_type": {
+      "type": "string"
+    },
+    "link_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "message",
+    "type"
+  ]
+}

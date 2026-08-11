@@ -1,0 +1,98 @@
+{
+  "name": "ChefTool",
+  "type": "object",
+  "properties": {
+    "tacto_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "patrimony": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "manufacturer": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "serial_number": {
+      "type": "string"
+    },
+    "qr_code": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "available",
+        "in_use",
+        "maintenance",
+        "calibration",
+        "scrapped"
+      ],
+      "default": "available"
+    },
+    "responsible": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "calibration_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "calibration_frequency_days": {
+      "type": "number"
+    },
+    "last_calibration_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "next_calibration_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "certificate_url": {
+      "type": "string"
+    },
+    "certificate_expiry": {
+      "type": "string",
+      "format": "date"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "status"
+  ]
+}

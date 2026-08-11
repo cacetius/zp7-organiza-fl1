@@ -1,0 +1,140 @@
+{
+  "name": "ChefEquipment",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nome do equipamento"
+    },
+    "code": {
+      "type": "string",
+      "description": "C\u00f3digo identificador"
+    },
+    "serial_number": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "manufacturer": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "ferramenta",
+        "maquina",
+        "torque",
+        "dispositivo",
+        "medicao"
+      ]
+    },
+    "photo_url": {
+      "type": "string"
+    },
+    "factory": {
+      "type": "string"
+    },
+    "area": {
+      "type": "string"
+    },
+    "cell": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "tact": {
+      "type": "string"
+    },
+    "side": {
+      "type": "string",
+      "enum": [
+        "esquerdo",
+        "direito",
+        "centro",
+        "na"
+      ]
+    },
+    "responsible_id": {
+      "type": "string"
+    },
+    "responsible_name": {
+      "type": "string"
+    },
+    "has_certificate": {
+      "type": "boolean",
+      "default": false
+    },
+    "certificate_url": {
+      "type": "string"
+    },
+    "calibration_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "expiry_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "next_calibration": {
+      "type": "string",
+      "format": "date"
+    },
+    "criticality": {
+      "type": "string",
+      "enum": [
+        "baixa",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "baixa"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "conforme",
+        "atencao",
+        "vencido",
+        "inativo"
+      ],
+      "default": "conforme"
+    },
+    "item_type": {
+      "type": "string",
+      "enum": [
+        "maquina",
+        "ferramenta",
+        "torquimetro",
+        "aparafusadeira",
+        "dispositivo",
+        "bancada",
+        "prateleira",
+        "armario",
+        "etiqueta",
+        "plaqueta"
+      ]
+    },
+    "has_demarcation": {
+      "type": "boolean",
+      "default": false
+    },
+    "demarcation_condition": {
+      "type": "string",
+      "enum": [
+        "bom",
+        "reparo",
+        "ausente"
+      ],
+      "default": "bom"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "category"
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "name": "ChefNonConformity",
+  "type": "object",
+  "properties": {
+    "audit_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "asset_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "resolved",
+        "closed",
+        "cancelled"
+      ],
+      "default": "open"
+    },
+    "responsible_id": {
+      "type": "string"
+    },
+    "responsible_name": {
+      "type": "string"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "resolution_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "root_cause": {
+      "type": "string"
+    },
+    "immediate_action": {
+      "type": "string"
+    },
+    "corrective_action": {
+      "type": "string"
+    },
+    "preventive_action": {
+      "type": "string"
+    },
+    "evidence_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resolution_evidence_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nc_number": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "audit",
+        "maintenance",
+        "operator",
+        "quality",
+        "other"
+      ],
+      "default": "audit"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "title",
+    "severity",
+    "status"
+  ]
+}

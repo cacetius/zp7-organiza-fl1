@@ -1,0 +1,70 @@
+{
+  "name": "ChefCalibration",
+  "type": "object",
+  "properties": {
+    "asset_id": {
+      "type": "string"
+    },
+    "tool_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "certificate_number": {
+      "type": "string"
+    },
+    "calibration_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "next_calibration_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "responsible_lab": {
+      "type": "string"
+    },
+    "technician": {
+      "type": "string"
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "approved",
+        "rejected",
+        "conditional"
+      ],
+      "default": "approved"
+    },
+    "measurement_found": {
+      "type": "string"
+    },
+    "tolerance": {
+      "type": "string"
+    },
+    "certificate_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "valid",
+        "expired",
+        "expiring_soon"
+      ],
+      "default": "valid"
+    },
+    "observations": {
+      "type": "string"
+    },
+    "cost": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "calibration_date",
+    "next_calibration_date",
+    "result"
+  ]
+}

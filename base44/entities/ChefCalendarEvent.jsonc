@@ -1,0 +1,63 @@
+{
+  "name": "ChefCalendarEvent",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "T\u00edtulo do evento"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "auditoria",
+        "calibracao",
+        "vencimento",
+        "troca_etiqueta",
+        "troca_faixa",
+        "revisao",
+        "tarefa"
+      ],
+      "description": "Tipo do evento"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Data do evento"
+    },
+    "area": {
+      "type": "string"
+    },
+    "cell": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "responsible_name": {
+      "type": "string"
+    },
+    "related_id": {
+      "type": "string"
+    },
+    "related_type": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "concluido",
+        "atrasado"
+      ],
+      "default": "pendente"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "type",
+    "date"
+  ]
+}

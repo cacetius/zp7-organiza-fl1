@@ -1,0 +1,116 @@
+{
+  "name": "ChefMaintenanceOrder",
+  "type": "object",
+  "properties": {
+    "asset_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "order_number": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "preventive",
+        "corrective",
+        "predictive",
+        "improvement"
+      ],
+      "default": "corrective"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "in_progress",
+        "completed",
+        "cancelled",
+        "on_hold"
+      ],
+      "default": "planned"
+    },
+    "responsible": {
+      "type": "string"
+    },
+    "team": {
+      "type": "string"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_date": {
+      "type": "string"
+    },
+    "completion_date": {
+      "type": "string"
+    },
+    "estimated_duration_hours": {
+      "type": "number"
+    },
+    "actual_duration_hours": {
+      "type": "number"
+    },
+    "parts_used": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cost": {
+      "type": "number"
+    },
+    "evidence_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "observations": {
+      "type": "string"
+    },
+    "next_maintenance_date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "title",
+    "type",
+    "priority",
+    "status"
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "name": "ChefActionPlan",
+  "type": "object",
+  "properties": {
+    "nc_id": {
+      "type": "string"
+    },
+    "audit_id": {
+      "type": "string"
+    },
+    "factory_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "what": {
+      "type": "string"
+    },
+    "why": {
+      "type": "string"
+    },
+    "who": {
+      "type": "string"
+    },
+    "where": {
+      "type": "string"
+    },
+    "when": {
+      "type": "string",
+      "format": "date"
+    },
+    "how": {
+      "type": "string"
+    },
+    "how_much": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed",
+        "overdue",
+        "cancelled"
+      ],
+      "default": "pending"
+    },
+    "responsible_id": {
+      "type": "string"
+    },
+    "responsible_name": {
+      "type": "string"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "completion_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "completion_percentage": {
+      "type": "number",
+      "default": 0
+    },
+    "evidence_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "responsible": {
+            "type": "string"
+          },
+          "due_date": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "completed_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "title",
+    "priority",
+    "status"
+  ]
+}
