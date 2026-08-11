@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { Map, Plus, Pencil, Trash2, MousePointer2, Square, Minus } from "lucide-react";
 import FormDialog, { Field, inputCls, BtnSave, BtnCancel, StatusBadge } from "@/components/chefinho/FormDialog";
+import Mapa3D from "@/components/chefinho/Mapa3D";
+import { Boxes } from "lucide-react";
 
 const ET = { bancada:"Bancada", faixa:"Faixa", area:"Área", corredor:"Corredor", seta:"Seta", separador:"Separador", limite:"Limite" };
 const AT = { producao:"Produção", estoque:"Estoque", qualidade:"Qualidade", retrabalho:"Retrabalho", livre:"Livre" };
@@ -20,6 +22,9 @@ export default function DigitalMap() {
 
   const { data: items = [] } = useQuery({ queryKey: ["chef-map"], queryFn: () => base44.entities.ChefMapLayout.list() });
   const { data: layouts = [] } = useQuery({ queryKey: ["chef-vm-map"], queryFn: () => base44.entities.ChefVisualManagement.list() });
+  const { data: assets = [] } = useQuery({ queryKey: ["chef-assets-map"], queryFn: () => base44.entities.ChefAsset.list() });
+  const { data: areas = [] } = useQuery({ queryKey: ["chef-areas-map"], queryFn: () => base44.entities.ChefArea.list() });
+  const [view3D, setView3D] = useState(false);
 
   const openNew = () => { setForm({ ...BLANK, pos_x: 50 + Math.random()*400, pos_y: 50 + Math.random()*200 }); setEditing(null); setModalOpen(true); };
   const openEdit = (m) => { setForm({ ...BLANK, ...m }); setEditing(m.id); setModalOpen(true); };
@@ -35,7 +40,10 @@ export default function DigitalMap() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-lg font-semibold flex items-center gap-2"><Map className="w-5 h-5 text-primary" />Mapa Digital</h1>
           <p className="text-[13px] text-muted-foreground">Layout visual das células de produção</p></div>
-        <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"><Plus className="w-4 h-4" /> Novo elemento</button>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>setView3D(v=>!v)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors ${view3D?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground hover:bg-accent"}`}><Boxes className="w-4 h-4" /> {view3D?"Ver 2D":"Ver 3D"}</button>
+          <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"><Plus className="w-4 h-4" /> Novo elemento</button>
+        </div>
       </div>
 
       <div className="flex gap-2">
@@ -50,8 +58,11 @@ export default function DigitalMap() {
       </div>
 
       <div className="grid lg:grid-cols-4 gap-4">
-        <div ref={canvasRef} className="lg:col-span-3 panel p-0 overflow-hidden">
-          <div className="relative w-full" style={{ minHeight: 420, backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "20px 20px" }}>
+        <div className="lg:col-span-3 panel p-0 overflow-hidden">
+          {view3D ? (
+            <Mapa3D items={items} assets={assets} areas={areas} equipment={[]} />
+          ) : (
+          <div ref={canvasRef} className="relative w-full" style={{ minHeight: 420, backgroundImage: "radial-gradient(hsl(var(--border)) 1px, transparent 1px)", backgroundSize: "20px 20px" }}>
             {items.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">Nenhum elemento no mapa. Adicione bancadas, faixas e corredores.</div>
             ) : items.map(m => {
@@ -74,6 +85,7 @@ export default function DigitalMap() {
               );
             })}
           </div>
+          )}
         </div>
         <div className="panel p-4 lg:col-span-1">
           <p className="label-section mb-3">Elementos ({items.length})</p>
