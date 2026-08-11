@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ShieldAlert, PenTool, Map, Wrench, Gauge,
-  ClipboardCheck, AlertTriangle, Eye, ListChecks, Monitor,
+  ClipboardCheck, AlertTriangle, Eye, ListChecks, Monitor, CheckSquare,
   Calendar, BarChart3, Bot, Bell, LogOut, ChevronLeft, ChevronRight,
   X, Menu, FileText, HardHat, User, Database, ArrowLeft,
 } from "lucide-react";
@@ -26,6 +26,7 @@ const NAV = [
       { path: "/chefinho/auditoria-rapida",  icon: PenTool,        label: "Auditoria Rápida" },
       { path: "/chefinho/auditorias",        icon: ClipboardCheck, label: "Auditorias" },
       { path: "/chefinho/nao-conformidades", icon: AlertTriangle,  label: "Não Conformidades" },
+      { path: "/chefinho/planos-acoes",      icon: CheckSquare,    label: "Planos de Ação" },
       { path: "/chefinho/gestao-visual",     icon: Eye,            label: "Gestão Visual" },
       { path: "/chefinho/modelos",           icon: FileText,       label: "Modelos" },
     ],

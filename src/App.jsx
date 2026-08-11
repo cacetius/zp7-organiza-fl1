@@ -17,7 +17,26 @@ import ManageApplications from "./pages/ManageApplications";
 // Chefinho — aplicação interna reconstruída sob /chefinho/*
 import ChefLayout from "./components/chefinho/ChefLayout";
 import ChefDashboard from "./pages/chefinho/Dashboard";
-import ChefEmBreve from "./pages/chefinho/EmBreve";
+import ChefEquipment from "./pages/chefinho/Equipment";
+import ChefAudits from "./pages/chefinho/Audits";
+import ChefNonConformities from "./pages/chefinho/NonConformities";
+import ChefCalibrationCenter from "./pages/chefinho/CalibrationCenter";
+import ChefVisualManagement from "./pages/chefinho/VisualManagement";
+import ChefEPI from "./pages/chefinho/EPI";
+import ChefCalendarView from "./pages/chefinho/CalendarView";
+import ChefTemplates from "./pages/chefinho/Templates";
+import ChefMonitorBoard from "./pages/chefinho/MonitorBoard";
+import ChefRiskCenter from "./pages/chefinho/RiskCenter";
+import ChefFactoryPanel from "./pages/chefinho/FactoryPanel";
+import ChefDigitalMap from "./pages/chefinho/DigitalMap";
+import ChefChefinhoAI from "./pages/chefinho/ChefinhoAI";
+import ChefReports from "./pages/chefinho/Reports";
+import ChefNotifications from "./pages/chefinho/Notifications";
+import ChefProfile from "./pages/chefinho/Profile";
+import ChefCompleteProfile from "./pages/chefinho/CompleteProfile";
+import ChefDataAdmin from "./pages/chefinho/DataAdmin";
+import ChefActionPlans from "./pages/chefinho/ActionPlans";
+import ChefQuickAudit from "./pages/chefinho/QuickAudit";
 
 // Lazy load de todas as páginas secundárias — carregam só quando o usuário navegar
 const Tasks = React.lazy(() => import("./pages/Tasks"));
@@ -95,24 +114,26 @@ function AppShell() {
       {/* Chefinho GLSI — reconstruído internamente sob /chefinho/* */}
       <Route element={<ChefLayout />}>
         <Route path="/chefinho" element={<ChefDashboard />} />
-        <Route path="/chefinho/centro-risco" element={<ChefEmBreve nome="Centro de Risco" />} />
-        <Route path="/chefinho/auditoria-rapida" element={<ChefEmBreve nome="Auditoria Rápida" />} />
-        <Route path="/chefinho/auditorias" element={<ChefEmBreve nome="Auditorias" />} />
-        <Route path="/chefinho/nao-conformidades" element={<ChefEmBreve nome="Não Conformidades" />} />
-        <Route path="/chefinho/gestao-visual" element={<ChefEmBreve nome="Gestão Visual" />} />
-        <Route path="/chefinho/modelos" element={<ChefEmBreve nome="Modelos" />} />
-        <Route path="/chefinho/mapa" element={<ChefEmBreve nome="Mapa Digital" />} />
-        <Route path="/chefinho/painel-fabrica" element={<ChefEmBreve nome="Painel Fábrica" />} />
-        <Route path="/chefinho/equipamentos" element={<ChefEmBreve nome="Equipamentos" />} />
-        <Route path="/chefinho/calibracao" element={<ChefEmBreve nome="Calibração" />} />
-        <Route path="/chefinho/epis" element={<ChefEmBreve nome="EPIs" />} />
-        <Route path="/chefinho/quadro-monitor" element={<ChefEmBreve nome="Quadro Monitor" />} />
-        <Route path="/chefinho/calendario" element={<ChefEmBreve nome="Calendário" />} />
-        <Route path="/chefinho/relatorios" element={<ChefEmBreve nome="Relatórios" />} />
-        <Route path="/chefinho/chefinho-ia" element={<ChefEmBreve nome="Chefinho IA" />} />
-        <Route path="/chefinho/notificacoes" element={<ChefEmBreve nome="Notificações" />} />
-        <Route path="/chefinho/admin-dados" element={<ChefEmBreve nome="Administração de Dados" />} />
-        <Route path="/chefinho/perfil" element={<ChefEmBreve nome="Perfil" />} />
+        <Route path="/chefinho/centro-risco" element={<ChefRiskCenter />} />
+        <Route path="/chefinho/auditoria-rapida" element={<ChefQuickAudit />} />
+        <Route path="/chefinho/auditorias" element={<ChefAudits />} />
+        <Route path="/chefinho/nao-conformidades" element={<ChefNonConformities />} />
+        <Route path="/chefinho/planos-acoes" element={<ChefActionPlans />} />
+        <Route path="/chefinho/gestao-visual" element={<ChefVisualManagement />} />
+        <Route path="/chefinho/modelos" element={<ChefTemplates />} />
+        <Route path="/chefinho/mapa" element={<ChefDigitalMap />} />
+        <Route path="/chefinho/painel-fabrica" element={<ChefFactoryPanel />} />
+        <Route path="/chefinho/equipamentos" element={<ChefEquipment />} />
+        <Route path="/chefinho/calibracao" element={<ChefCalibrationCenter />} />
+        <Route path="/chefinho/epis" element={<ChefEPI />} />
+        <Route path="/chefinho/quadro-monitor" element={<ChefMonitorBoard />} />
+        <Route path="/chefinho/calendario" element={<ChefCalendarView />} />
+        <Route path="/chefinho/relatorios" element={<ChefReports />} />
+        <Route path="/chefinho/chefinho-ia" element={<ChefChefinhoAI />} />
+        <Route path="/chefinho/notificacoes" element={<ChefNotifications />} />
+        <Route path="/chefinho/admin-dados" element={<ChefDataAdmin />} />
+        <Route path="/chefinho/perfil" element={<ChefProfile />} />
+        <Route path="/chefinho/completar-perfil" element={<ChefCompleteProfile />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />
