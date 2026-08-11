@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { useTheme } from "@/lib/ThemeContext";
+import { Sun, Moon } from "lucide-react";
 
 /* ── Navigation structure — all under /chefinho/* ── */
 const NAV = [
@@ -99,6 +101,19 @@ function SideGroup({ group, collapsed }) {
       {collapsed && <div className="h-3" />}
       <div className="space-y-px">{group.items.map(i => <SideItem key={i.path} item={i} collapsed={collapsed} />)}</div>
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <button
+      onClick={toggle}
+      title={theme === "dark" ? "Modo claro" : "Modo escuro"}
+      className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded"
+    >
+      {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
   );
 }
 
@@ -202,6 +217,7 @@ export default function ChefLayout() {
             <span className="hidden sm:inline text-[11px] text-muted-foreground capitalize">· {today}</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <Link to="/chefinho/notificacoes" className="relative p-1.5 text-muted-foreground hover:text-foreground rounded">
               <Bell className="w-4 h-4" />
               {unread > 0 && (

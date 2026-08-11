@@ -4,6 +4,7 @@ import { queryClientInstance } from "@/lib/query-client";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
+import { ThemeProvider } from "@/lib/ThemeContext";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
@@ -160,7 +161,7 @@ const AuthenticatedApp = () => {
     }
   }
 
-  return <AppShell />;
+  return <ThemeProvider><AppShell /></ThemeProvider>;
 };
 
 function App() {

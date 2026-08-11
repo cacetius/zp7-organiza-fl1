@@ -3,15 +3,13 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import MobileNav from "./MobileNav";
-import { ThemeProvider } from "@/lib/ThemeContext";
 
 export default function AppLayout({ profile, onProfileSaved }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <ThemeProvider>
-      <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex">
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -32,6 +30,5 @@ export default function AppLayout({ profile, onProfileSaved }) {
         </div>
         <MobileNav />
       </div>
-    </ThemeProvider>
   );
 }
