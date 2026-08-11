@@ -14,6 +14,11 @@ import Dashboard from "./pages/Dashboard";
 import CentralApplications from "./pages/CentralApplications";
 import ManageApplications from "./pages/ManageApplications";
 
+// Chefinho — aplicação interna reconstruída sob /chefinho/*
+import ChefLayout from "./components/chefinho/ChefLayout";
+import ChefDashboard from "./pages/chefinho/Dashboard";
+import ChefEmBreve from "./pages/chefinho/EmBreve";
+
 // Lazy load de todas as páginas secundárias — carregam só quando o usuário navegar
 const Tasks = React.lazy(() => import("./pages/Tasks"));
 const Testores = React.lazy(() => import("./pages/Testores"));
@@ -87,6 +92,29 @@ function AppShell() {
         <Route path="/controle-perdas" element={<React.Suspense fallback={<PageLoader />}><LossControl /></React.Suspense>} />
         <Route path="/controle-producao" element={<React.Suspense fallback={<PageLoader />}><ProductionControl /></React.Suspense>} />
       </Route>
+      {/* Chefinho GLSI — reconstruído internamente sob /chefinho/* */}
+      <Route element={<ChefLayout />}>
+        <Route path="/chefinho" element={<ChefDashboard />} />
+        <Route path="/chefinho/centro-risco" element={<ChefEmBreve nome="Centro de Risco" />} />
+        <Route path="/chefinho/auditoria-rapida" element={<ChefEmBreve nome="Auditoria Rápida" />} />
+        <Route path="/chefinho/auditorias" element={<ChefEmBreve nome="Auditorias" />} />
+        <Route path="/chefinho/nao-conformidades" element={<ChefEmBreve nome="Não Conformidades" />} />
+        <Route path="/chefinho/gestao-visual" element={<ChefEmBreve nome="Gestão Visual" />} />
+        <Route path="/chefinho/modelos" element={<ChefEmBreve nome="Modelos" />} />
+        <Route path="/chefinho/mapa" element={<ChefEmBreve nome="Mapa Digital" />} />
+        <Route path="/chefinho/painel-fabrica" element={<ChefEmBreve nome="Painel Fábrica" />} />
+        <Route path="/chefinho/equipamentos" element={<ChefEmBreve nome="Equipamentos" />} />
+        <Route path="/chefinho/calibracao" element={<ChefEmBreve nome="Calibração" />} />
+        <Route path="/chefinho/epis" element={<ChefEmBreve nome="EPIs" />} />
+        <Route path="/chefinho/quadro-monitor" element={<ChefEmBreve nome="Quadro Monitor" />} />
+        <Route path="/chefinho/calendario" element={<ChefEmBreve nome="Calendário" />} />
+        <Route path="/chefinho/relatorios" element={<ChefEmBreve nome="Relatórios" />} />
+        <Route path="/chefinho/chefinho-ia" element={<ChefEmBreve nome="Chefinho IA" />} />
+        <Route path="/chefinho/notificacoes" element={<ChefEmBreve nome="Notificações" />} />
+        <Route path="/chefinho/admin-dados" element={<ChefEmBreve nome="Administração de Dados" />} />
+        <Route path="/chefinho/perfil" element={<ChefEmBreve nome="Perfil" />} />
+      </Route>
+
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

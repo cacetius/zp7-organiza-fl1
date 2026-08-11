@@ -92,6 +92,7 @@ module.exports = {
     "page-section", "page-section-header", "page-section-title",
     "data-table", "stat-value", "stat-label",
     "badge-success", "badge-warning", "badge-danger", "badge-neutral", "badge-info",
+    "panel", "label-section",
   ],
   plugins: [require("tailwindcss-animate")],
 }
