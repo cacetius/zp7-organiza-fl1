@@ -1,0 +1,48 @@
+{
+  "name": "Relat\u00f3rio Fim 1\u00ba Turno",
+  "description": "Envia relat\u00f3rio consolidado do 1\u00ba turno por e-mail \u00e0s 14:55 (seg\u2013s\u00e1b)",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "55 14 * * 1-6",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "relat_rio_fim_1_turno",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "enviarRelatorioTurno",
+            "args": {
+              "_automation": true,
+              "turno": "primeiro",
+              "turnoLabel": "1\u00ba Turno (06h\u201315h)"
+            }
+          },
+          "then": "end"
+        }
+      }
+    ]
+  },
+  "x-base44-migrated-from-automation": {
+    "legacy_payload_function": "enviarRelatorioTurno"
+  }
+}

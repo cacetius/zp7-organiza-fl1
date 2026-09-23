@@ -1,0 +1,46 @@
+{
+  "name": "Relat\u00f3rio Fechamento 2\u00ba Turno (23:45)",
+  "description": "Gera automaticamente o relat\u00f3rio de fechamento do 2\u00ba Turno todo dia \u00e0s 23:45",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "45 2 * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "relat_rio_fechamento_2_turno_23_45",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "gerarRelatorioTurno",
+            "args": {
+              "turno": "segundo"
+            }
+          },
+          "then": "end"
+        }
+      }
+    ]
+  },
+  "x-base44-migrated-from-automation": {
+    "legacy_payload_function": "gerarRelatorioTurno"
+  }
+}
